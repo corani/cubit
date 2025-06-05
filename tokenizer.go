@@ -1,0 +1,261 @@
+package main
+
+import (
+	"errors"
+	"io"
+	"strconv"
+)
+
+type TokenType string
+
+const (
+	TypeEOF     TokenType = "EOF"
+	TypeIdent   TokenType = "Identifier"
+	TypeKeyword TokenType = "Keyword"
+	TypeNumber  TokenType = "Number"
+	TypeString  TokenType = "String"
+	TypeLparen  TokenType = "LeftParen"
+	TypeRparen  TokenType = "RightParen"
+	TypeLbrace  TokenType = "LeftBrace"
+	TypeRbrace  TokenType = "RightBrace"
+	TypeComma   TokenType = "Comma"
+)
+
+type Keyword string
+
+const (
+	KeywordFunc Keyword = "func"
+)
+
+type Token struct {
+	Type       TokenType
+	Keyword    Keyword
+	Identifier string
+	StringVal  string
+	NumberVal  int
+	Location   Location
+}
+
+func (t Token) String() string {
+	switch t.Type {
+	case TypeEOF:
+		return "EOF @ " + t.Location.String()
+	case TypeIdent:
+		return "Identifier(" + t.Identifier + ") @ " + t.Location.String()
+	case TypeKeyword:
+		return "Keyword(" + string(t.Keyword) + ") @ " + t.Location.String()
+	case TypeNumber:
+		return "Number(" + strconv.Itoa(t.NumberVal) + ") @ " + t.Location.String()
+	case TypeString:
+		return "String(\"" + t.StringVal + "\") @ " + t.Location.String()
+	case TypeLparen:
+		return "LeftParen @ " + t.Location.String()
+	case TypeRparen:
+		return "RightParen @ " + t.Location.String()
+	case TypeLbrace:
+		return "LeftBrace @ " + t.Location.String()
+	case TypeRbrace:
+		return "RightBrace @ " + t.Location.String()
+	case TypeComma:
+		return "Comma @ " + t.Location.String()
+	default:
+		return "Unknown @ " + t.Location.String()
+	}
+}
+
+func checkKeyword(ident string) (Keyword, bool) {
+	switch ident {
+	case "func":
+		return KeywordFunc, true
+	default:
+		return "", false
+	}
+}
+
+type tokenizer struct {
+	scan   *scanner
+	buffer []Token
+}
+
+func NewTokenizer(scan *scanner) *tokenizer {
+	return &tokenizer{
+		scan:   scan,
+		buffer: nil,
+	}
+}
+
+func (t *tokenizer) Tokens() ([]Token, error) {
+	var tokens []Token
+
+	for {
+		token, err := t.next()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return tokens, nil
+			}
+
+			return nil, err
+		}
+
+		tokens = append(tokens, token)
+	}
+}
+
+func (t *tokenizer) next() (Token, error) {
+	if len(t.buffer) > 0 {
+		token := t.buffer[0]
+		t.buffer = t.buffer[1:]
+
+		return token, nil
+	}
+
+	var buf []byte
+
+	for {
+		c, err := t.scan.Next()
+		if err != nil {
+			return Token{}, err
+		}
+
+		start := t.scan.Location()
+
+		switch {
+		case c == '(':
+			return Token{
+				Type:      TypeLparen,
+				StringVal: "(",
+				Location:  start,
+			}, nil
+		case c == ')':
+			return Token{
+				Type:      TypeRparen,
+				StringVal: ")",
+				Location:  start,
+			}, nil
+		case c == '{':
+			return Token{
+				Type:      TypeLbrace,
+				StringVal: "{",
+				Location:  start,
+			}, nil
+		case c == '}':
+			return Token{
+				Type:      TypeRbrace,
+				StringVal: "}",
+				Location:  start,
+			}, nil
+		case c == ',':
+			return Token{
+				Type:      TypeComma,
+				StringVal: ",",
+				Location:  start,
+			}, nil
+		case isWhitespace(c):
+			continue
+		case c == '"':
+			// don't add the quotes to the buffer
+			for {
+				c, err = t.scan.Next()
+				if err != nil {
+					return Token{}, err
+				}
+
+				if c == '"' {
+					break
+				} else if c == '\\' {
+					// handle escape sequences
+					c, err = t.scan.Next()
+					if err != nil {
+						return Token{}, err
+					}
+					buf = append(buf, '\\', c)
+				} else {
+					buf = append(buf, c)
+				}
+			}
+
+			return Token{
+				Type:      TypeString,
+				StringVal: string(buf),
+				Location:  start,
+			}, nil
+		case isNumeric(c):
+			buf = append(buf, c)
+
+			for {
+				c, err = t.scan.Next()
+				if err != nil {
+					return Token{}, err
+				}
+
+				if isNumeric(c) {
+					buf = append(buf, c)
+				} else {
+					t.scan.Unread(1)
+					break
+				}
+			}
+
+			num, err := strconv.Atoi(string(buf))
+			if err != nil {
+				return Token{}, err
+			}
+
+			return Token{
+				Type:      TypeNumber,
+				NumberVal: num,
+				StringVal: string(buf),
+				Location:  start,
+			}, nil
+		case isAlpha(c):
+			buf = append(buf, c)
+
+			for {
+				c, err = t.scan.Next()
+				if err != nil {
+					return Token{}, err
+				}
+
+				if isAlphanumeric(c) {
+					buf = append(buf, c)
+				} else {
+					t.scan.Unread(1)
+					break
+				}
+			}
+
+			if kw, ok := checkKeyword(string(buf)); ok {
+				return Token{
+					Type:       TypeKeyword,
+					Keyword:    kw,
+					Identifier: string(buf),
+					StringVal:  string(buf),
+					Location:   start,
+				}, nil
+			}
+
+			return Token{
+				Type:       TypeIdent,
+				Identifier: string(buf),
+				StringVal:  string(buf),
+				Location:   start,
+			}, nil
+		}
+	}
+}
+
+func isAlphanumeric(a byte) bool {
+	return isAlpha(a) || isNumeric(a)
+}
+
+func isAlpha(a byte) bool {
+	return (a >= 'a' && a <= 'z') || (a >= 'A' && a <= 'Z') || a == '_'
+}
+
+func isNumeric(d byte) bool {
+	return d >= '0' && d <= '9'
+}
+
+func isWhitespace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
+}

@@ -1,0 +1,7 @@
+func hello(arg) {
+  printf("Hello from compiler-%d!\n", arg)
+}
+
+func main() {
+  hello(33)
+}
