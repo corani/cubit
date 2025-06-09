@@ -27,12 +27,13 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
 The provided `example.in`:
 
 ```go
-func hello(arg) {
+func hello(arg int) {
   printf("Hello from compiler-%d!\n", arg)
 }
 
-func main() {
+func main() -> int {
   hello(33)
+  return 0
 }
 ```
 

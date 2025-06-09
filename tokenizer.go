@@ -19,12 +19,17 @@ const (
 	TypeLbrace  TokenType = "LeftBrace"
 	TypeRbrace  TokenType = "RightBrace"
 	TypeComma   TokenType = "Comma"
+	TypeArrow   TokenType = "Arrow"
 )
 
 type Keyword string
 
 const (
-	KeywordFunc Keyword = "func"
+	KeywordFunc   Keyword = "func"
+	KeywordReturn Keyword = "return"
+	KeywordInt    Keyword = "int"
+	KeywordString Keyword = "string"
+	KeywordVoid   Keyword = "void"
 )
 
 type Token struct {
@@ -58,6 +63,8 @@ func (t Token) String() string {
 		return "RightBrace @ " + t.Location.String()
 	case TypeComma:
 		return "Comma @ " + t.Location.String()
+	case TypeArrow:
+		return "Arrow @ " + t.Location.String()
 	default:
 		return "Unknown @ " + t.Location.String()
 	}
@@ -67,6 +74,14 @@ func checkKeyword(ident string) (Keyword, bool) {
 	switch ident {
 	case "func":
 		return KeywordFunc, true
+	case "return":
+		return KeywordReturn, true
+	case "int":
+		return KeywordInt, true
+	case "string":
+		return KeywordString, true
+	case "void":
+		return KeywordVoid, true
 	default:
 		return "", false
 	}
@@ -150,6 +165,27 @@ func (t *tokenizer) next() (Token, error) {
 				StringVal: ",",
 				Location:  start,
 			}, nil
+		case c == '-':
+			c, err := t.scan.Next()
+			if err != nil {
+				return Token{}, err
+			}
+
+			switch {
+			case c == '>':
+				return Token{
+					Type:      TypeArrow,
+					StringVal: "->",
+					Location:  start,
+				}, nil
+			case c >= '0' && c <= '9':
+				// it's a negative number
+				buf = append(buf, '-')
+				buf = append(buf, c)
+				continue
+			default:
+				t.scan.Unread(1) // unread the character
+			}
 		case isWhitespace(c):
 			continue
 		case c == '"':

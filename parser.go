@@ -73,19 +73,9 @@ func NewParser(tok []Token) *parser {
 
 func (p *parser) Parse() ([]Op, error) {
 	for {
-		token, err := p.nextToken()
+		token, err := p.expectKeyword(KeywordFunc)
 		if err != nil {
 			return p.ops, err
-		}
-
-		if token.Type != TypeKeyword {
-			return p.ops, fmt.Errorf("unexpected token %s at %s",
-				token.StringVal, token.Location)
-		}
-
-		if token.Keyword != KeywordFunc {
-			return p.ops, fmt.Errorf("unexpected keyword %s at %s",
-				token.Keyword, token.Location)
 		}
 
 		if err := p.parseFunc(token); err != nil {
@@ -106,12 +96,12 @@ func (p *parser) nextToken() (Token, error) {
 }
 
 func (p *parser) parseFunc(start Token) error {
-	name, err := p.expect(TypeIdent)
+	name, err := p.expectType(TypeIdent)
 	if err != nil {
 		return err
 	}
 
-	if _, err := p.expect(TypeLparen); err != nil {
+	if _, err := p.expectType(TypeLparen); err != nil {
 		return err
 	}
 
@@ -123,15 +113,27 @@ func (p *parser) parseFunc(start Token) error {
 	}
 
 	for arg.Type != TypeRparen {
-		switch arg.Type {
-		case TypeIdent:
-			args = append(args, arg)
-		default:
+		if arg.Type != TypeIdent {
 			return fmt.Errorf("unexpected argument type %s at %s, expected identifier, string or number",
 				arg.Type, arg.Location)
 		}
 
-		arg, err = p.expect(TypeRparen, TypeComma)
+		argType, err := p.expectKeyword(KeywordInt, KeywordString)
+		if err != nil {
+			return err
+		}
+
+		// TODO(daniel): this is a hack.
+		switch argType.Keyword {
+		case KeywordInt:
+			arg.Type = TypeNumber
+		case KeywordString:
+			arg.Type = TypeString
+		}
+
+		args = append(args, arg)
+
+		arg, err = p.expectType(TypeRparen, TypeComma)
 		if err != nil {
 			return err
 		}
@@ -144,9 +146,36 @@ func (p *parser) parseFunc(start Token) error {
 		}
 	}
 
-	lbrace, err := p.expect(TypeLbrace)
+	lbrace, err := p.expectType(TypeLbrace, TypeArrow)
 	if err != nil {
 		return err
+	}
+
+	retType := Token{
+		Type:     TypeKeyword,
+		Location: lbrace.Location,
+		Keyword:  KeywordVoid,
+	}
+
+	if lbrace.Type == TypeArrow {
+		// read the return type
+		retType, err = p.expectKeyword(KeywordInt, KeywordString, KeywordVoid)
+		if err != nil {
+			return err
+		}
+
+		// read the lbrace
+		lbrace, err = p.expectType(TypeLbrace)
+		if err != nil {
+			return err
+		}
+	}
+
+	// insert retType after the first argument (function name)
+	if len(args) < 2 {
+		args = append(args, retType)
+	} else {
+		args = append(args[:1], append([]Token{retType}, args[1:]...)...)
 	}
 
 	p.ops = append(p.ops, Op{
@@ -159,18 +188,9 @@ func (p *parser) parseFunc(start Token) error {
 		return err
 	}
 
-	ret, err := p.expect(TypeRbrace)
-	if err != nil {
-		return err
-	}
+	_, err = p.expectType(TypeRbrace)
 
-	p.ops = append(p.ops, Op{
-		Type:     OpTypeReturn,
-		Location: ret.Location,
-		Args:     nil,
-	})
-
-	return nil
+	return err
 }
 
 func (p *parser) parseBody(start Token) error {
@@ -189,7 +209,35 @@ func (p *parser) parseBody(start Token) error {
 		case TypeRbrace:
 			p.index--
 
+			// if there's no 'return' at the end, add one:
+			if len(p.ops) > 0 && p.ops[len(p.ops)-1].Type != OpTypeReturn {
+				p.ops = append(p.ops, Op{
+					Type:     OpTypeReturn,
+					Location: first.Location,
+					Args: []Token{{
+						Type:     TypeKeyword,
+						Keyword:  KeywordVoid,
+						Location: first.Location,
+					}},
+				})
+			}
+
 			return nil
+		case TypeKeyword:
+			switch first.Keyword {
+			case KeywordReturn:
+				// parse return value
+				ret, err := p.expectType(TypeString, TypeNumber, TypeIdent)
+				if err != nil {
+					return err
+				}
+
+				p.ops = append(p.ops, Op{
+					Type:     OpTypeReturn,
+					Location: first.Location,
+					Args:     []Token{ret},
+				})
+			}
 		case TypeIdent:
 			// Check if it's a function call
 			token, err := p.nextToken()
@@ -219,7 +267,7 @@ func (p *parser) parseBody(start Token) error {
 						arg.Type, arg.Location)
 				}
 
-				arg, err = p.expect(TypeRparen, TypeComma)
+				arg, err = p.expectType(TypeRparen, TypeComma)
 				if err != nil {
 					return err
 				}
@@ -241,7 +289,27 @@ func (p *parser) parseBody(start Token) error {
 	}
 }
 
-func (p *parser) expect(tt ...TokenType) (Token, error) {
+func (p *parser) expectKeyword(kws ...Keyword) (Token, error) {
+	token, err := p.expectType(TypeKeyword)
+	if err != nil {
+		return token, err
+	}
+
+	var kwnames []string
+
+	for _, kw := range kws {
+		kwnames = append(kwnames, string(kw))
+
+		if token.Keyword == kw {
+			return token, nil
+		}
+	}
+
+	return token, fmt.Errorf("expected %s at %s, got %s",
+		strings.Join(kwnames, " or "), token.Location, token.StringVal)
+}
+
+func (p *parser) expectType(tts ...TokenType) (Token, error) {
 	token, err := p.nextToken()
 	if err != nil {
 		return token, err
@@ -249,9 +317,9 @@ func (p *parser) expect(tt ...TokenType) (Token, error) {
 
 	var ttnames []string
 
-	for _, t := range tt {
-		ttnames = append(ttnames, string(t))
-		if token.Type == t {
+	for _, tt := range tts {
+		ttnames = append(ttnames, string(tt))
+		if token.Type == tt {
 			return token, nil
 		}
 	}

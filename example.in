@@ -1,7 +1,8 @@
-func hello(arg) {
+func hello(arg int) {
   printf("Hello from compiler-%d!\n", arg)
 }
 
-func main() {
+func main() -> int {
   hello(33)
+  return 0
 }

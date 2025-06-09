@@ -22,21 +22,35 @@ func GenerateCode(ops []Op) (string, error) {
 		switch op.Type {
 		case OpTypeFunc:
 			funName = op.Args[0].Identifier
+			retType := op.Args[1].Keyword
 
-			if funName == "main" {
-				fmt.Fprint(&sb, "export function w $main(")
-			} else {
-				fmt.Fprintf(&sb, "function w $%s(", funName)
+			switch retType {
+			case KeywordVoid:
+				retType = ""
+			case KeywordInt:
+				retType = "w "
+			case KeywordString:
+				retType = "l "
 			}
 
-			for i, arg := range op.Args[1:] {
+			if funName == "main" {
+				fmt.Fprintf(&sb, "export function %s$%s(", retType, funName)
+			} else {
+				fmt.Fprintf(&sb, "function %s$%s(", retType, funName)
+			}
+
+			for i, arg := range op.Args[2:] {
 				if i > 0 {
 					fmt.Fprint(&sb, ", ")
 				}
 
 				switch arg.Type {
-				case TypeIdent:
+				case TypeNumber:
 					fmt.Fprintf(&sb, "w %%%s", arg.Identifier)
+				case TypeString:
+					fmt.Fprintf(&sb, "l %%%s", arg.Identifier)
+				case TypeIdent:
+					fmt.Fprintf(&sb, "l %%%s", arg.Identifier)
 				default:
 					return "", fmt.Errorf("unexpected argument type %s in function %s", arg.Type, funName)
 				}
@@ -70,7 +84,16 @@ func GenerateCode(ops []Op) (string, error) {
 			}
 			fmt.Fprintln(&sb, ")")
 		case OpTypeReturn:
-			fmt.Fprintln(&sb, "  ret 0\n}")
+			retType := op.Args[0]
+
+			switch {
+			case retType.Type == TypeKeyword && retType.Keyword == KeywordVoid:
+				fmt.Fprintln(&sb, "  ret\n}")
+			case retType.Type == TypeNumber:
+				fmt.Fprintf(&sb, "  ret %d\n}\n", retType.NumberVal)
+			default:
+				return "", fmt.Errorf("unexpected return type %s in function %s", retType.Type, funName)
+			}
 		}
 	}
 
