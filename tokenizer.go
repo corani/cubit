@@ -30,6 +30,7 @@ const (
 	KeywordInt    Keyword = "int"
 	KeywordString Keyword = "string"
 	KeywordVoid   Keyword = "void"
+	KeywordExtern Keyword = "extern"
 )
 
 type Token struct {
@@ -82,6 +83,8 @@ func checkKeyword(ident string) (Keyword, bool) {
 		return KeywordString, true
 	case "void":
 		return KeywordVoid, true
+	case "extern":
+		return KeywordExtern, true
 	default:
 		return "", false
 	}

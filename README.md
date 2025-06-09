@@ -27,6 +27,8 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
 The provided `example.in`:
 
 ```go
+extern printf(msg string, arg int) -> void
+
 func hello(arg int) {
   printf("Hello from compiler-%d!\n", arg)
 }

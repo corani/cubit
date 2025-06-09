@@ -73,15 +73,72 @@ func NewParser(tok []Token) *parser {
 
 func (p *parser) Parse() ([]Op, error) {
 	for {
-		token, err := p.expectKeyword(KeywordFunc)
+		token, err := p.expectKeyword(KeywordFunc, KeywordExtern)
 		if err != nil {
 			return p.ops, err
 		}
 
-		if err := p.parseFunc(token); err != nil {
-			return p.ops, err
+		switch token.Keyword {
+		case KeywordFunc:
+			if err := p.parseFunc(token); err != nil {
+				return p.ops, err
+			}
+		case KeywordExtern:
+			// Parse and ignore extern function signature
+			if err := p.parseExtern(token); err != nil {
+				return p.ops, err
+			}
 		}
 	}
+}
+
+// parseExtern parses and ignores an extern function signature.
+func (p *parser) parseExtern(start Token) error {
+	_ = start
+
+	// Expect function name
+	if _, err := p.expectType(TypeIdent); err != nil {
+		return err
+	}
+	// Expect (
+	if _, err := p.expectType(TypeLparen); err != nil {
+		return err
+	}
+	// Skip arguments
+	for {
+		tok, err := p.nextToken()
+		if err != nil {
+			return err
+		}
+		if tok.Type == TypeRparen {
+			break
+		}
+		// skip type after identifier
+		if tok.Type == TypeIdent {
+			if _, err := p.expectKeyword(KeywordInt, KeywordString); err != nil {
+				return err
+			}
+		}
+		// skip comma
+		if tok.Type == TypeComma {
+			continue
+		}
+	}
+	// Optionally handle return type (-> type)
+	tok, err := p.nextToken()
+	if err != nil {
+		return err
+	}
+
+	if tok.Type == TypeArrow {
+		if _, err := p.expectKeyword(KeywordInt, KeywordString, KeywordVoid); err != nil {
+			return err
+		}
+	} else {
+		p.index-- // unread the token if it's not an arrow
+	}
+
+	return nil
 }
 
 func (p *parser) nextToken() (Token, error) {

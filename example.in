@@ -1,3 +1,5 @@
+extern printf(msg string, arg int) -> void
+
 func hello(arg int) {
   printf("Hello from compiler-%d!\n", arg)
 }
