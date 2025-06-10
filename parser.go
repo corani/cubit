@@ -6,87 +6,37 @@ import (
 	"strings"
 )
 
-type OpType string
-
-const (
-	OpTypeFunc   OpType = "Func"
-	OpTypeCall   OpType = "Call"
-	OpTypeReturn OpType = "Return"
-)
-
-type Op struct {
-	Type     OpType
-	Location Location
-	Args     []Token
-}
-
-func (op Op) String() string {
-	switch op.Type {
-	case OpTypeFunc:
-		var sb strings.Builder
-
-		if len(op.Args) < 2 {
-			return fmt.Sprintf("Func %s() @ %s\n", op.Args[0].Identifier, op.Location)
-		} else {
-			fmt.Fprintf(&sb, "Func %s(\n", op.Args[0].Identifier)
-			for _, arg := range op.Args[1:] {
-				fmt.Fprintf(&sb, "  %s\n", arg)
-			}
-			fmt.Fprintf(&sb, ") @ %s\n", op.Location)
-		}
-
-		return sb.String()
-	case OpTypeCall:
-		var sb strings.Builder
-
-		if len(op.Args) < 2 {
-			return fmt.Sprintf("Call %s() @ %s\n", op.Args[0].Identifier, op.Location)
-		} else {
-			fmt.Fprintf(&sb, "Call %s(\n", op.Args[0].Identifier)
-			for _, arg := range op.Args[1:] {
-				fmt.Fprintf(&sb, "  %s\n", arg)
-			}
-			fmt.Fprintf(&sb, ") @ %s\n", op.Location)
-		}
-
-		return sb.String()
-	case OpTypeReturn:
-		return fmt.Sprintf("Return @ %s\n", op.Location)
-	default:
-		return fmt.Sprintf("Unknown %s @ %s\n", op.Type, op.Location)
-	}
-}
-
 type parser struct {
-	tok   []Token
-	index int
-	ops   []Op
+	tok    []Token
+	index  int
+	unit   *CompilationUnit
+	blocks []Block
 }
 
 func NewParser(tok []Token) *parser {
 	return &parser{
 		tok:   tok,
 		index: 0,
-		ops:   nil,
+		unit:  new(CompilationUnit),
 	}
 }
 
-func (p *parser) Parse() ([]Op, error) {
+func (p *parser) Parse() (*CompilationUnit, error) {
 	for {
 		token, err := p.expectKeyword(KeywordFunc, KeywordExtern)
 		if err != nil {
-			return p.ops, err
+			return p.unit, err
 		}
 
 		switch token.Keyword {
 		case KeywordFunc:
 			if err := p.parseFunc(token); err != nil {
-				return p.ops, err
+				return p.unit, err
 			}
 		case KeywordExtern:
 			// Parse and ignore extern function signature
 			if err := p.parseExtern(token); err != nil {
-				return p.ops, err
+				return p.unit, err
 			}
 		}
 	}
@@ -141,17 +91,6 @@ func (p *parser) parseExtern(start Token) error {
 	return nil
 }
 
-func (p *parser) nextToken() (Token, error) {
-	if p.index >= len(p.tok) {
-		return Token{}, io.EOF
-	}
-
-	token := p.tok[p.index]
-	p.index++
-
-	return token, nil
-}
-
 func (p *parser) parseFunc(start Token) error {
 	name, err := p.expectType(TypeIdent)
 	if err != nil {
@@ -162,7 +101,7 @@ func (p *parser) parseFunc(start Token) error {
 		return err
 	}
 
-	args := []Token{name}
+	var params []Param
 
 	arg, err := p.nextToken()
 	if err != nil {
@@ -180,15 +119,12 @@ func (p *parser) parseFunc(start Token) error {
 			return err
 		}
 
-		// TODO(daniel): this is a hack.
 		switch argType.Keyword {
 		case KeywordInt:
-			arg.Type = TypeNumber
+			params = append(params, NewParamRegular(NewAbiTyBase(BaseWord), Ident(arg.StringVal)))
 		case KeywordString:
-			arg.Type = TypeString
+			params = append(params, NewParamRegular(NewAbiTyBase(BaseLong), Ident(arg.StringVal)))
 		}
-
-		args = append(args, arg)
 
 		arg, err = p.expectType(TypeRparen, TypeComma)
 		if err != nil {
@@ -209,9 +145,7 @@ func (p *parser) parseFunc(start Token) error {
 	}
 
 	retType := Token{
-		Type:     TypeKeyword,
-		Location: lbrace.Location,
-		Keyword:  KeywordVoid,
+		Keyword: KeywordVoid,
 	}
 
 	if lbrace.Type == TypeArrow {
@@ -228,33 +162,34 @@ func (p *parser) parseFunc(start Token) error {
 		}
 	}
 
-	// insert retType after the first argument (function name)
-	if len(args) < 2 {
-		args = append(args, retType)
-	} else {
-		args = append(args[:1], append([]Token{retType}, args[1:]...)...)
-	}
-
-	p.ops = append(p.ops, Op{
-		Type:     OpTypeFunc,
-		Location: start.Location,
-		Args:     args,
-	})
-
-	if err := p.parseBody(lbrace); err != nil {
+	if err := p.parseBody(lbrace, retType); err != nil {
 		return err
 	}
 
 	_, err = p.expectType(TypeRbrace)
 
+	fn := NewFuncDef(Ident(name.StringVal), params...).WithBlocks(p.blocks...)
+
+	if name.StringVal == "main" {
+		fn = fn.WithLinkage(NewLinkageExport())
+	}
+
+	if retType.Keyword == KeywordInt {
+		fn = fn.WithRetTy(NewAbiTyBase(BaseWord))
+	}
+
+	p.unit.WithFuncDefs(fn)
+
 	return err
 }
 
-func (p *parser) parseBody(start Token) error {
+func (p *parser) parseBody(start, retType Token) error {
 	if start.Type != TypeLbrace {
 		return fmt.Errorf("expected { at %s, got %s",
 			start.Location, start.StringVal)
 	}
+
+	block := Block{Label: "start"}
 
 	for {
 		first, err := p.nextToken()
@@ -266,18 +201,25 @@ func (p *parser) parseBody(start Token) error {
 		case TypeRbrace:
 			p.index--
 
-			// if there's no 'return' at the end, add one:
-			if len(p.ops) > 0 && p.ops[len(p.ops)-1].Type != OpTypeReturn {
-				p.ops = append(p.ops, Op{
-					Type:     OpTypeReturn,
-					Location: first.Location,
-					Args: []Token{{
-						Type:     TypeKeyword,
-						Keyword:  KeywordVoid,
-						Location: first.Location,
-					}},
-				})
+			addRet := false
+
+			if len(block.Instructions) == 0 {
+				addRet = true
+			} else {
+				_, hasRet := block.Instructions[len(block.Instructions)-1].(Ret)
+				addRet = !hasRet
 			}
+
+			if addRet {
+				switch retType.Keyword {
+				case KeywordVoid:
+					block.Instructions = append(block.Instructions, NewRet())
+				default:
+					return fmt.Errorf("expected return statement at %s", first.Location)
+				}
+			}
+
+			p.blocks = []Block{block}
 
 			return nil
 		case TypeKeyword:
@@ -289,11 +231,17 @@ func (p *parser) parseBody(start Token) error {
 					return err
 				}
 
-				p.ops = append(p.ops, Op{
-					Type:     OpTypeReturn,
-					Location: first.Location,
-					Args:     []Token{ret},
-				})
+				var val Val
+
+				switch ret.Type {
+				case TypeNumber:
+					val = NewValInteger(int64(ret.NumberVal))
+				default:
+					panic(fmt.Sprintf("unexpected return type %s at %s, expected number",
+						ret.Type, ret.Location))
+				}
+
+				block.Instructions = append(block.Instructions, NewRet(val))
 			}
 		case TypeIdent:
 			// Check if it's a function call
@@ -307,18 +255,24 @@ func (p *parser) parseBody(start Token) error {
 					token.Location, token.StringVal)
 			}
 
-			args := []Token{first}
-
 			arg, err := p.nextToken()
 			if err != nil {
 				return err
 			}
 
+			var args []Arg
+
 			// Read function arguments
 			for arg.Type != TypeRparen {
 				switch arg.Type {
-				case TypeString, TypeNumber, TypeIdent:
-					args = append(args, arg)
+				case TypeString:
+					id := fmt.Sprintf("data_%s%d", first.StringVal, len(args))
+					p.unit.WithDataDefs(NewDataDefStringZ(Ident(id), arg.StringVal))
+					args = append(args, NewArgRegular(NewAbiTyBase(BaseLong), NewValGlobal(Ident(id))))
+				case TypeNumber:
+					args = append(args, NewArgRegular(NewAbiTyBase(BaseWord), NewValInteger(int64(arg.NumberVal))))
+				case TypeIdent:
+					args = append(args, NewArgRegular(NewAbiTyBase(BaseWord), NewValIdent(Ident(arg.StringVal))))
 				default:
 					return fmt.Errorf("unexpected argument type %s at %s, expected string or number",
 						arg.Type, arg.Location)
@@ -337,11 +291,8 @@ func (p *parser) parseBody(start Token) error {
 				}
 			}
 
-			p.ops = append(p.ops, Op{
-				Type:     OpTypeCall,
-				Location: first.Location,
-				Args:     args,
-			})
+			block.Instructions = append(block.Instructions,
+				NewCall(NewValGlobal(Ident(first.StringVal)), args...))
 		}
 	}
 }
@@ -383,4 +334,15 @@ func (p *parser) expectType(tts ...TokenType) (Token, error) {
 
 	return token, fmt.Errorf("expected %s at %s, got %s",
 		strings.Join(ttnames, " or "), token.Location, token.StringVal)
+}
+
+func (p *parser) nextToken() (Token, error) {
+	if p.index >= len(p.tok) {
+		return Token{}, io.EOF
+	}
+
+	token := p.tok[p.index]
+	p.index++
+
+	return token, nil
 }

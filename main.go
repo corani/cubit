@@ -22,10 +22,9 @@ func withExt(filename, ext string) string {
 }
 
 func main() {
-	var writeTokens, writeOps, writeSSA, run, help bool
+	var writeTokens, writeSSA, run, help bool
 
 	flag.BoolVar(&writeTokens, "tok", false, "write tokens to file")
-	flag.BoolVar(&writeOps, "ops", false, "write operations to file")
 	flag.BoolVar(&writeSSA, "ssa", false, "write SSA code to file")
 	flag.BoolVar(&run, "run", false, "run the compiled code")
 	flag.BoolVar(&help, "help", false, "show help message")
@@ -41,7 +40,6 @@ func main() {
 
 	srcFile := "example.in"
 	tokFile, _ := filepath.Abs(filepath.Join("out", withExt(srcFile, ".tok")))
-	opsFile, _ := filepath.Abs(filepath.Join("out", withExt(srcFile, ".ops")))
 	ssaFile, _ := filepath.Abs(filepath.Join("out", withExt(srcFile, ".ssa")))
 	asmFile, _ := filepath.Abs(filepath.Join("out", withExt(srcFile, ".s")))
 	binFile, _ := filepath.Abs(filepath.Join("out", withExt(srcFile, "")))
@@ -78,27 +76,12 @@ func main() {
 
 	parser := NewParser(tokens)
 
-	ops, err := parser.Parse()
+	unit, err := parser.Parse()
 	if err != nil && !errors.Is(err, io.EOF) {
 		panic(fmt.Sprintf("failed to parse: %v", err))
 	}
 
-	if writeOps {
-		var sb strings.Builder
-
-		for _, op := range ops {
-			sb.WriteString(op.String())
-		}
-
-		if err := os.WriteFile(opsFile, []byte(sb.String()), 0644); err != nil {
-			panic(fmt.Sprintf("failed to write ops file: %v", err))
-		}
-	}
-
-	code, err := GenerateCode(ops)
-	if err != nil {
-		panic(fmt.Sprintf("failed to generate code: %v", err))
-	}
+	code := unit.String()
 
 	if writeSSA {
 		if err := os.WriteFile(ssaFile, []byte(code), 0644); err != nil {

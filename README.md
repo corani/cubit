@@ -17,8 +17,9 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
 - `main.go` - Entry point, handles CLI flags and orchestrates compilation.
 - `tokenizer.go` - Tokenizes the input source code.
 - `scanner.go` - Reads and manages input data for tokenization.
-- `parser.go` - Parses tokens into operations (AST-like structure).
+- `parser.go` - Parses tokens into AST.
 - `generator.go` - Generates code (SSA/QBE) from parsed operations.
+- `ast.go` - AST structures.
 - `example.in` - Example source file for the compiler.
 - `go.mod` / `go.sum` - Go module files and dependencies.
 
@@ -48,7 +49,6 @@ go run main.go [options]
 ### Options
 
 - `-tok`  : Write tokens to file (`out/example.tok`)
-- `-ops`  : Write operations to file (`out/example.ops`)
 - `-ssa`  : Write SSA code to file (`out/example.ssa`)
 - `-run`  : Run the compiled code
 - `-help` : Show help message
