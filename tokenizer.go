@@ -28,12 +28,13 @@ const (
 type Keyword string
 
 const (
-	KeywordFunc   Keyword = "func"
-	KeywordReturn Keyword = "return"
-	KeywordInt    Keyword = "int"
-	KeywordString Keyword = "string"
-	KeywordVoid   Keyword = "void"
-	KeywordExtern Keyword = "extern"
+	KeywordFunc    Keyword = "func"
+	KeywordReturn  Keyword = "return"
+	KeywordInt     Keyword = "int"
+	KeywordString  Keyword = "string"
+	KeywordVoid    Keyword = "void"
+	KeywordExtern  Keyword = "extern"
+	KeywordPackage Keyword = "package"
 )
 
 type Token struct {
@@ -94,6 +95,8 @@ func checkKeyword(ident string) (Keyword, bool) {
 		return KeywordVoid, true
 	case "extern":
 		return KeywordExtern, true
+	case "package":
+		return KeywordPackage, true
 	default:
 		return "", false
 	}

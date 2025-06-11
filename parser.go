@@ -12,6 +12,7 @@ type parser struct {
 	unit       *CompilationUnit
 	blocks     []Block
 	attributes map[string]string
+	pkgName    string
 }
 
 func NewParser(tok []Token) *parser {
@@ -21,17 +22,19 @@ func NewParser(tok []Token) *parser {
 		unit:       new(CompilationUnit),
 		blocks:     nil,
 		attributes: make(map[string]string),
+		pkgName:    "",
 	}
 }
 
 func (p *parser) Parse() (*CompilationUnit, error) {
 	for {
-		start, err := p.expectType(TypeIdent, TypeAt)
+		start, err := p.expectType(TypeKeyword, TypeIdent, TypeAt)
 		if err != nil {
 			return p.unit, err
 		}
 
-		if start.Type == TypeAt {
+		switch start.Type {
+		case TypeAt:
 			if err := p.parseAttributes(start); err != nil {
 				return p.unit, err
 			}
@@ -40,6 +43,22 @@ func (p *parser) Parse() (*CompilationUnit, error) {
 			if err != nil {
 				return p.unit, err
 			}
+		case TypeKeyword:
+			if start.Keyword != KeywordPackage {
+				return p.unit, fmt.Errorf("expected package keyword at %s, got %s",
+					start.Location, start.StringVal)
+			}
+
+			if err := p.parsePackage(start); err != nil {
+				return p.unit, err
+			}
+
+			continue
+		}
+
+		if p.pkgName == "" {
+			return p.unit, fmt.Errorf("package must be defined before any other declarations at %s",
+				start.Location)
 		}
 
 		if _, err := p.expectType(TypeColon); err != nil {
@@ -69,6 +88,25 @@ func (p *parser) Parse() (*CompilationUnit, error) {
 			}
 		}
 	}
+}
+
+func (p *parser) parsePackage(start Token) error {
+	_ = start
+
+	if p.pkgName != "" {
+		return fmt.Errorf("package already defined at %s, cannot redefine",
+			p.tok[p.index-1].Location)
+	}
+
+	// Expect package name
+	pkgName, err := p.expectType(TypeIdent)
+	if err != nil {
+		return err
+	}
+
+	p.pkgName = pkgName.StringVal
+
+	return nil
 }
 
 func (p *parser) parseAttributes(start Token) error {

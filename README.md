@@ -28,6 +28,8 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
 The provided `example.in`:
 
 ```odin
+package main
+
 printf :: extern(msg: string, arg: int)
 
 hello :: func(arg: int) {

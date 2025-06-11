@@ -1,3 +1,5 @@
+package main
+
 printf :: extern(msg: string, arg: int)
 
 hello :: func(arg: int) {
