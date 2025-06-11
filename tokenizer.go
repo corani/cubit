@@ -20,6 +20,7 @@ const (
 	TypeRbrace  TokenType = "RightBrace"
 	TypeComma   TokenType = "Comma"
 	TypeArrow   TokenType = "Arrow"
+	TypeColon   TokenType = "Colon"
 )
 
 type Keyword string
@@ -66,6 +67,8 @@ func (t Token) String() string {
 		return "Comma @ " + t.Location.String()
 	case TypeArrow:
 		return "Arrow @ " + t.Location.String()
+	case TypeColon:
+		return "Colon @ " + t.Location.String()
 	default:
 		return "Unknown @ " + t.Location.String()
 	}
@@ -166,6 +169,12 @@ func (t *tokenizer) next() (Token, error) {
 			return Token{
 				Type:      TypeComma,
 				StringVal: ",",
+				Location:  start,
+			}, nil
+		case c == ':':
+			return Token{
+				Type:      TypeColon,
+				StringVal: ":",
 				Location:  start,
 			}, nil
 		case c == '-':

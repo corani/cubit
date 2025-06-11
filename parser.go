@@ -23,6 +23,21 @@ func NewParser(tok []Token) *parser {
 
 func (p *parser) Parse() (*CompilationUnit, error) {
 	for {
+		name, err := p.expectType(TypeIdent)
+		if err != nil {
+			return p.unit, err
+		}
+
+		if _, err := p.expectType(TypeColon); err != nil {
+			return p.unit, err
+		}
+
+		// TODO(daniel): parse optional type.
+
+		if _, err := p.expectType(TypeColon); err != nil {
+			return p.unit, err
+		}
+
 		token, err := p.expectKeyword(KeywordFunc, KeywordExtern)
 		if err != nil {
 			return p.unit, err
@@ -30,12 +45,12 @@ func (p *parser) Parse() (*CompilationUnit, error) {
 
 		switch token.Keyword {
 		case KeywordFunc:
-			if err := p.parseFunc(token); err != nil {
+			if err := p.parseFunc(name); err != nil {
 				return p.unit, err
 			}
 		case KeywordExtern:
 			// Parse and ignore extern function signature
-			if err := p.parseExtern(token); err != nil {
+			if err := p.parseExtern(name); err != nil {
 				return p.unit, err
 			}
 		}
@@ -46,34 +61,41 @@ func (p *parser) Parse() (*CompilationUnit, error) {
 func (p *parser) parseExtern(start Token) error {
 	_ = start
 
-	// Expect function name
-	if _, err := p.expectType(TypeIdent); err != nil {
-		return err
-	}
 	// Expect (
 	if _, err := p.expectType(TypeLparen); err != nil {
 		return err
 	}
-	// Skip arguments
+
+	// Skip parameters
 	for {
-		tok, err := p.nextToken()
+		tok, err := p.expectType(TypeRparen, TypeIdent)
 		if err != nil {
 			return err
 		}
+
 		if tok.Type == TypeRparen {
 			break
 		}
+
 		// skip type after identifier
-		if tok.Type == TypeIdent {
-			if _, err := p.expectKeyword(KeywordInt, KeywordString); err != nil {
-				return err
-			}
+		if _, err := p.expectType(TypeColon); err != nil {
+			return err
 		}
-		// skip comma
-		if tok.Type == TypeComma {
-			continue
+
+		if _, err := p.expectKeyword(KeywordInt, KeywordString); err != nil {
+			return err
+		}
+
+		tok, err = p.expectType(TypeComma, TypeRparen)
+		if err != nil {
+			return err
+		}
+
+		if tok.Type == TypeRparen {
+			break
 		}
 	}
+
 	// Optionally handle return type (-> type)
 	tok, err := p.nextToken()
 	if err != nil {
@@ -91,27 +113,26 @@ func (p *parser) parseExtern(start Token) error {
 	return nil
 }
 
-func (p *parser) parseFunc(start Token) error {
-	name, err := p.expectType(TypeIdent)
-	if err != nil {
-		return err
-	}
-
+func (p *parser) parseFunc(name Token) error {
 	if _, err := p.expectType(TypeLparen); err != nil {
 		return err
 	}
 
 	var params []Param
 
-	arg, err := p.nextToken()
-	if err != nil {
-		return err
-	}
+	// Parse parameters
+	for {
+		arg, err := p.expectType(TypeRparen, TypeIdent)
+		if err != nil {
+			return err
+		}
 
-	for arg.Type != TypeRparen {
-		if arg.Type != TypeIdent {
-			return fmt.Errorf("unexpected argument type %s at %s, expected identifier, string or number",
-				arg.Type, arg.Location)
+		if arg.Type == TypeRparen {
+			break
+		}
+
+		if _, err := p.expectType(TypeColon); err != nil {
+			return err
 		}
 
 		argType, err := p.expectKeyword(KeywordInt, KeywordString)
@@ -126,16 +147,13 @@ func (p *parser) parseFunc(start Token) error {
 			params = append(params, NewParamRegular(NewAbiTyBase(BaseLong), Ident(arg.StringVal)))
 		}
 
-		arg, err = p.expectType(TypeRparen, TypeComma)
+		tok, err := p.expectType(TypeComma, TypeRparen)
 		if err != nil {
 			return err
 		}
 
-		if arg.Type == TypeComma {
-			arg, err = p.nextToken()
-			if err != nil {
-				return err
-			}
+		if tok.Type == TypeRparen {
+			break
 		}
 	}
 

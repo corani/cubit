@@ -27,15 +27,16 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
 
 The provided `example.in`:
 
-```go
-extern printf(msg string, arg int) -> void
+```odin
+printf :: extern(msg: string, arg: int)
 
-func hello(arg int) {
+hello :: func(arg: int) {
   printf("Hello from compiler-%d!\n", arg)
 }
 
-func main() -> int {
+main :: func() -> int {
   hello(33)
+
   return 0
 }
 ```
