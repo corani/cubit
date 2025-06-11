@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -38,52 +39,37 @@ func (p *parser) Parse() (*CompilationUnit, error) {
 			if err := p.parseAttributes(start); err != nil {
 				return p.unit, err
 			}
-
-			start, err = p.expectType(TypeIdent)
-			if err != nil {
-				return p.unit, err
-			}
 		case TypeKeyword:
-			if start.Keyword != KeywordPackage {
+			switch start.Keyword {
+			case KeywordPackage:
+				if err := p.parsePackage(start); err != nil {
+					return p.unit, err
+				}
+			default:
 				return p.unit, fmt.Errorf("expected package keyword at %s, got %s",
 					start.Location, start.StringVal)
 			}
+		case TypeIdent:
+			if p.pkgName == "" {
+				return p.unit, fmt.Errorf("package must be defined before any other declarations at %s",
+					start.Location)
+			}
 
-			if err := p.parsePackage(start); err != nil {
+			if _, err := p.expectType(TypeColon); err != nil {
 				return p.unit, err
 			}
 
-			continue
-		}
+			// TODO(daniel): parse optional type.
 
-		if p.pkgName == "" {
-			return p.unit, fmt.Errorf("package must be defined before any other declarations at %s",
-				start.Location)
-		}
+			if _, err := p.expectType(TypeColon); err != nil {
+				return p.unit, err
+			}
 
-		if _, err := p.expectType(TypeColon); err != nil {
-			return p.unit, err
-		}
+			if _, err := p.expectKeyword(KeywordFunc); err != nil {
+				return p.unit, err
+			}
 
-		// TODO(daniel): parse optional type.
-
-		if _, err := p.expectType(TypeColon); err != nil {
-			return p.unit, err
-		}
-
-		token, err := p.expectKeyword(KeywordFunc, KeywordExtern)
-		if err != nil {
-			return p.unit, err
-		}
-
-		switch token.Keyword {
-		case KeywordFunc:
 			if err := p.parseFunc(start); err != nil {
-				return p.unit, err
-			}
-		case KeywordExtern:
-			// Parse and ignore extern function signature
-			if err := p.parseExtern(start); err != nil {
 				return p.unit, err
 			}
 		}
@@ -110,8 +96,6 @@ func (p *parser) parsePackage(start Token) error {
 }
 
 func (p *parser) parseAttributes(start Token) error {
-	clear(p.attributes)
-
 	_ = start
 
 	// Expect opening parenthesis
@@ -167,63 +151,11 @@ func (p *parser) parseAttributes(start Token) error {
 	return nil
 }
 
-// parseExtern parses and ignores an extern function signature.
-func (p *parser) parseExtern(start Token) error {
-	_ = start
-
-	// Expect (
-	if _, err := p.expectType(TypeLparen); err != nil {
-		return err
-	}
-
-	// Skip parameters
-	for {
-		tok, err := p.expectType(TypeRparen, TypeIdent)
-		if err != nil {
-			return err
-		}
-
-		if tok.Type == TypeRparen {
-			break
-		}
-
-		// skip type after identifier
-		if _, err := p.expectType(TypeColon); err != nil {
-			return err
-		}
-
-		if _, err := p.expectKeyword(KeywordInt, KeywordString); err != nil {
-			return err
-		}
-
-		tok, err = p.expectType(TypeComma, TypeRparen)
-		if err != nil {
-			return err
-		}
-
-		if tok.Type == TypeRparen {
-			break
-		}
-	}
-
-	// Optionally handle return type (-> type)
-	tok, err := p.nextToken()
-	if err != nil {
-		return err
-	}
-
-	if tok.Type == TypeArrow {
-		if _, err := p.expectKeyword(KeywordInt, KeywordString, KeywordVoid); err != nil {
-			return err
-		}
-	} else {
-		p.index-- // unread the token if it's not an arrow
-	}
-
-	return nil
-}
-
 func (p *parser) parseFunc(name Token) error {
+	defer func() {
+		clear(p.attributes)
+	}()
+
 	if _, err := p.expectType(TypeLparen); err != nil {
 		return err
 	}
@@ -267,7 +199,7 @@ func (p *parser) parseFunc(name Token) error {
 		}
 	}
 
-	lbrace, err := p.expectType(TypeLbrace, TypeArrow)
+	arrow, err := p.peekType(TypeArrow)
 	if err != nil {
 		return err
 	}
@@ -276,39 +208,43 @@ func (p *parser) parseFunc(name Token) error {
 		Keyword: KeywordVoid,
 	}
 
-	if lbrace.Type == TypeArrow {
+	if arrow.Type == TypeArrow {
 		// read the return type
 		retType, err = p.expectKeyword(KeywordInt, KeywordString, KeywordVoid)
 		if err != nil {
 			return err
 		}
+	}
 
-		// read the lbrace
-		lbrace, err = p.expectType(TypeLbrace)
+	if _, ok := p.attributes["extern"]; ok {
+		// no body
+		return nil
+	} else {
+		lbrace, err := p.expectType(TypeLbrace)
 		if err != nil {
 			return err
 		}
-	}
 
-	if err := p.parseBody(lbrace, retType); err != nil {
+		if err := p.parseBody(lbrace, retType); err != nil {
+			return err
+		}
+
+		_, err = p.expectType(TypeRbrace)
+
+		fn := NewFuncDef(Ident(name.StringVal), params...).WithBlocks(p.blocks...)
+
+		if _, ok := p.attributes["export"]; ok {
+			fn = fn.WithLinkage(NewLinkageExport())
+		}
+
+		if retType.Keyword == KeywordInt {
+			fn = fn.WithRetTy(NewAbiTyBase(BaseWord))
+		}
+
+		p.unit.WithFuncDefs(fn)
+
 		return err
 	}
-
-	_, err = p.expectType(TypeRbrace)
-
-	fn := NewFuncDef(Ident(name.StringVal), params...).WithBlocks(p.blocks...)
-
-	if _, ok := p.attributes["export"]; ok {
-		fn = fn.WithLinkage(NewLinkageExport())
-	}
-
-	if retType.Keyword == KeywordInt {
-		fn = fn.WithRetTy(NewAbiTyBase(BaseWord))
-	}
-
-	p.unit.WithFuncDefs(fn)
-
-	return err
 }
 
 func (p *parser) parseBody(start, retType Token) error {
@@ -443,6 +379,17 @@ func (p *parser) expectKeyword(kws ...Keyword) (Token, error) {
 
 	return token, fmt.Errorf("expected %s at %s, got %s",
 		strings.Join(kwnames, " or "), token.Location, token.StringVal)
+}
+
+func (p *parser) peekType(tts ...TokenType) (Token, error) {
+	tok, err := p.expectType(tts...)
+	if errors.Is(err, io.EOF) {
+		return tok, err
+	} else if err != nil {
+		p.index-- // Rollback index if not EOF
+	}
+
+	return tok, nil
 }
 
 func (p *parser) expectType(tts ...TokenType) (Token, error) {

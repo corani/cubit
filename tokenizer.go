@@ -33,7 +33,6 @@ const (
 	KeywordInt     Keyword = "int"
 	KeywordString  Keyword = "string"
 	KeywordVoid    Keyword = "void"
-	KeywordExtern  Keyword = "extern"
 	KeywordPackage Keyword = "package"
 )
 
@@ -93,8 +92,6 @@ func checkKeyword(ident string) (Keyword, bool) {
 		return KeywordString, true
 	case "void":
 		return KeywordVoid, true
-	case "extern":
-		return KeywordExtern, true
 	case "package":
 		return KeywordPackage, true
 	default:

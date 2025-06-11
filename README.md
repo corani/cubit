@@ -30,7 +30,8 @@ The provided `example.in`:
 ```odin
 package main
 
-printf :: extern(msg: string, arg: int)
+@(extern)
+printf :: func(msg: string, arg: int)
 
 hello :: func(arg: int) {
   printf("Hello from compiler-%d!\n", arg)
