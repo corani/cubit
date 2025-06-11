@@ -20,6 +20,7 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
 - `parser.go` - Parses tokens into AST.
 - `generator.go` - Generates code (SSA/QBE) from parsed operations.
 - `ast.go` - AST structures.
+- `attributes.go` - Attribute key/value types and validation logic.
 - `example.in` - Example source file for the compiler.
 - `go.mod` / `go.sum` - Go module files and dependencies.
 

@@ -12,7 +12,7 @@ type parser struct {
 	index      int
 	unit       *CompilationUnit
 	blocks     []Block
-	attributes map[string]string
+	attributes map[AttrKey]AttrValue
 	pkgName    string
 }
 
@@ -22,7 +22,7 @@ func NewParser(tok []Token) *parser {
 		index:      0,
 		unit:       new(CompilationUnit),
 		blocks:     nil,
-		attributes: make(map[string]string),
+		attributes: make(map[AttrKey]AttrValue),
 		pkgName:    "",
 	}
 }
@@ -115,8 +115,13 @@ func (p *parser) parseAttributes(start Token) error {
 		}
 
 		// Attribute key (string)
+
 		key := tok.StringVal
-		value := ""
+		validKey, err := ParseAttrKey(key)
+		if err != nil {
+			return err
+		}
+		var value AttrValue
 
 		// Check for '='
 		next, err := p.expectType(TypeEquals, TypeComma, TypeRparen)
@@ -125,13 +130,17 @@ func (p *parser) parseAttributes(start Token) error {
 		}
 
 		if next.Type == TypeEquals {
-			// Value must be a quoted string
-			valTok, err := p.expectType(TypeString)
+			// Value can be a string or number
+			valTok, err := p.expectType(TypeString, TypeNumber)
 			if err != nil {
 				return err
 			}
-
-			value = valTok.StringVal
+			switch valTok.Type {
+			case TypeString:
+				value = AttrString(valTok.StringVal)
+			case TypeNumber:
+				value = AttrInt(valTok.NumberVal)
+			}
 
 			// After value, expect comma or rparen
 			next, err = p.expectType(TypeComma, TypeRparen)
@@ -140,7 +149,7 @@ func (p *parser) parseAttributes(start Token) error {
 			}
 		}
 
-		p.attributes[key] = value
+		p.attributes[validKey] = value
 
 		if next.Type == TypeRparen {
 			break
