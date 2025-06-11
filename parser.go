@@ -7,25 +7,39 @@ import (
 )
 
 type parser struct {
-	tok    []Token
-	index  int
-	unit   *CompilationUnit
-	blocks []Block
+	tok        []Token
+	index      int
+	unit       *CompilationUnit
+	blocks     []Block
+	attributes map[string]string
 }
 
 func NewParser(tok []Token) *parser {
 	return &parser{
-		tok:   tok,
-		index: 0,
-		unit:  new(CompilationUnit),
+		tok:        tok,
+		index:      0,
+		unit:       new(CompilationUnit),
+		blocks:     nil,
+		attributes: make(map[string]string),
 	}
 }
 
 func (p *parser) Parse() (*CompilationUnit, error) {
 	for {
-		name, err := p.expectType(TypeIdent)
+		start, err := p.expectType(TypeIdent, TypeAt)
 		if err != nil {
 			return p.unit, err
+		}
+
+		if start.Type == TypeAt {
+			if err := p.parseAttributes(start); err != nil {
+				return p.unit, err
+			}
+
+			start, err = p.expectType(TypeIdent)
+			if err != nil {
+				return p.unit, err
+			}
 		}
 
 		if _, err := p.expectType(TypeColon); err != nil {
@@ -45,16 +59,74 @@ func (p *parser) Parse() (*CompilationUnit, error) {
 
 		switch token.Keyword {
 		case KeywordFunc:
-			if err := p.parseFunc(name); err != nil {
+			if err := p.parseFunc(start); err != nil {
 				return p.unit, err
 			}
 		case KeywordExtern:
 			// Parse and ignore extern function signature
-			if err := p.parseExtern(name); err != nil {
+			if err := p.parseExtern(start); err != nil {
 				return p.unit, err
 			}
 		}
 	}
+}
+
+func (p *parser) parseAttributes(start Token) error {
+	clear(p.attributes)
+
+	_ = start
+
+	// Expect opening parenthesis
+	_, err := p.expectType(TypeLparen)
+	if err != nil {
+		return err
+	}
+
+	// Parse attributes until closing parenthesis
+	for {
+		tok, err := p.expectType(TypeRparen, TypeIdent)
+		if err != nil {
+			return err
+		}
+		if tok.Type == TypeRparen {
+			break
+		}
+
+		// Attribute key (string)
+		key := tok.StringVal
+		value := ""
+
+		// Check for '='
+		next, err := p.expectType(TypeEquals, TypeComma, TypeRparen)
+		if err != nil {
+			return err
+		}
+
+		if next.Type == TypeEquals {
+			// Value must be a quoted string
+			valTok, err := p.expectType(TypeString)
+			if err != nil {
+				return err
+			}
+
+			value = valTok.StringVal
+
+			// After value, expect comma or rparen
+			next, err = p.expectType(TypeComma, TypeRparen)
+			if err != nil {
+				return err
+			}
+		}
+
+		p.attributes[key] = value
+
+		if next.Type == TypeRparen {
+			break
+		}
+		// else, next.Type == TypeComma, continue
+	}
+
+	return nil
 }
 
 // parseExtern parses and ignores an extern function signature.
@@ -188,7 +260,7 @@ func (p *parser) parseFunc(name Token) error {
 
 	fn := NewFuncDef(Ident(name.StringVal), params...).WithBlocks(p.blocks...)
 
-	if name.StringVal == "main" {
+	if _, ok := p.attributes["export"]; ok {
 		fn = fn.WithLinkage(NewLinkageExport())
 	}
 

@@ -34,6 +34,7 @@ hello :: func(arg: int) {
   printf("Hello from compiler-%d!\n", arg)
 }
 
+@(export)
 main :: func() -> int {
   hello(33)
 
@@ -66,7 +67,7 @@ go run main.go [options]
 
 1. Clone the repository.
 2. Run `go mod tidy` to install dependencies.
-3. Use `go run main.go` to compile the example or your own `.in` file.
+3. Use `go run . -run` to compile and run the example file.
 
 ---
 

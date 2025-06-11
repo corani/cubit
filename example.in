@@ -4,6 +4,7 @@ hello :: func(arg: int) {
   printf("Hello from compiler-%d!\n", arg)
 }
 
+@(export)
 main :: func() -> int {
   hello(33)
 

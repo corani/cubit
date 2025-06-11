@@ -21,6 +21,8 @@ const (
 	TypeComma   TokenType = "Comma"
 	TypeArrow   TokenType = "Arrow"
 	TypeColon   TokenType = "Colon"
+	TypeAt      TokenType = "At"
+	TypeEquals  TokenType = "Equals"
 )
 
 type Keyword string
@@ -69,6 +71,10 @@ func (t Token) String() string {
 		return "Arrow @ " + t.Location.String()
 	case TypeColon:
 		return "Colon @ " + t.Location.String()
+	case TypeAt:
+		return "At @ " + t.Location.String()
+	case TypeEquals:
+		return "Equals @ " + t.Location.String()
 	default:
 		return "Unknown @ " + t.Location.String()
 	}
@@ -141,6 +147,12 @@ func (t *tokenizer) next() (Token, error) {
 		start := t.scan.Location()
 
 		switch {
+		case c == '=':
+			return Token{
+				Type:      TypeEquals,
+				StringVal: "=",
+				Location:  start,
+			}, nil
 		case c == '(':
 			return Token{
 				Type:      TypeLparen,
@@ -175,6 +187,12 @@ func (t *tokenizer) next() (Token, error) {
 			return Token{
 				Type:      TypeColon,
 				StringVal: ":",
+				Location:  start,
+			}, nil
+		case c == '@':
+			return Token{
+				Type:      TypeAt,
+				StringVal: "@",
 				Location:  start,
 			}, nil
 		case c == '-':
