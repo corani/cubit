@@ -204,6 +204,27 @@ func (t *tokenizer) next() (Token, error) {
 				StringVal: "+",
 				Location:  start,
 			}, nil
+		case c == '/':
+			c, err := t.scan.Next()
+			if err != nil {
+				return Token{}, err
+			}
+
+			switch {
+			case c == '/':
+				// read a single-line comment
+				for {
+					c, err = t.scan.Next()
+					if err != nil {
+						return Token{}, err
+					}
+					if c == '\n' || c == '\r' {
+						break
+					}
+				}
+			default:
+				t.scan.Unread(1) // unread the character
+			}
 		case c == '-':
 			c, err := t.scan.Next()
 			if err != nil {

@@ -31,13 +31,16 @@ The provided `example.in`:
 ```odin
 package main
 
+// Declare an external function
 @(extern)
 printf :: func(msg: string, arg: int)
 
+// Define a function that calls printf
 hello :: func(arg: int) {
   printf("Hello from compiler-%d!\n", arg)
 }
 
+// Export the main function
 @(export)
 main :: func() -> int {
   hello(11+22)
