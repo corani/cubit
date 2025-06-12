@@ -23,6 +23,7 @@ const (
 	TypeColon   TokenType = "Colon"
 	TypeAt      TokenType = "At"
 	TypeEquals  TokenType = "Equals"
+	TypePlus    TokenType = "Plus"
 )
 
 type Keyword string
@@ -75,6 +76,8 @@ func (t Token) String() string {
 		return "At @ " + t.Location.String()
 	case TypeEquals:
 		return "Equals @ " + t.Location.String()
+	case TypePlus:
+		return "Plus @ " + t.Location.String()
 	default:
 		return "Unknown @ " + t.Location.String()
 	}
@@ -193,6 +196,12 @@ func (t *tokenizer) next() (Token, error) {
 			return Token{
 				Type:      TypeAt,
 				StringVal: "@",
+				Location:  start,
+			}, nil
+		case c == '+':
+			return Token{
+				Type:      TypePlus,
+				StringVal: "+",
 				Location:  start,
 			}, nil
 		case c == '-':

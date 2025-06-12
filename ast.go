@@ -881,3 +881,21 @@ const (
 	ArgEnv      ArgType = "env"      // Environment argument (first)
 	ArgVariadic ArgType = "variadic" // Variadic marker
 )
+
+type Add struct {
+	Lhs, Rhs Val
+	Ret      Val
+}
+
+func NewAdd(Ret, Lhs, Rhs Val) Add {
+	return Add{
+		Lhs: Lhs,
+		Rhs: Rhs,
+		Ret: Ret,
+	}
+}
+
+func (a Add) String() string {
+	// TODO(daniel): determine the return type
+	return fmt.Sprintf("%s =w add %s, %s", a.Ret.String(), a.Lhs.String(), a.Rhs.String())
+}

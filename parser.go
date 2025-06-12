@@ -14,6 +14,7 @@ type parser struct {
 	blocks     []Block
 	attributes map[AttrKey]AttrValue
 	pkgName    string
+	localID    int
 }
 
 func NewParser(tok []Token) *parser {
@@ -24,6 +25,7 @@ func NewParser(tok []Token) *parser {
 		blocks:     nil,
 		attributes: make(map[AttrKey]AttrValue),
 		pkgName:    "",
+		localID:    0,
 	}
 }
 
@@ -343,7 +345,25 @@ func (p *parser) parseBody(start, retType Token) error {
 					p.unit.WithDataDefs(NewDataDefStringZ(Ident(id), arg.StringVal))
 					args = append(args, NewArgRegular(NewAbiTyBase(BaseLong), NewValGlobal(Ident(id))))
 				case TypeNumber:
-					args = append(args, NewArgRegular(NewAbiTyBase(BaseWord), NewValInteger(int64(arg.NumberVal))))
+					lhs := NewValInteger(int64(arg.NumberVal))
+					// TODO(daniel): This is a hack to get '+' with two numbers to work here. This
+					// needs to be factored out in a proper expression parser.
+					next, err := p.peekType(TypePlus)
+					if err != nil {
+						return err
+					}
+					if next.Type == TypePlus {
+						next, err := p.expectType(TypeNumber)
+						if err != nil {
+							return err
+						}
+						rhs := NewValInteger(int64(next.NumberVal))
+						ret := NewValIdent(Ident(fmt.Sprintf("local_%d", p.localID)))
+						p.localID++
+						block.Instructions = append(block.Instructions, NewAdd(ret, lhs, rhs))
+						lhs = ret
+					}
+					args = append(args, NewArgRegular(NewAbiTyBase(BaseWord), lhs))
 				case TypeIdent:
 					args = append(args, NewArgRegular(NewAbiTyBase(BaseWord), NewValIdent(Ident(arg.StringVal))))
 				default:
@@ -387,7 +407,7 @@ func (p *parser) expectKeyword(kws ...Keyword) (Token, error) {
 	}
 
 	return token, fmt.Errorf("expected %s at %s, got %s",
-		strings.Join(kwnames, " or "), token.Location, token.StringVal)
+		strings.Join(kwnames, " or "), token.Location, token.Keyword)
 }
 
 func (p *parser) peekType(tts ...TokenType) (Token, error) {
@@ -417,7 +437,7 @@ func (p *parser) expectType(tts ...TokenType) (Token, error) {
 	}
 
 	return token, fmt.Errorf("expected %s at %s, got %s",
-		strings.Join(ttnames, " or "), token.Location, token.StringVal)
+		strings.Join(ttnames, " or "), token.Location, token.Type)
 }
 
 func (p *parser) nextToken() (Token, error) {

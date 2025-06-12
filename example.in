@@ -9,7 +9,7 @@ hello :: func(arg: int) {
 
 @(export)
 main :: func() -> int {
-  hello(33)
+  hello(11+22)
 
   return 0
 }
