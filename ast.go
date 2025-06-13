@@ -899,3 +899,17 @@ func (a Add) String() string {
 	// TODO(daniel): determine the return type
 	return fmt.Sprintf("%s =w add %s, %s", a.Ret.String(), a.Lhs.String(), a.Rhs.String())
 }
+
+type Instr struct {
+	Str string
+}
+
+func NewInstr(str string) Instr {
+	return Instr{
+		Str: str,
+	}
+}
+
+func (i Instr) String() string {
+	return i.Str
+}

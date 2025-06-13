@@ -264,7 +264,7 @@ func (p *parser) parseBody(start, retType Token) error {
 			start.Location, start.StringVal)
 	}
 
-	block := Block{Label: "start"}
+	block := &Block{Label: "start"}
 
 	for {
 		first, err := p.nextToken()
@@ -294,7 +294,7 @@ func (p *parser) parseBody(start, retType Token) error {
 				}
 			}
 
-			p.blocks = []Block{block}
+			p.blocks = []Block{*block}
 
 			return nil
 		case TypeKeyword:
@@ -325,69 +325,150 @@ func (p *parser) parseBody(start, retType Token) error {
 				return err
 			}
 
-			if token.Type != TypeLparen {
+			switch token.Type {
+			case TypeLparen:
+				if err := p.parseCall(first, block); err != nil {
+					return err
+				}
+			case TypeColon:
+				if err := p.parseDecl(first, block); err != nil {
+					return err
+				}
+			default:
 				return fmt.Errorf("expected ( after identifier at %s, got %s",
 					token.Location, token.StringVal)
 			}
+		}
+	}
+}
 
-			arg, err := p.nextToken()
+func (p *parser) parseDecl(first Token, block *Block) error {
+	// Expect type
+	ty, err := p.expectKeyword(KeywordInt, KeywordString)
+	if err != nil {
+		return err
+	}
+
+	var abiTy AbiTy
+
+	switch ty.Keyword {
+	case KeywordInt:
+		abiTy = NewAbiTyBase(BaseWord)
+	case KeywordString:
+		abiTy = NewAbiTyBase(BaseLong)
+	default:
+		return fmt.Errorf("unexpected type %s at %s", ty.Keyword, ty.Location)
+	}
+
+	if _, err := p.expectType(TypeEquals); err != nil {
+		return err
+	}
+
+	lhs, err := p.expectType(TypeNumber, TypeIdent)
+	if err != nil {
+		return err
+	}
+
+	var val Val
+
+	switch lhs.Type {
+	case TypeNumber:
+		val, err = p.parseVal(NewValInteger(int64(lhs.NumberVal)), block)
+		if err != nil {
+			return err
+		}
+	case TypeIdent:
+		val, err = p.parseVal(NewValIdent(Ident(lhs.StringVal)), block)
+		if err != nil {
+			return err
+		}
+	}
+
+	// generate an assignment instruction
+	// TODO(daniel): this is a hack to assign the generated local name to the local variable name.
+	block.Instructions = append(block.Instructions,
+		NewInstr(fmt.Sprintf("%%%s =%s add 0, %%%s", first.StringVal, abiTy.String(), val.Ident)))
+
+	return nil
+}
+
+func (p *parser) parseCall(first Token, block *Block) error {
+	arg, err := p.nextToken()
+	if err != nil {
+		return err
+	}
+
+	var args []Arg
+
+	// Read function arguments
+	for arg.Type != TypeRparen {
+		switch arg.Type {
+		case TypeString:
+			id := fmt.Sprintf("data_%s%d", first.StringVal, len(args))
+			p.unit.WithDataDefs(NewDataDefStringZ(Ident(id), arg.StringVal))
+			args = append(args, NewArgRegular(NewAbiTyBase(BaseLong), NewValGlobal(Ident(id))))
+		case TypeNumber:
+			lhs := NewValInteger(int64(arg.NumberVal))
+
+			lhs, err := p.parseVal(lhs, block)
 			if err != nil {
 				return err
 			}
 
-			var args []Arg
+			args = append(args, NewArgRegular(NewAbiTyBase(BaseWord), lhs))
+		case TypeIdent:
+			lhs := NewValIdent(Ident(arg.StringVal))
 
-			// Read function arguments
-			for arg.Type != TypeRparen {
-				switch arg.Type {
-				case TypeString:
-					id := fmt.Sprintf("data_%s%d", first.StringVal, len(args))
-					p.unit.WithDataDefs(NewDataDefStringZ(Ident(id), arg.StringVal))
-					args = append(args, NewArgRegular(NewAbiTyBase(BaseLong), NewValGlobal(Ident(id))))
-				case TypeNumber:
-					lhs := NewValInteger(int64(arg.NumberVal))
-					// TODO(daniel): This is a hack to get '+' with two numbers to work here. This
-					// needs to be factored out in a proper expression parser.
-					next, err := p.peekType(TypePlus)
-					if err != nil {
-						return err
-					}
-					if next.Type == TypePlus {
-						next, err := p.expectType(TypeNumber)
-						if err != nil {
-							return err
-						}
-						rhs := NewValInteger(int64(next.NumberVal))
-						ret := NewValIdent(Ident(fmt.Sprintf("local_%d", p.localID)))
-						p.localID++
-						block.Instructions = append(block.Instructions, NewAdd(ret, lhs, rhs))
-						lhs = ret
-					}
-					args = append(args, NewArgRegular(NewAbiTyBase(BaseWord), lhs))
-				case TypeIdent:
-					args = append(args, NewArgRegular(NewAbiTyBase(BaseWord), NewValIdent(Ident(arg.StringVal))))
-				default:
-					return fmt.Errorf("unexpected argument type %s at %s, expected string or number",
-						arg.Type, arg.Location)
-				}
-
-				arg, err = p.expectType(TypeRparen, TypeComma)
-				if err != nil {
-					return err
-				}
-
-				if arg.Type == TypeComma {
-					arg, err = p.nextToken()
-					if err != nil {
-						return err
-					}
-				}
+			lhs, err := p.parseVal(lhs, block)
+			if err != nil {
+				return err
 			}
 
-			block.Instructions = append(block.Instructions,
-				NewCall(NewValGlobal(Ident(first.StringVal)), args...))
+			args = append(args, NewArgRegular(NewAbiTyBase(BaseWord), lhs))
+		default:
+			return fmt.Errorf("unexpected argument type %s at %s, expected string or number",
+				arg.Type, arg.Location)
+		}
+
+		arg, err = p.expectType(TypeRparen, TypeComma)
+		if err != nil {
+			return err
+		}
+
+		if arg.Type == TypeComma {
+			arg, err = p.nextToken()
+			if err != nil {
+				return err
+			}
 		}
 	}
+
+	block.Instructions = append(block.Instructions,
+		NewCall(NewValGlobal(Ident(first.StringVal)), args...))
+
+	return nil
+}
+
+func (p *parser) parseVal(lhs Val, block *Block) (Val, error) {
+	// TODO(daniel): This is a hack to get '+' with two numbers to work here. This
+	// needs to be factored out in a proper expression parser.
+	next, err := p.peekType(TypePlus)
+	if err != nil {
+		return Val{}, err
+	}
+	if next.Type == TypePlus {
+		next, err := p.expectType(TypeNumber)
+		if err != nil {
+			return Val{}, err
+		}
+		rhs := NewValInteger(int64(next.NumberVal))
+		ret := NewValIdent(Ident(fmt.Sprintf("local_%d", p.localID)))
+		p.localID++
+		block.Instructions = append(block.Instructions, NewAdd(ret, lhs, rhs))
+		lhs = ret
+	}
+
+	return lhs, nil
 }
 
 func (p *parser) expectKeyword(kws ...Keyword) (Token, error) {

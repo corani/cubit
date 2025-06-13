@@ -13,8 +13,9 @@ hello :: func(arg: int) {
 // Export the main function
 @(export)
 main :: func() -> int {
-  // Call hello with a computed argument
-  hello(11+22)
+  count : int = 11 + 12
+
+  hello(count + 10)
 
   // Return 0 to indicate success
   return 0

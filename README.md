@@ -43,7 +43,9 @@ hello :: func(arg: int) {
 // Export the main function
 @(export)
 main :: func() -> int {
-  hello(11+22)
+  count : int = 11 + 22
+
+  hello(count)
 
   return 0
 }
@@ -52,7 +54,7 @@ main :: func() -> int {
 ## Usage 🏃
 
 ```sh
-go run main.go [options]
+go run . [options]
 ```
 
 ### Options
