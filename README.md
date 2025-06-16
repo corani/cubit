@@ -19,7 +19,8 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
   - `lexer/tokenizer.go` - Tokenizes the input source code.
   - `lexer/scanner.go` - Reads and manages input data for tokenization.
 - `parser.go` - Parses tokens into AST.
-- `generator.go` - Generates code (SSA/QBE) from parsed operations.
+- `codegen/` - Contains code generation logic:
+  - `codegen/generator.go` - Generates code (SSA/QBE) from parsed operations.
 - `ast/` - Contains the AST package:
   - `ast/ast.go` - AST structures and attribute logic (moved from `ast.go` and `attributes.go`).
   - `ast/ast_test.go` - Unit tests for AST types and functions.

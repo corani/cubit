@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/corani/refactored-giggle/codegen"
 	"github.com/corani/refactored-giggle/lexer"
 )
 
@@ -91,11 +92,11 @@ func main() {
 		}
 	}
 
-	if err := GenerateAssembly(srcFile, code, asmFile); err != nil {
+	if err := codegen.GenerateAssembly(srcFile, code, asmFile); err != nil {
 		panic(fmt.Sprintf("failed to generate assembly: %v", err))
 	}
 
-	if err := Compile(asmFile, binFile, run); err != nil {
+	if err := codegen.Compile(asmFile, binFile, run); err != nil {
 		panic(fmt.Sprintf("failed to compile assembly: %v", err))
 	}
 }
