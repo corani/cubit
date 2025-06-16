@@ -20,8 +20,9 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
   - `lexer/scanner.go` - Reads and manages input data for tokenization.
 - `parser.go` - Parses tokens into AST.
 - `generator.go` - Generates code (SSA/QBE) from parsed operations.
-- `ast.go` - AST structures.
-- `attributes.go` - Attribute key/value types and validation logic.
+- `ast/` - Contains the AST package:
+  - `ast/ast.go` - AST structures and attribute logic (moved from `ast.go` and `attributes.go`).
+  - `ast/ast_test.go` - Unit tests for AST types and functions.
 - `example.in` - Example source file for the compiler.
 - `go.mod` / `go.sum` - Go module files and dependencies.
 

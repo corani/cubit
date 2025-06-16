@@ -1,6 +1,8 @@
-package main
+package ast
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // AttrKey is a type for attribute keys.
 type AttrKey string

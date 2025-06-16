@@ -1,4 +1,4 @@
-package main
+package ast
 
 import (
 	"testing"
@@ -12,7 +12,7 @@ func TestAST_CompilationUnit(t *testing.T) {
 	unit := new(CompilationUnit)
 
 	unit.WithDataDefs(
-		NewDataDefStringZ(Ident("data_hello0"), "Hello from test-%d!\n"))
+		NewDataDefStringZ(Ident("data_hello0"), `Hello from test-%d!\n`))
 
 	unit.WithFuncDefs(
 		NewFuncDef(Ident("hello"),
