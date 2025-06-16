@@ -14,19 +14,19 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
 
 ## Project Structure 📁
 
-- `main.go` - Entry point, handles CLI flags and orchestrates compilation.
-- `lexer/` - Contains the lexer package:
-  - `lexer/tokenizer.go` - Tokenizes the input source code.
-  - `lexer/scanner.go` - Reads and manages input data for tokenization.
-- `parser/` - Contains the parser package:
-  - `parser/parser.go` - Parses tokens into AST.
-- `codegen/` - Contains code generation logic:
-  - `codegen/generator.go` - Generates code (SSA/QBE) from parsed operations.
-- `ast/` - Contains the AST package:
-  - `ast/ast.go` - AST structures and attribute logic (moved from `ast.go` and `attributes.go`).
-  - `ast/ast_test.go` - Unit tests for AST types and functions.
-- `example.in` - Example source file for the compiler.
-- `go.mod` / `go.sum` - Go module files and dependencies.
+- 📦 `cmd/c33/main.go` - Entry point, handles CLI flags and orchestrates compilation.
+- 📁 `lexer/` - Contains the lexer package:
+  - 📄 `tokenizer.go` - Tokenizes the input source code.
+  - 📄 `scanner.go` - Reads and manages input data for tokenization.
+- 📁 `parser/` - Contains the parser package:
+  - 📄 `parser.go` - Parses tokens into AST.
+- 📁 `codegen/` - Contains code generation logic:
+  - 📄 `generator.go` - Generates code (SSA/QBE) from parsed operations.
+- 📁 `ast/` - Contains the AST package:
+  - 📄 `ast.go` - AST structures and attribute logic.
+  - 🧪 `ast_test.go` - Unit tests for AST types and functions.
+- 📄 `example.in` - Example source file for the compiler.
+- 📄 `go.mod` / `go.sum` - Go module files and dependencies.
 
 ## Example 📝
 
@@ -58,7 +58,7 @@ main :: func() -> int {
 ## Usage 🏃
 
 ```sh
-go run . [options]
+go run ./cmd/c33 [options]
 ```
 
 ### Options
@@ -80,7 +80,7 @@ go run . [options]
 
 1. Clone the repository.
 2. Run `go mod tidy` to install dependencies.
-3. Use `go run . -run` to compile and run the example file.
+3. Use `go run ./cmd/c33 -run` to compile and run the example file.
 
 ---
 
