@@ -262,5 +262,3 @@ func isAlphanumeric(a byte) bool { return isAlpha(a) || isNumeric(a) }
 func isAlpha(a byte) bool        { return (a >= 'a' && a <= 'z') || (a >= 'A' && a <= 'Z') || a == '_' }
 func isNumeric(d byte) bool      { return d >= '0' && d <= '9' }
 func isWhitespace(c byte) bool   { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
-
-// Location and Scanner are defined in scanner.go

@@ -8,18 +8,26 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/corani/refactored-giggle/ast"
 	"modernc.org/libqbe"
 )
 
-func GenerateAssembly(srcfile, code, asmfile string) error {
+// WriteSSA writes the SSA code for the given CompilationUnit to the specified filename.
+func WriteSSA(unit *ast.CompilationUnit, filename string) error {
+	return os.WriteFile(filename, []byte(unit.String()), 0644)
+}
+
+// GenerateAssembly generates assembly from the given CompilationUnit.
+func GenerateAssembly(srcfile string, unit *ast.CompilationUnit, asmfile string) error {
 	var w bytes.Buffer
 
 	if err := libqbe.Main(
 		libqbe.DefaultTarget(runtime.GOOS, runtime.GOARCH),
-		srcfile, strings.NewReader(code), &w, nil,
+		srcfile, strings.NewReader(unit.String()), &w, nil,
 	); err != nil {
 		return err
 	}
+
 	return os.WriteFile(asmfile, w.Bytes(), 0644)
 }
 

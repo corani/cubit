@@ -84,15 +84,13 @@ func main() {
 		panic(fmt.Sprintf("failed to parse: %v", err))
 	}
 
-	code := unit.String()
-
 	if writeSSA {
-		if err := os.WriteFile(ssaFile, []byte(code), 0644); err != nil {
+		if err := codegen.WriteSSA(unit, ssaFile); err != nil {
 			panic(fmt.Sprintf("failed to write SSA file: %v", err))
 		}
 	}
 
-	if err := codegen.GenerateAssembly(srcFile, code, asmFile); err != nil {
+	if err := codegen.GenerateAssembly(srcFile, unit, asmFile); err != nil {
 		panic(fmt.Sprintf("failed to generate assembly: %v", err))
 	}
 

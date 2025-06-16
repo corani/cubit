@@ -92,8 +92,6 @@ func (p *Parser) Parse() (*ast.CompilationUnit, error) {
 	}
 }
 
-// All methods below: replace receiver type from *parser to *Parser
-
 func (p *Parser) parsePackage(start lexer.Token) error {
 	_ = start
 	if p.pkgName != "" {
