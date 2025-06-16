@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/corani/refactored-giggle/lexer"
 )
 
 type parser struct {
-	tok        []Token
+	tok        []lexer.Token
 	index      int
 	unit       *CompilationUnit
 	blocks     []Block
@@ -17,9 +19,21 @@ type parser struct {
 	localID    int
 }
 
-func NewParser(tok []Token) *parser {
+func NewParser(tok []lexer.Token) *parser {
+	// Accepts []lexer.Token, but for compatibility with old code, allow []Token as input and convert if needed
+	toks := make([]lexer.Token, len(tok))
+	for i, t := range tok {
+		toks[i] = lexer.Token{
+			Type:       lexer.TokenType(t.Type),
+			Keyword:    lexer.Keyword(t.Keyword),
+			Identifier: t.Identifier,
+			StringVal:  t.StringVal,
+			NumberVal:  t.NumberVal,
+			Location:   lexer.Location(t.Location),
+		}
+	}
 	return &parser{
-		tok:        tok,
+		tok:        toks,
 		index:      0,
 		unit:       new(CompilationUnit),
 		blocks:     nil,
@@ -31,19 +45,19 @@ func NewParser(tok []Token) *parser {
 
 func (p *parser) Parse() (*CompilationUnit, error) {
 	for {
-		start, err := p.expectType(TypeKeyword, TypeIdent, TypeAt)
+		start, err := p.expectType(lexer.TypeKeyword, lexer.TypeIdent, lexer.TypeAt)
 		if err != nil {
 			return p.unit, err
 		}
 
 		switch start.Type {
-		case TypeAt:
+		case lexer.TypeAt:
 			if err := p.parseAttributes(start); err != nil {
 				return p.unit, err
 			}
-		case TypeKeyword:
+		case lexer.TypeKeyword:
 			switch start.Keyword {
-			case KeywordPackage:
+			case lexer.KeywordPackage:
 				if err := p.parsePackage(start); err != nil {
 					return p.unit, err
 				}
@@ -51,23 +65,23 @@ func (p *parser) Parse() (*CompilationUnit, error) {
 				return p.unit, fmt.Errorf("expected package keyword at %s, got %s",
 					start.Location, start.StringVal)
 			}
-		case TypeIdent:
+		case lexer.TypeIdent:
 			if p.pkgName == "" {
 				return p.unit, fmt.Errorf("package must be defined before any other declarations at %s",
 					start.Location)
 			}
 
-			if _, err := p.expectType(TypeColon); err != nil {
+			if _, err := p.expectType(lexer.TypeColon); err != nil {
 				return p.unit, err
 			}
 
 			// TODO(daniel): parse optional type.
 
-			if _, err := p.expectType(TypeColon); err != nil {
+			if _, err := p.expectType(lexer.TypeColon); err != nil {
 				return p.unit, err
 			}
 
-			if _, err := p.expectKeyword(KeywordFunc); err != nil {
+			if _, err := p.expectKeyword(lexer.KeywordFunc); err != nil {
 				return p.unit, err
 			}
 
@@ -78,7 +92,7 @@ func (p *parser) Parse() (*CompilationUnit, error) {
 	}
 }
 
-func (p *parser) parsePackage(start Token) error {
+func (p *parser) parsePackage(start lexer.Token) error {
 	_ = start
 
 	if p.pkgName != "" {
@@ -87,7 +101,7 @@ func (p *parser) parsePackage(start Token) error {
 	}
 
 	// Expect package name
-	pkgName, err := p.expectType(TypeIdent)
+	pkgName, err := p.expectType(lexer.TypeIdent)
 	if err != nil {
 		return err
 	}
@@ -97,22 +111,22 @@ func (p *parser) parsePackage(start Token) error {
 	return nil
 }
 
-func (p *parser) parseAttributes(start Token) error {
+func (p *parser) parseAttributes(start lexer.Token) error {
 	_ = start
 
 	// Expect opening parenthesis
-	_, err := p.expectType(TypeLparen)
+	_, err := p.expectType(lexer.TypeLparen)
 	if err != nil {
 		return err
 	}
 
 	// Parse attributes until closing parenthesis
 	for {
-		tok, err := p.expectType(TypeRparen, TypeIdent)
+		tok, err := p.expectType(lexer.TypeRparen, lexer.TypeIdent)
 		if err != nil {
 			return err
 		}
-		if tok.Type == TypeRparen {
+		if tok.Type == lexer.TypeRparen {
 			break
 		}
 
@@ -126,26 +140,26 @@ func (p *parser) parseAttributes(start Token) error {
 		var value AttrValue
 
 		// Check for '='
-		next, err := p.expectType(TypeEquals, TypeComma, TypeRparen)
+		next, err := p.expectType(lexer.TypeEquals, lexer.TypeComma, lexer.TypeRparen)
 		if err != nil {
 			return err
 		}
 
-		if next.Type == TypeEquals {
+		if next.Type == lexer.TypeEquals {
 			// Value can be a string or number
-			valTok, err := p.expectType(TypeString, TypeNumber)
+			valTok, err := p.expectType(lexer.TypeString, lexer.TypeNumber)
 			if err != nil {
 				return err
 			}
 			switch valTok.Type {
-			case TypeString:
+			case lexer.TypeString:
 				value = AttrString(valTok.StringVal)
-			case TypeNumber:
+			case lexer.TypeNumber:
 				value = AttrInt(valTok.NumberVal)
 			}
 
 			// After value, expect comma or rparen
-			next, err = p.expectType(TypeComma, TypeRparen)
+			next, err = p.expectType(lexer.TypeComma, lexer.TypeRparen)
 			if err != nil {
 				return err
 			}
@@ -153,7 +167,7 @@ func (p *parser) parseAttributes(start Token) error {
 
 		p.attributes[validKey] = value
 
-		if next.Type == TypeRparen {
+		if next.Type == lexer.TypeRparen {
 			break
 		}
 		// else, next.Type == TypeComma, continue
@@ -162,12 +176,13 @@ func (p *parser) parseAttributes(start Token) error {
 	return nil
 }
 
-func (p *parser) parseFunc(name Token) error {
+// removed duplicate definition
+func (p *parser) parseFunc(name lexer.Token) error {
 	defer func() {
 		clear(p.attributes)
 	}()
 
-	if _, err := p.expectType(TypeLparen); err != nil {
+	if _, err := p.expectType(lexer.TypeLparen); err != nil {
 		return err
 	}
 
@@ -175,53 +190,53 @@ func (p *parser) parseFunc(name Token) error {
 
 	// Parse parameters
 	for {
-		arg, err := p.expectType(TypeRparen, TypeIdent)
+		arg, err := p.expectType(lexer.TypeRparen, lexer.TypeIdent)
 		if err != nil {
 			return err
 		}
 
-		if arg.Type == TypeRparen {
+		if arg.Type == lexer.TypeRparen {
 			break
 		}
 
-		if _, err := p.expectType(TypeColon); err != nil {
+		if _, err := p.expectType(lexer.TypeColon); err != nil {
 			return err
 		}
 
-		argType, err := p.expectKeyword(KeywordInt, KeywordString)
+		argType, err := p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
 		if err != nil {
 			return err
 		}
 
 		switch argType.Keyword {
-		case KeywordInt:
+		case lexer.KeywordInt:
 			params = append(params, NewParamRegular(NewAbiTyBase(BaseWord), Ident(arg.StringVal)))
-		case KeywordString:
+		case lexer.KeywordString:
 			params = append(params, NewParamRegular(NewAbiTyBase(BaseLong), Ident(arg.StringVal)))
 		}
 
-		tok, err := p.expectType(TypeComma, TypeRparen)
+		tok, err := p.expectType(lexer.TypeComma, lexer.TypeRparen)
 		if err != nil {
 			return err
 		}
 
-		if tok.Type == TypeRparen {
+		if tok.Type == lexer.TypeRparen {
 			break
 		}
 	}
 
-	arrow, err := p.peekType(TypeArrow)
+	arrow, err := p.peekType(lexer.TypeArrow)
 	if err != nil {
 		return err
 	}
 
-	retType := Token{
-		Keyword: KeywordVoid,
+	retType := lexer.Token{
+		Keyword: lexer.KeywordVoid,
 	}
 
-	if arrow.Type == TypeArrow {
+	if arrow.Type == lexer.TypeArrow {
 		// read the return type
-		retType, err = p.expectKeyword(KeywordInt, KeywordString, KeywordVoid)
+		retType, err = p.expectKeyword(lexer.KeywordInt, lexer.KeywordString, lexer.KeywordVoid)
 		if err != nil {
 			return err
 		}
@@ -231,7 +246,7 @@ func (p *parser) parseFunc(name Token) error {
 		// no body
 		return nil
 	} else {
-		lbrace, err := p.expectType(TypeLbrace)
+		lbrace, err := p.expectType(lexer.TypeLbrace)
 		if err != nil {
 			return err
 		}
@@ -240,7 +255,7 @@ func (p *parser) parseFunc(name Token) error {
 			return err
 		}
 
-		_, err = p.expectType(TypeRbrace)
+		_, err = p.expectType(lexer.TypeRbrace)
 
 		fn := NewFuncDef(Ident(name.StringVal), params...).WithBlocks(p.blocks...)
 
@@ -248,7 +263,7 @@ func (p *parser) parseFunc(name Token) error {
 			fn = fn.WithLinkage(NewLinkageExport())
 		}
 
-		if retType.Keyword == KeywordInt {
+		if retType.Keyword == lexer.KeywordInt {
 			fn = fn.WithRetTy(NewAbiTyBase(BaseWord))
 		}
 
@@ -258,8 +273,9 @@ func (p *parser) parseFunc(name Token) error {
 	}
 }
 
-func (p *parser) parseBody(start, retType Token) error {
-	if start.Type != TypeLbrace {
+// removed duplicate definition
+func (p *parser) parseBody(start, retType lexer.Token) error {
+	if start.Type != lexer.TypeLbrace {
 		return fmt.Errorf("expected { at %s, got %s",
 			start.Location, start.StringVal)
 	}
@@ -273,7 +289,7 @@ func (p *parser) parseBody(start, retType Token) error {
 		}
 
 		switch first.Type {
-		case TypeRbrace:
+		case lexer.TypeRbrace:
 			p.index--
 
 			addRet := false
@@ -287,7 +303,7 @@ func (p *parser) parseBody(start, retType Token) error {
 
 			if addRet {
 				switch retType.Keyword {
-				case KeywordVoid:
+				case lexer.KeywordVoid:
 					block.Instructions = append(block.Instructions, NewRet())
 				default:
 					return fmt.Errorf("expected return statement at %s", first.Location)
@@ -297,11 +313,11 @@ func (p *parser) parseBody(start, retType Token) error {
 			p.blocks = []Block{*block}
 
 			return nil
-		case TypeKeyword:
+		case lexer.TypeKeyword:
 			switch first.Keyword {
-			case KeywordReturn:
+			case lexer.KeywordReturn:
 				// parse return value
-				ret, err := p.expectType(TypeString, TypeNumber, TypeIdent)
+				ret, err := p.expectType(lexer.TypeString, lexer.TypeNumber, lexer.TypeIdent)
 				if err != nil {
 					return err
 				}
@@ -309,7 +325,7 @@ func (p *parser) parseBody(start, retType Token) error {
 				var val Val
 
 				switch ret.Type {
-				case TypeNumber:
+				case lexer.TypeNumber:
 					val = NewValInteger(int64(ret.NumberVal))
 				default:
 					panic(fmt.Sprintf("unexpected return type %s at %s, expected number",
@@ -318,7 +334,7 @@ func (p *parser) parseBody(start, retType Token) error {
 
 				block.Instructions = append(block.Instructions, NewRet(val))
 			}
-		case TypeIdent:
+		case lexer.TypeIdent:
 			// Check if it's a function call
 			token, err := p.nextToken()
 			if err != nil {
@@ -326,11 +342,11 @@ func (p *parser) parseBody(start, retType Token) error {
 			}
 
 			switch token.Type {
-			case TypeLparen:
+			case lexer.TypeLparen:
 				if err := p.parseCall(first, block); err != nil {
 					return err
 				}
-			case TypeColon:
+			case lexer.TypeColon:
 				if err := p.parseDecl(first, block); err != nil {
 					return err
 				}
@@ -342,9 +358,9 @@ func (p *parser) parseBody(start, retType Token) error {
 	}
 }
 
-func (p *parser) parseDecl(first Token, block *Block) error {
+func (p *parser) parseDecl(first lexer.Token, block *Block) error {
 	// Expect type
-	ty, err := p.expectKeyword(KeywordInt, KeywordString)
+	ty, err := p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
 	if err != nil {
 		return err
 	}
@@ -352,19 +368,19 @@ func (p *parser) parseDecl(first Token, block *Block) error {
 	var abiTy AbiTy
 
 	switch ty.Keyword {
-	case KeywordInt:
+	case lexer.KeywordInt:
 		abiTy = NewAbiTyBase(BaseWord)
-	case KeywordString:
+	case lexer.KeywordString:
 		abiTy = NewAbiTyBase(BaseLong)
 	default:
 		return fmt.Errorf("unexpected type %s at %s", ty.Keyword, ty.Location)
 	}
 
-	if _, err := p.expectType(TypeEquals); err != nil {
+	if _, err := p.expectType(lexer.TypeEquals); err != nil {
 		return err
 	}
 
-	lhs, err := p.expectType(TypeNumber, TypeIdent)
+	lhs, err := p.expectType(lexer.TypeNumber, lexer.TypeIdent)
 	if err != nil {
 		return err
 	}
@@ -372,12 +388,12 @@ func (p *parser) parseDecl(first Token, block *Block) error {
 	var val Val
 
 	switch lhs.Type {
-	case TypeNumber:
+	case lexer.TypeNumber:
 		val, err = p.parseVal(NewValInteger(int64(lhs.NumberVal)), block)
 		if err != nil {
 			return err
 		}
-	case TypeIdent:
+	case lexer.TypeIdent:
 		val, err = p.parseVal(NewValIdent(Ident(lhs.StringVal)), block)
 		if err != nil {
 			return err
@@ -392,7 +408,7 @@ func (p *parser) parseDecl(first Token, block *Block) error {
 	return nil
 }
 
-func (p *parser) parseCall(first Token, block *Block) error {
+func (p *parser) parseCall(first lexer.Token, block *Block) error {
 	arg, err := p.nextToken()
 	if err != nil {
 		return err
@@ -401,13 +417,13 @@ func (p *parser) parseCall(first Token, block *Block) error {
 	var args []Arg
 
 	// Read function arguments
-	for arg.Type != TypeRparen {
+	for arg.Type != lexer.TypeRparen {
 		switch arg.Type {
-		case TypeString:
+		case lexer.TypeString:
 			id := fmt.Sprintf("data_%s%d", first.StringVal, len(args))
 			p.unit.WithDataDefs(NewDataDefStringZ(Ident(id), arg.StringVal))
 			args = append(args, NewArgRegular(NewAbiTyBase(BaseLong), NewValGlobal(Ident(id))))
-		case TypeNumber:
+		case lexer.TypeNumber:
 			lhs := NewValInteger(int64(arg.NumberVal))
 
 			lhs, err := p.parseVal(lhs, block)
@@ -416,7 +432,7 @@ func (p *parser) parseCall(first Token, block *Block) error {
 			}
 
 			args = append(args, NewArgRegular(NewAbiTyBase(BaseWord), lhs))
-		case TypeIdent:
+		case lexer.TypeIdent:
 			lhs := NewValIdent(Ident(arg.StringVal))
 
 			lhs, err := p.parseVal(lhs, block)
@@ -430,12 +446,12 @@ func (p *parser) parseCall(first Token, block *Block) error {
 				arg.Type, arg.Location)
 		}
 
-		arg, err = p.expectType(TypeRparen, TypeComma)
+		arg, err = p.expectType(lexer.TypeRparen, lexer.TypeComma)
 		if err != nil {
 			return err
 		}
 
-		if arg.Type == TypeComma {
+		if arg.Type == lexer.TypeComma {
 			arg, err = p.nextToken()
 			if err != nil {
 				return err
@@ -452,12 +468,12 @@ func (p *parser) parseCall(first Token, block *Block) error {
 func (p *parser) parseVal(lhs Val, block *Block) (Val, error) {
 	// TODO(daniel): This is a hack to get '+' with two numbers to work here. This
 	// needs to be factored out in a proper expression parser.
-	next, err := p.peekType(TypePlus)
+	next, err := p.peekType(lexer.TypePlus)
 	if err != nil {
 		return Val{}, err
 	}
-	if next.Type == TypePlus {
-		next, err := p.expectType(TypeNumber)
+	if next.Type == lexer.TypePlus {
+		next, err := p.expectType(lexer.TypeNumber)
 		if err != nil {
 			return Val{}, err
 		}
@@ -471,8 +487,8 @@ func (p *parser) parseVal(lhs Val, block *Block) (Val, error) {
 	return lhs, nil
 }
 
-func (p *parser) expectKeyword(kws ...Keyword) (Token, error) {
-	token, err := p.expectType(TypeKeyword)
+func (p *parser) expectKeyword(kws ...lexer.Keyword) (lexer.Token, error) {
+	token, err := p.expectType(lexer.TypeKeyword)
 	if err != nil {
 		return token, err
 	}
@@ -491,7 +507,7 @@ func (p *parser) expectKeyword(kws ...Keyword) (Token, error) {
 		strings.Join(kwnames, " or "), token.Location, token.Keyword)
 }
 
-func (p *parser) peekType(tts ...TokenType) (Token, error) {
+func (p *parser) peekType(tts ...lexer.TokenType) (lexer.Token, error) {
 	tok, err := p.expectType(tts...)
 	if errors.Is(err, io.EOF) {
 		return tok, err
@@ -502,7 +518,7 @@ func (p *parser) peekType(tts ...TokenType) (Token, error) {
 	return tok, nil
 }
 
-func (p *parser) expectType(tts ...TokenType) (Token, error) {
+func (p *parser) expectType(tts ...lexer.TokenType) (lexer.Token, error) {
 	token, err := p.nextToken()
 	if err != nil {
 		return token, err
@@ -521,9 +537,9 @@ func (p *parser) expectType(tts ...TokenType) (Token, error) {
 		strings.Join(ttnames, " or "), token.Location, token.Type)
 }
 
-func (p *parser) nextToken() (Token, error) {
+func (p *parser) nextToken() (lexer.Token, error) {
 	if p.index >= len(p.tok) {
-		return Token{}, io.EOF
+		return lexer.Token{}, io.EOF
 	}
 
 	token := p.tok[p.index]

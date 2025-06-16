@@ -1,4 +1,4 @@
-package main
+package lexer
 
 import (
 	"errors"
@@ -102,19 +102,19 @@ func checkKeyword(ident string) (Keyword, bool) {
 	}
 }
 
-type tokenizer struct {
-	scan   *scanner
-	buffer []Token
+type Tokenizer struct {
+	Scan   *Scanner
+	Buffer []Token
 }
 
-func NewTokenizer(scan *scanner) *tokenizer {
-	return &tokenizer{
-		scan:   scan,
-		buffer: nil,
+func NewTokenizer(scan *Scanner) *Tokenizer {
+	return &Tokenizer{
+		Scan:   scan,
+		Buffer: nil,
 	}
 }
 
-func (t *tokenizer) Tokens() ([]Token, error) {
+func (t *Tokenizer) Tokens() ([]Token, error) {
 	var tokens []Token
 
 	for {
@@ -123,98 +123,53 @@ func (t *tokenizer) Tokens() ([]Token, error) {
 			if errors.Is(err, io.EOF) {
 				return tokens, nil
 			}
-
 			return nil, err
 		}
-
 		tokens = append(tokens, token)
 	}
 }
 
-func (t *tokenizer) next() (Token, error) {
-	if len(t.buffer) > 0 {
-		token := t.buffer[0]
-		t.buffer = t.buffer[1:]
-
+func (t *Tokenizer) next() (Token, error) {
+	if len(t.Buffer) > 0 {
+		token := t.Buffer[0]
+		t.Buffer = t.Buffer[1:]
 		return token, nil
 	}
-
 	var buf []byte
-
 	for {
-		c, err := t.scan.Next()
+		c, err := t.Scan.Next()
 		if err != nil {
 			return Token{}, err
 		}
-
-		start := t.scan.Location()
-
+		start := t.Scan.Location()
 		switch {
 		case c == '=':
-			return Token{
-				Type:      TypeEquals,
-				StringVal: "=",
-				Location:  start,
-			}, nil
+			return Token{Type: TypeEquals, StringVal: "=", Location: start}, nil
 		case c == '(':
-			return Token{
-				Type:      TypeLparen,
-				StringVal: "(",
-				Location:  start,
-			}, nil
+			return Token{Type: TypeLparen, StringVal: "(", Location: start}, nil
 		case c == ')':
-			return Token{
-				Type:      TypeRparen,
-				StringVal: ")",
-				Location:  start,
-			}, nil
+			return Token{Type: TypeRparen, StringVal: ")", Location: start}, nil
 		case c == '{':
-			return Token{
-				Type:      TypeLbrace,
-				StringVal: "{",
-				Location:  start,
-			}, nil
+			return Token{Type: TypeLbrace, StringVal: "{", Location: start}, nil
 		case c == '}':
-			return Token{
-				Type:      TypeRbrace,
-				StringVal: "}",
-				Location:  start,
-			}, nil
+			return Token{Type: TypeRbrace, StringVal: "}", Location: start}, nil
 		case c == ',':
-			return Token{
-				Type:      TypeComma,
-				StringVal: ",",
-				Location:  start,
-			}, nil
+			return Token{Type: TypeComma, StringVal: ",", Location: start}, nil
 		case c == ':':
-			return Token{
-				Type:      TypeColon,
-				StringVal: ":",
-				Location:  start,
-			}, nil
+			return Token{Type: TypeColon, StringVal: ":", Location: start}, nil
 		case c == '@':
-			return Token{
-				Type:      TypeAt,
-				StringVal: "@",
-				Location:  start,
-			}, nil
+			return Token{Type: TypeAt, StringVal: "@", Location: start}, nil
 		case c == '+':
-			return Token{
-				Type:      TypePlus,
-				StringVal: "+",
-				Location:  start,
-			}, nil
+			return Token{Type: TypePlus, StringVal: "+", Location: start}, nil
 		case c == '/':
-			c, err := t.scan.Next()
+			c, err := t.Scan.Next()
 			if err != nil {
 				return Token{}, err
 			}
-
 			switch {
 			case c == '/':
-				// read a single-line comment
 				for {
-					c, err = t.scan.Next()
+					c, err = t.Scan.Next()
 					if err != nil {
 						return Token{}, err
 					}
@@ -223,44 +178,36 @@ func (t *tokenizer) next() (Token, error) {
 					}
 				}
 			default:
-				t.scan.Unread(1) // unread the character
+				t.Scan.Unread(1)
 			}
 		case c == '-':
-			c, err := t.scan.Next()
+			c, err := t.Scan.Next()
 			if err != nil {
 				return Token{}, err
 			}
-
 			switch {
 			case c == '>':
-				return Token{
-					Type:      TypeArrow,
-					StringVal: "->",
-					Location:  start,
-				}, nil
+				return Token{Type: TypeArrow, StringVal: "->", Location: start}, nil
 			case c >= '0' && c <= '9':
-				// it's a negative number
 				buf = append(buf, '-')
 				buf = append(buf, c)
 				continue
 			default:
-				t.scan.Unread(1) // unread the character
+				t.Scan.Unread(1)
 			}
 		case isWhitespace(c):
 			continue
 		case c == '"':
-			// don't add the quotes to the buffer
 			for {
-				c, err = t.scan.Next()
+				c, err = t.Scan.Next()
 				if err != nil {
 					return Token{}, err
 				}
-
 				if c == '"' {
 					break
-				} else if c == '\\' {
-					// handle escape sequences
-					c, err = t.scan.Next()
+				}
+				if c == '\\' {
+					c, err = t.Scan.Next()
 					if err != nil {
 						return Token{}, err
 					}
@@ -269,89 +216,51 @@ func (t *tokenizer) next() (Token, error) {
 					buf = append(buf, c)
 				}
 			}
-
-			return Token{
-				Type:      TypeString,
-				StringVal: string(buf),
-				Location:  start,
-			}, nil
+			return Token{Type: TypeString, StringVal: string(buf), Location: start}, nil
 		case isNumeric(c):
 			buf = append(buf, c)
-
 			for {
-				c, err = t.scan.Next()
+				c, err = t.Scan.Next()
 				if err != nil {
 					return Token{}, err
 				}
-
 				if isNumeric(c) {
 					buf = append(buf, c)
 				} else {
-					t.scan.Unread(1)
+					t.Scan.Unread(1)
 					break
 				}
 			}
-
 			num, err := strconv.Atoi(string(buf))
 			if err != nil {
 				return Token{}, err
 			}
-
-			return Token{
-				Type:      TypeNumber,
-				NumberVal: num,
-				StringVal: string(buf),
-				Location:  start,
-			}, nil
+			return Token{Type: TypeNumber, NumberVal: num, StringVal: string(buf), Location: start}, nil
 		case isAlpha(c):
 			buf = append(buf, c)
-
 			for {
-				c, err = t.scan.Next()
+				c, err = t.Scan.Next()
 				if err != nil {
 					return Token{}, err
 				}
-
 				if isAlphanumeric(c) {
 					buf = append(buf, c)
 				} else {
-					t.scan.Unread(1)
+					t.Scan.Unread(1)
 					break
 				}
 			}
-
 			if kw, ok := checkKeyword(string(buf)); ok {
-				return Token{
-					Type:       TypeKeyword,
-					Keyword:    kw,
-					Identifier: string(buf),
-					StringVal:  string(buf),
-					Location:   start,
-				}, nil
+				return Token{Type: TypeKeyword, Keyword: kw, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
 			}
-
-			return Token{
-				Type:       TypeIdent,
-				Identifier: string(buf),
-				StringVal:  string(buf),
-				Location:   start,
-			}, nil
+			return Token{Type: TypeIdent, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
 		}
 	}
 }
 
-func isAlphanumeric(a byte) bool {
-	return isAlpha(a) || isNumeric(a)
-}
+func isAlphanumeric(a byte) bool { return isAlpha(a) || isNumeric(a) }
+func isAlpha(a byte) bool        { return (a >= 'a' && a <= 'z') || (a >= 'A' && a <= 'Z') || a == '_' }
+func isNumeric(d byte) bool      { return d >= '0' && d <= '9' }
+func isWhitespace(c byte) bool   { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
 
-func isAlpha(a byte) bool {
-	return (a >= 'a' && a <= 'z') || (a >= 'A' && a <= 'Z') || a == '_'
-}
-
-func isNumeric(d byte) bool {
-	return d >= '0' && d <= '9'
-}
-
-func isWhitespace(c byte) bool {
-	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
-}
+// Location and Scanner are defined in scanner.go

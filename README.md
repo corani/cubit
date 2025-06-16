@@ -15,8 +15,9 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
 ## Project Structure 📁
 
 - `main.go` - Entry point, handles CLI flags and orchestrates compilation.
-- `tokenizer.go` - Tokenizes the input source code.
-- `scanner.go` - Reads and manages input data for tokenization.
+- `lexer/` - Contains the lexer package:
+  - `lexer/tokenizer.go` - Tokenizes the input source code.
+  - `lexer/scanner.go` - Reads and manages input data for tokenization.
 - `parser.go` - Parses tokens into AST.
 - `generator.go` - Generates code (SSA/QBE) from parsed operations.
 - `ast.go` - AST structures.

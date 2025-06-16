@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/corani/refactored-giggle/lexer"
 )
 
 func withExt(filename, ext string) string {
@@ -50,12 +52,12 @@ func main() {
 	}
 	defer reader.Close()
 
-	scanner, err := NewScanner(srcFile, reader)
+	scanner, err := lexer.NewScanner(srcFile, reader)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create scanner: %v", err))
 	}
 
-	tokenizer := NewTokenizer(scanner)
+	tokenizer := lexer.NewTokenizer(scanner)
 
 	tokens, err := tokenizer.Tokens()
 	if err != nil {
