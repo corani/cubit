@@ -18,7 +18,8 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
 - `lexer/` - Contains the lexer package:
   - `lexer/tokenizer.go` - Tokenizes the input source code.
   - `lexer/scanner.go` - Reads and manages input data for tokenization.
-- `parser.go` - Parses tokens into AST.
+- `parser/` - Contains the parser package:
+  - `parser/parser.go` - Parses tokens into AST.
 - `codegen/` - Contains code generation logic:
   - `codegen/generator.go` - Generates code (SSA/QBE) from parsed operations.
 - `ast/` - Contains the AST package:

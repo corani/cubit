@@ -11,6 +11,7 @@ import (
 
 	"github.com/corani/refactored-giggle/codegen"
 	"github.com/corani/refactored-giggle/lexer"
+	parserpkg "github.com/corani/refactored-giggle/parser"
 )
 
 func withExt(filename, ext string) string {
@@ -77,9 +78,8 @@ func main() {
 		}
 	}
 
-	parser := NewParser(tokens)
-
-	unit, err := parser.Parse()
+	pr := parserpkg.New(tokens)
+	unit, err := pr.Parse()
 	if err != nil && !errors.Is(err, io.EOF) {
 		panic(fmt.Sprintf("failed to parse: %v", err))
 	}
