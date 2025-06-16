@@ -1,15 +1,8 @@
 // Package ast contains the abstract syntax tree definitions and related attributes.
 package ast
 
-import (
-	"fmt"
-	"strings"
-)
+// (imports removed; no longer needed)
 
-// ---- AST TYPES AND FUNCTIONS ----
-// (Moved from original ast.go and attributes.go)
-
-// --- Begin ast.go ---
 type CompilationUnit struct {
 	Types    []TypeDef
 	DataDefs []DataDef
@@ -39,19 +32,7 @@ func (cu *CompilationUnit) WithFuncDefs(funcDefs ...FuncDef) *CompilationUnit {
 	return cu
 }
 
-func (cu CompilationUnit) String() string {
-	var sb strings.Builder
-	for _, typ := range cu.Types {
-		fmt.Fprintln(&sb, typ.String())
-	}
-	for _, funcDef := range cu.FuncDefs {
-		fmt.Fprintln(&sb, funcDef.String())
-	}
-	for _, dataDef := range cu.DataDefs {
-		fmt.Fprintln(&sb, dataDef.String())
-	}
-	return sb.String()
-}
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type Ident string
 type BaseTy string
@@ -80,16 +61,7 @@ type SubTy struct {
 	Ident Ident
 }
 
-func (s SubTy) String() string {
-	switch s.Type {
-	case SubTyExt:
-		return string(s.ExtTy)
-	case SubTyIdent:
-		return fmt.Sprintf(":%s", s.Ident)
-	default:
-		panic("unknown subtype type: " + string(s.Type))
-	}
-}
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type SubTyType string
 
@@ -115,12 +87,8 @@ func NewSubTyIdentSize(ident Ident, size int) SubTySize {
 		Size:  size,
 	}
 }
-func (s SubTySize) String() string {
-	if s.Size > 1 {
-		return fmt.Sprintf("%s %d", s.SubTy, s.Size)
-	}
-	return s.SubTy.String()
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type Const struct {
 	Type  ConstType
@@ -142,20 +110,8 @@ func NewConstDouble(f float64) Const {
 func NewConstIdent(ident Ident) Const {
 	return Const{Type: ConstIdent, Ident: ident}
 }
-func (c Const) String() string {
-	switch c.Type {
-	case ConstInteger:
-		return fmt.Sprintf("%d", c.I64)
-	case ConstSingle:
-		return fmt.Sprintf("s_%f", c.F32)
-	case ConstDouble:
-		return fmt.Sprintf("d_%f", c.F64)
-	case ConstIdent:
-		return fmt.Sprintf("$%s", c.Ident)
-	default:
-		panic("unknown constant type: " + string(c.Type))
-	}
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type ConstType string
 
@@ -178,16 +134,8 @@ func NewDynConst(constv Const) DynConst {
 func NewDynConstThread(ident Ident) DynConst {
 	return DynConst{Type: DynConstThread, Ident: ident}
 }
-func (dc DynConst) String() string {
-	switch dc.Type {
-	case DynConstConst:
-		return dc.Const.String()
-	case DynConstThread:
-		return fmt.Sprintf("thread $%s", dc.Ident)
-	default:
-		panic("unknown dynamic constant type: " + string(dc.Type))
-	}
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type DynConstType string
 
@@ -214,16 +162,8 @@ func NewValInteger(i int64) Val {
 func NewValIdent(ident Ident) Val {
 	return Val{Type: ValIdent, Ident: ident}
 }
-func (v Val) String() string {
-	switch v.Type {
-	case ValDynConst:
-		return v.DynConst.String()
-	case ValIdent:
-		return fmt.Sprintf("%%%s", v.Ident)
-	default:
-		panic("unknown value type: " + string(v.Type))
-	}
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type ValType string
 
@@ -247,19 +187,8 @@ func NewLinkageThread() Linkage {
 func NewLinkageSection(secName, secFlags string) Linkage {
 	return Linkage{Type: LinkageSection, SecName: secName, SecFlags: secFlags}
 }
-func (l Linkage) String() string {
-	switch l.Type {
-	case LinkageExport, LinkageThread:
-		return string(l.Type)
-	case LinkageSection:
-		if l.SecFlags == "" {
-			return fmt.Sprintf("%s %q", l.Type, l.SecName)
-		}
-		return fmt.Sprintf("%s %q %q", l.Type, l.SecName, l.SecFlags)
-	default:
-		panic("unknown linkage type: " + string(l.Type))
-	}
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type LinkageType string
 
@@ -291,34 +220,8 @@ func (td TypeDef) WithAlign(align int) TypeDef {
 	td.Align = align
 	return td
 }
-func (td TypeDef) String() string {
-	align := ""
-	if td.Align > 0 {
-		align = fmt.Sprintf("align %d ", td.Align)
-	}
-	switch td.Type {
-	case TypeDefRegular:
-		fields := make([]string, len(td.Fields))
-		for i, field := range td.Fields {
-			fields[i] = field.String()
-		}
-		return fmt.Sprintf("type :%s = %s{ %s }", td.Ident, align, strings.Join(fields, ", "))
-	case TypeDefUnion:
-		unionFields := make([]string, len(td.UnionFields))
-		for i, unionField := range td.UnionFields {
-			fields := make([]string, len(unionField))
-			for j, field := range unionField {
-				fields[j] = field.String()
-			}
-			unionFields[i] = fmt.Sprintf("{ %s }", strings.Join(fields, ", "))
-		}
-		return fmt.Sprintf("type :%s = %s{ %s }", td.Ident, align, strings.Join(unionFields, ", "))
-	case TypeDefOpaque:
-		return fmt.Sprintf("type :%s = %s{ %d }", td.Ident, align, td.OpaqueSize)
-	default:
-		panic("unknown type definition type: " + string(td.Type))
-	}
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type TypeDefType string
 
@@ -352,21 +255,8 @@ func (dd DataDef) WithAlign(align int) DataDef {
 	dd.Align = align
 	return dd
 }
-func (dd DataDef) String() string {
-	linkage := ""
-	align := ""
-	if dd.Linkage != nil {
-		linkage = dd.Linkage.String() + " "
-	}
-	if dd.Align > 0 {
-		align = fmt.Sprintf("align %d ", dd.Align)
-	}
-	initializer := make([]string, len(dd.Initializer))
-	for i, init := range dd.Initializer {
-		initializer[i] = init.String()
-	}
-	return fmt.Sprintf("%sdata $%s = %s{ %s }", linkage, dd.Ident, align, strings.Join(initializer, ", "))
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type DataInit struct {
 	Type  DataInitType
@@ -384,20 +274,8 @@ func NewDataInitString(val string) DataInit {
 func NewDataInitZero(size int) DataInit {
 	return DataInit{Type: DataInitZero, Size: size}
 }
-func (di DataInit) String() string {
-	switch di.Type {
-	case DataInitExt:
-		items := make([]string, len(di.Items))
-		for i, item := range di.Items {
-			items[i] = item.String()
-		}
-		return fmt.Sprintf("%s %s", di.ExtTy, strings.Join(items, " "))
-	case DataInitZero:
-		return fmt.Sprintf("z %d", di.Size)
-	default:
-		panic("unknown data initialization type: " + string(di.Type))
-	}
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type DataInitType string
 
@@ -426,21 +304,8 @@ func NewDataItemInteger(i int64) DataItem {
 func NewDataItemSymbol(ident Ident, offset int) DataItem {
 	return DataItem{Type: DataItemSymbol, Ident: ident, Offset: offset}
 }
-func (di DataItem) String() string {
-	switch di.Type {
-	case DataItemSymbol:
-		if di.Offset > 0 {
-			return fmt.Sprintf("$%s + %d", di.Ident, di.Offset)
-		}
-		return fmt.Sprintf("$%s", di.Ident)
-	case DataItemString:
-		return fmt.Sprintf("\"%s\"", di.StringVal)
-	case DataItemConst:
-		return di.Const.String()
-	default:
-		panic("unknown data item type: " + string(di.Type))
-	}
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type DataItemType string
 
@@ -473,28 +338,8 @@ func (fd FuncDef) WithBlocks(blocks ...Block) FuncDef {
 	fd.Blocks = append(fd.Blocks, blocks...)
 	return fd
 }
-func (fd FuncDef) String() string {
-	linkage := ""
-	if fd.Linkage != nil {
-		linkage = fd.Linkage.String() + " "
-	}
-	retTy := ""
-	if fd.RetTy != nil {
-		retTy = fd.RetTy.String() + " "
-	}
-	params := make([]string, len(fd.Params))
-	for i, param := range fd.Params {
-		params[i] = param.String()
-	}
-	blocks := make([]string, len(fd.Blocks))
-	for i, block := range fd.Blocks {
-		blocks[i] = block.String()
-	}
-	return fmt.Sprintf("%sfunction %s$%s(%s) {%s}",
-		linkage, retTy, fd.Ident,
-		strings.Join(params, ", "),
-		strings.Join(blocks, "\n"))
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type Param struct {
 	Type  ParamType
@@ -511,18 +356,8 @@ func NewParamEnv(ident Ident) Param {
 func NewParamVariadic() Param {
 	return Param{Type: ParamVariadic}
 }
-func (p Param) String() string {
-	switch p.Type {
-	case ParamRegular:
-		return fmt.Sprintf("%s %%%s", p.AbiTy, p.Ident)
-	case ParamEnv:
-		return fmt.Sprintf("env %%%s", p.Ident)
-	case ParamVariadic:
-		return "..."
-	default:
-		panic("unknown parameter type: " + string(p.Type))
-	}
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type ParamType string
 
@@ -548,18 +383,8 @@ func NewAbiTySubW(subWTy SubWTy) AbiTy {
 func NewAbiTyIdent(ident Ident) AbiTy {
 	return AbiTy{Type: AbiTyIdent, Ident: ident}
 }
-func (a AbiTy) String() string {
-	switch a.Type {
-	case AbiTyBase:
-		return string(a.BaseTy)
-	case AbiTySubW:
-		return string(a.SubWTy)
-	case AbiTyIdent:
-		return fmt.Sprintf(":%s", a.Ident)
-	default:
-		panic("unknown ABI type: " + string(a.Type))
-	}
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type AbiTyType string
 
@@ -583,25 +408,19 @@ type Block struct {
 	Instructions []Instruction
 }
 
-func (b Block) String() string {
-	label := ""
-	if b.Label != "" {
-		label = fmt.Sprintf("@%s\n", b.Label)
-	}
-	instructions := make([]string, len(b.Instructions))
-	for i, instr := range b.Instructions {
-		instructions[i] = "\t" + instr.String()
-	}
-	return fmt.Sprintf("\n%s%s\n", label, strings.Join(instructions, "\n"))
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
+
+// Instruction is a marker interface for all instruction types.
+type Instruction interface {
+	isInstruction()
 }
 
-type Instruction interface {
-	String() string
-}
+// Ret represents an SSA return instruction.
 type Ret struct {
 	Val *Val
 }
 
+func (Ret) isInstruction() {}
 func NewRet(val ...Val) Ret {
 	if len(val) > 1 {
 		panic("NewRet accepts at most one value")
@@ -611,13 +430,8 @@ func NewRet(val ...Val) Ret {
 	}
 	return Ret{Val: &val[0]}
 }
-func (r Ret) String() string {
-	if r.Val == nil {
-		return "ret"
-	}
-	return fmt.Sprintf("ret %s", r.Val.String())
-}
 
+// Call represents an SSA call instruction.
 type Call struct {
 	LHS   *Ident
 	RetTy *AbiTy
@@ -625,6 +439,7 @@ type Call struct {
 	Args  []Arg
 }
 
+func (Call) isInstruction() {}
 func NewCall(val Val, args ...Arg) Call {
 	return Call{Val: val, Args: args}
 }
@@ -633,17 +448,8 @@ func (c Call) WithRet(lhs Ident, retTy AbiTy) Call {
 	c.RetTy = &retTy
 	return c
 }
-func (c Call) String() string {
-	lhs := ""
-	if c.LHS != nil && c.RetTy != nil {
-		lhs = fmt.Sprintf("%%%s = %s ", *c.LHS, c.RetTy)
-	}
-	args := make([]string, len(c.Args))
-	for i, arg := range c.Args {
-		args[i] = arg.String()
-	}
-	return fmt.Sprintf("%scall %s(%s)", lhs, c.Val, strings.Join(args, ", "))
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type Arg struct {
 	Type  ArgType
@@ -660,18 +466,8 @@ func NewArgEnv(val Val) Arg {
 func NewArgVariadic() Arg {
 	return Arg{Type: ArgVariadic}
 }
-func (a Arg) String() string {
-	switch a.Type {
-	case ArgRegular:
-		return fmt.Sprintf("%s %s", a.AbiTy.String(), a.Val.String())
-	case ArgEnv:
-		return fmt.Sprintf("env %s", a.Val.String())
-	case ArgVariadic:
-		return "..."
-	default:
-		panic("unknown argument type: " + string(a.Type))
-	}
-}
+
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type ArgType string
 
@@ -681,29 +477,25 @@ const (
 	ArgVariadic ArgType = "variadic"
 )
 
+// Add represents an SSA add instruction.
 type Add struct {
 	Lhs, Rhs Val
 	Ret      Val
 }
 
+func (Add) isInstruction() {}
 func NewAdd(Ret, Lhs, Rhs Val) Add {
 	return Add{Lhs: Lhs, Rhs: Rhs, Ret: Ret}
 }
-func (a Add) String() string {
-	return fmt.Sprintf("%s =w add %s, %s", a.Ret.String(), a.Lhs.String(), a.Rhs.String())
-}
 
+// Instr represents a raw SSA instruction string.
 type Instr struct {
 	Str string
 }
 
+func (Instr) isInstruction() {}
 func NewInstr(str string) Instr {
 	return Instr{Str: str}
 }
-func (i Instr) String() string {
-	return i.Str
-}
 
-// --- End ast.go ---
-
-// --- attributes.go content removed: duplicate declarations cleaned up ---
+// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.

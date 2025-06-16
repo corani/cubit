@@ -14,16 +14,20 @@ import (
 
 // WriteSSA writes the SSA code for the given CompilationUnit to the specified filename.
 func WriteSSA(unit *ast.CompilationUnit, filename string) error {
-	return os.WriteFile(filename, []byte(unit.String()), 0644)
+	visitor := NewSSAVisitor()
+	ssa := visitor.VisitCompilationUnit(unit)
+	return os.WriteFile(filename, []byte(ssa), 0644)
 }
 
 // GenerateAssembly generates assembly from the given CompilationUnit.
 func GenerateAssembly(srcfile string, unit *ast.CompilationUnit, asmfile string) error {
 	var w bytes.Buffer
+	visitor := NewSSAVisitor()
+	ssa := visitor.VisitCompilationUnit(unit)
 
 	if err := libqbe.Main(
 		libqbe.DefaultTarget(runtime.GOOS, runtime.GOARCH),
-		srcfile, strings.NewReader(unit.String()), &w, nil,
+		srcfile, strings.NewReader(ssa), &w, nil,
 	); err != nil {
 		return err
 	}

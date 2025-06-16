@@ -21,10 +21,10 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
 - 📁 `parser/` - Contains the parser package:
   - 📄 `parser.go` - Parses tokens into AST.
 - 📁 `codegen/` - Contains code generation logic:
-  - 📄 `generator.go` - Generates code (SSA/QBE) from parsed operations.
+  - 📄 `generator.go` - Generates code (ASM/Executable) from QBE IR code.
+  - 📄 `ssa_visitor.go` - Generate QBE IR from the AST using visitor pattern.
 - 📁 `ast/` - Contains the AST package:
   - 📄 `ast.go` - AST structures and attribute logic.
-  - 🧪 `ast_test.go` - Unit tests for AST types and functions.
 - 📄 `example.in` - Example source file for the compiler.
 - 📄 `go.mod` / `go.sum` - Go module files and dependencies.
 
