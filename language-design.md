@@ -71,24 +71,24 @@ StringList :: []string
 // Enums (simple)
 Color :: enum { Red, Green, Blue }
 
-// Rust-style enums (tagged unions with data)
-Result :: enum {
-    Ok(value: $T),
+// Enums (with data)
+Result :: enum(int) {
+    Ok(value: int),
     Error(msg: string, code: int)
 }
 
 // Usage
-res := Result.Ok(value=42)
-err := Result.Error(msg="fail", code=1)
+res := Result.Ok(42)                     // positional
+err := Result.Error(msg="fail", code=1)  // named
 
-// Option type
-Option :: enum {
-    Some(value: $T),
+// Generic option type
+Option :: enum($T) {
+    Some(T),    // name is optional
     None
 }
 
-opt := Option.Some(value=123)
-none := Option.None()
+opt := Option.Some(123)             // type parameter is inferred
+none : Option(int) = Option.None()  // can't infer the type parameter here
 ```
 
 ---
@@ -129,7 +129,7 @@ matrix :: [3][3]float  // Multi-dimensional array
 foo :: func(x: int)
 foo :: func(x: string)
 foo(42)      // calls int version
-foo("bar")  // calls string version
+foo("bar")   // calls string version
 ```
 
 ---
@@ -210,7 +210,32 @@ main :: func() -> int {
 ---
 
 
-## 12. Lambdas (Anonymous Functions)
+
+## 12. Implicit Context
+
+Every function, lambda, and method has access to an implicit context value via a special identifier (e.g., `context`). This context is not passed explicitly, but is always available for logging, resource management, cancellation, etc.
+
+- The context is function-local and changes are only visible down the call stack (not up).
+- When a function or block modifies the context, the change is scoped to that call and its callees; the previous context is restored on return.
+- This enables safe dependency injection and avoids surprising side effects.
+
+### Example
+
+```odin
+foo :: func(x: int) {
+    context.log("foo called")
+    context.allocator = myAllocator
+    bar() // bar and anything it calls see the new allocator
+    // after bar returns, context.allocator is restored
+}
+
+// Lambdas also have access to context
+f := func(x: int) = context.trace("lambda called")
+```
+
+---
+
+## 13. Lambdas (Anonymous Functions)
 
 Lambdas use the same syntax as function definitions, but with `:=` instead of `::`. You can assign them to variables or pass them directly as arguments.
 
@@ -231,13 +256,54 @@ printer := func(msg: string) {
 
 ## 13. Destructuring Assignment
 
-Destructuring allows you to unpack values from tuples, function returns, structs, and enums directly into variables.
+Destructuring allows you to unpack values from tuples, function returns, and enums directly into variables. Only positional destructuring with (a, b) is supported.
+
+### Unnamed (Positional) Tuples
 
 ```odin
-a := (1, 2)        // a is a tuple
-(a, b) := (1, 2)   // destructures tuple into a and b
+t := (1, 2)
+(a, b) := t         // a = 1, b = 2
+```
 
-(x, y) := pair(1, 2) // destructures function return values
+### Named Tuples
+
+```odin
+point := (x: 5, y: 7)
+(a, b) := point     // a = 5, b = 7 (by position)
+
+// Access by name
+xval := point.x     // xval = 5
+yval := point.y     // yval = 7
+```
+
+### Function Return Values
+
+```odin
+get_pair :: func() = (10, 20)
+(x, y) := get_pair() // x = 10, y = 20
+
+get_point :: func() = (x: 3, y: 4)
+(x, y) := get_point() // x = 3, y = 4
+```
+
+### Pattern Matching on Tuples
+
+```odin
+switch t {
+    case (a, b):
+        // a = 1, b = 2
+}
+
+switch point {
+    case (x, y):
+        // x = 5, y = 7
+}
+
+// rebinding the fields to new names
+switch point {
+    case (x as a, y as b):
+        // a = 5, b = 7
+}
 ```
 
 ### Enum (Tagged Union) Destructuring (Pattern Matching)
@@ -248,6 +314,8 @@ switch res {
         // use value
     case Result.Error(msg, code):
         // use msg, code
+    case Result.Pair(x as a, y as b):
+        // use a, b
 }
 
 // Or single-variant destructuring
