@@ -329,23 +329,33 @@ func (p *Parser) parseBody(start, retType lexer.Token) error {
 		case lexer.TypeKeyword:
 			switch first.Keyword {
 			case lexer.KeywordReturn:
-				ret, err := p.expectType(lexer.TypeString, lexer.TypeNumber, lexer.TypeIdent)
-				if err != nil {
-					return err
+				if retType.Keyword == lexer.KeywordVoid {
+					block.Instructions = append(block.Instructions, ast.NewRet())
+				} else {
+					ret, err := p.expectType(lexer.TypeString, lexer.TypeNumber, lexer.TypeIdent)
+					if err != nil {
+						return err
+					}
+
+					var val ast.Val
+
+					switch ret.Type {
+					case lexer.TypeNumber:
+						if retType.Keyword != lexer.KeywordInt {
+							return fmt.Errorf("unexpected return type %s at %s, expected %s",
+								ret.Type, ret.Location, retType.Keyword)
+						}
+
+						val = ast.NewValInteger(int64(ret.NumberVal))
+						val.Ty = ast.TypeInt
+					default:
+						// TODO(daniel): handle string and ident return types
+						panic(fmt.Sprintf("unexpected return type %s at %s, expected number",
+							ret.Type, ret.Location))
+					}
+
+					block.Instructions = append(block.Instructions, ast.NewRet(val))
 				}
-
-				var val ast.Val
-
-				switch ret.Type {
-				case lexer.TypeNumber:
-					val = ast.NewValInteger(int64(ret.NumberVal))
-					val.Ty = ast.TypeInt
-				default:
-					panic(fmt.Sprintf("unexpected return type %s at %s, expected number",
-						ret.Type, ret.Location))
-				}
-
-				block.Instructions = append(block.Instructions, ast.NewRet(val))
 			}
 		case lexer.TypeIdent:
 			token, err := p.nextToken()
