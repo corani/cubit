@@ -1,10 +1,23 @@
 // Package ast contains the abstract syntax tree definitions and related attributes.
 package ast
 
+// SSAVisitor defines the visitor interface for SSA code generation.
+type SSAVisitor interface {
+	VisitCompilationUnit(cu *CompilationUnit) string
+	VisitTypeDef(td *TypeDef) string
+	VisitDataDef(dd *DataDef) string
+	VisitFuncDef(fd *FuncDef) string
+}
+
 type CompilationUnit struct {
 	Types    []TypeDef
 	DataDefs []DataDef
 	FuncDefs []FuncDef
+}
+
+// Accept implements the classic visitor pattern for CompilationUnit.
+func (cu *CompilationUnit) Accept(visitor SSAVisitor) string {
+	return visitor.VisitCompilationUnit(cu)
 }
 
 func NewCompilationUnit() CompilationUnit {
@@ -200,6 +213,10 @@ type TypeDef struct {
 	OpaqueSize  int
 }
 
+func (td *TypeDef) Accept(visitor SSAVisitor) string {
+	return visitor.VisitTypeDef(td)
+}
+
 func NewTypeDefRegular(ident Ident, fields ...SubTySize) TypeDef {
 	return TypeDef{Type: TypeDefRegular, Ident: ident, Fields: fields}
 }
@@ -230,6 +247,10 @@ type DataDef struct {
 	Ident       Ident
 	Align       int
 	Initializer []DataInit
+}
+
+func (dd *DataDef) Accept(visitor SSAVisitor) string {
+	return visitor.VisitDataDef(dd)
 }
 
 func NewDataDef(ident Ident, initializer ...DataInit) DataDef {
@@ -317,6 +338,10 @@ type FuncDef struct {
 	Ident   Ident
 	Params  []Param
 	Blocks  []Block
+}
+
+func (fd *FuncDef) Accept(visitor SSAVisitor) string {
+	return visitor.VisitFuncDef(fd)
 }
 
 func NewFuncDef(ident Ident, params ...Param) FuncDef {

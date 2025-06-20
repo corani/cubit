@@ -10,7 +10,7 @@ import (
 func TestSSAVisitor_CompilationUnit(t *testing.T) {
 	unit := ast.NewCompilationUnit()
 	visitor := NewSSAVisitor()
-	_ = visitor.VisitCompilationUnit(&unit) // Add real assertions as needed
+	_ = (&unit).Accept(visitor) // Add real assertions as needed
 }
 
 func TestAST_CompilationUnit(t *testing.T) {
@@ -61,7 +61,7 @@ data $data_hello0 = { b "Hello from test-%d!\n", b 0 }
 `
 
 	visitor := NewSSAVisitor()
-	actual := visitor.VisitCompilationUnit(unit)
+	actual := unit.Accept(visitor)
 
 	require.Equal(t, expected, actual)
 }
@@ -121,7 +121,7 @@ func TestAST_TypeDef(t *testing.T) {
 			t.Parallel()
 
 			visitor := NewSSAVisitor()
-			actual := visitor.VisitTypeDef(tc.input)
+			actual := tc.input.Accept(visitor)
 
 			require.Equal(t, tc.expected, actual)
 		})
@@ -172,7 +172,7 @@ func TestAST_DataDef(t *testing.T) {
 			t.Parallel()
 
 			visitor := NewSSAVisitor()
-			actual := visitor.VisitDataDef(tc.input)
+			actual := tc.input.Accept(visitor)
 
 			require.Equal(t, tc.expected, actual)
 		})
@@ -214,7 +214,7 @@ func TestAST_FuncDef(t *testing.T) {
 			t.Parallel()
 
 			visitor := NewSSAVisitor()
-			actual := visitor.VisitFuncDef(tc.input)
+			actual := tc.input.Accept(visitor)
 
 			require.Equal(t, tc.expected, actual)
 		})

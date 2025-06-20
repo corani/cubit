@@ -7,72 +7,52 @@ import (
 	"github.com/corani/refactored-giggle/ast"
 )
 
-// SSAVisitor defines the visitor interface for SSA code generation.
-type SSAVisitor interface {
-	VisitCompilationUnit(cu *ast.CompilationUnit) string
-	VisitTypeDef(td ast.TypeDef) string
-	VisitDataDef(dd ast.DataDef) string
-	VisitFuncDef(fd ast.FuncDef) string
-	// ... add more as needed for all AST types
-}
-
-// SsaGen implements SSAVisitor and generates SSA code.
+// SsaGen implements ast.SSAVisitor and generates SSA code.
 type SsaGen struct{}
 
-func NewSSAVisitor() SSAVisitor {
+// NewSSAVisitor returns a new SSAVisitor.
+func NewSSAVisitor() *SsaGen {
 	return &SsaGen{}
 }
 
 func (v *SsaGen) VisitCompilationUnit(cu *ast.CompilationUnit) string {
 	var sb strings.Builder
-
-	for _, typ := range cu.Types {
-		sb.WriteString(v.VisitTypeDef(typ))
+	for i := range cu.Types {
+		sb.WriteString(cu.Types[i].Accept(v))
 		sb.WriteString("\n")
 	}
-
-	for _, funcDef := range cu.FuncDefs {
-		sb.WriteString(v.VisitFuncDef(funcDef))
+	for i := range cu.FuncDefs {
+		sb.WriteString(cu.FuncDefs[i].Accept(v))
 		sb.WriteString("\n")
 	}
-
-	for _, dataDef := range cu.DataDefs {
-		sb.WriteString(v.VisitDataDef(dataDef))
+	for i := range cu.DataDefs {
+		sb.WriteString(cu.DataDefs[i].Accept(v))
 		sb.WriteString("\n")
 	}
-
 	return sb.String()
 }
 
-func (v *SsaGen) VisitTypeDef(td ast.TypeDef) string {
+func (v *SsaGen) VisitTypeDef(td *ast.TypeDef) string {
 	var align string
-
 	if td.Align > 0 {
 		align = fmt.Sprintf("align %d ", td.Align)
 	}
-
 	switch td.Type {
 	case ast.TypeDefRegular:
 		fields := make([]string, len(td.Fields))
-
 		for i, field := range td.Fields {
 			fields[i] = v.VisitSubTySize(field)
 		}
-
 		return fmt.Sprintf("type :%s = %s{ %s }", td.Ident, align, strings.Join(fields, ", "))
 	case ast.TypeDefUnion:
 		unionFields := make([]string, len(td.UnionFields))
-
 		for i, unionField := range td.UnionFields {
 			fields := make([]string, len(unionField))
-
 			for j, field := range unionField {
 				fields[j] = v.VisitSubTySize(field)
 			}
-
 			unionFields[i] = fmt.Sprintf("{ %s }", strings.Join(fields, ", "))
 		}
-
 		return fmt.Sprintf("type :%s = %s{ %s }", td.Ident, align, strings.Join(unionFields, ", "))
 	case ast.TypeDefOpaque:
 		return fmt.Sprintf("type :%s = %s{ %d }", td.Ident, align, td.OpaqueSize)
@@ -81,48 +61,37 @@ func (v *SsaGen) VisitTypeDef(td ast.TypeDef) string {
 	}
 }
 
-func (v *SsaGen) VisitDataDef(dd ast.DataDef) string {
+func (v *SsaGen) VisitDataDef(dd *ast.DataDef) string {
 	var linkage, align string
-
 	if dd.Linkage != nil {
 		linkage = v.VisitLinkage(*dd.Linkage) + " "
 	}
-
 	if dd.Align > 0 {
 		align = fmt.Sprintf("align %d ", dd.Align)
 	}
-
 	initializer := make([]string, len(dd.Initializer))
-
 	for i, init := range dd.Initializer {
 		initializer[i] = v.VisitDataInit(init)
 	}
-
 	return fmt.Sprintf("%sdata $%s = %s{ %s }", linkage, dd.Ident, align, strings.Join(initializer, ", "))
 }
 
-func (v *SsaGen) VisitFuncDef(fd ast.FuncDef) string {
+func (v *SsaGen) VisitFuncDef(fd *ast.FuncDef) string {
 	var linkage, retTy string
-
 	if fd.Linkage != nil {
 		linkage = v.VisitLinkage(*fd.Linkage) + " "
 	}
-
 	if fd.RetTy != nil {
 		retTy = v.VisitAbiTy(*fd.RetTy) + " "
 	}
-
 	params := make([]string, len(fd.Params))
 	blocks := make([]string, len(fd.Blocks))
-
 	for i, param := range fd.Params {
 		params[i] = v.VisitParam(param)
 	}
-
 	for i, block := range fd.Blocks {
 		blocks[i] = v.VisitBlock(block)
 	}
-
 	return fmt.Sprintf("%sfunction %s$%s(%s) {%s}",
 		linkage, retTy, fd.Ident,
 		strings.Join(params, ", "),

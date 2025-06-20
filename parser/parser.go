@@ -383,7 +383,7 @@ func (p *Parser) parseDecl(first lexer.Token, block *ast.Block) error {
 	}
 
 	block.Instructions = append(block.Instructions,
-		ast.NewInstr(fmt.Sprintf("%%%s =%s add 0, %%%s", first.StringVal, codegen.NewSSAVisitor().(*codegen.SsaGen).VisitAbiTy(abiTy), val.Ident)))
+		ast.NewInstr(fmt.Sprintf("%%%s =%s add 0, %%%s", first.StringVal, codegen.NewSSAVisitor().VisitAbiTy(abiTy), val.Ident)))
 
 	return nil
 }

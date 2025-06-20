@@ -15,7 +15,7 @@ import (
 // WriteSSA writes the SSA code for the given CompilationUnit to the specified filename.
 func WriteSSA(unit *ast.CompilationUnit, filename string) error {
 	visitor := NewSSAVisitor()
-	ssa := visitor.VisitCompilationUnit(unit)
+	ssa := unit.Accept(visitor)
 
 	return os.WriteFile(filename, []byte(ssa), 0644)
 }
