@@ -1,6 +1,29 @@
 // Package ast contains the abstract syntax tree definitions and related attributes.
 package ast
 
+// TypeKind represents the basic types in the language for type checking.
+type TypeKind int
+
+const (
+	TypeInt TypeKind = iota
+	TypeString
+	TypeVoid
+	TypeUnknown
+)
+
+func (t TypeKind) String() string {
+	switch t {
+	case TypeInt:
+		return "int"
+	case TypeString:
+		return "string"
+	case TypeVoid:
+		return "void"
+	default:
+		return "unknown"
+	}
+}
+
 // Visitor defines the visitor interface for SSA code generation.
 type Visitor interface {
 	VisitCompilationUnit(cu *CompilationUnit) string
@@ -10,13 +33,20 @@ type Visitor interface {
 	VisitRet(r *Ret) string
 	VisitCall(c *Call) string
 	VisitAdd(a *Add) string
-	VisitInstr(i *Instr) string
 }
 
 type CompilationUnit struct {
 	Types    []TypeDef
 	DataDefs []DataDef
 	FuncDefs []FuncDef
+	// Map from function name to signature (params and return type)
+	FuncSigs map[string]FuncSig
+}
+
+// FuncSig represents a function signature: parameter types and return type.
+type FuncSig struct {
+	ParamTypes []TypeKind
+	ReturnType TypeKind
 }
 
 // Accept implements the classic visitor pattern for CompilationUnit.
@@ -157,6 +187,8 @@ type Val struct {
 	Type     ValType
 	DynConst DynConst
 	Ident    Ident
+	// For type checking (if this Val is a literal or variable)
+	Ty TypeKind
 }
 
 func NewValDynConst(dc DynConst) Val {
@@ -164,7 +196,9 @@ func NewValDynConst(dc DynConst) Val {
 }
 
 func NewValGlobal(ident Ident) Val {
-	return NewValDynConst(NewDynConst(NewConstIdent(ident)))
+	v := NewValDynConst(NewDynConst(NewConstIdent(ident)))
+	v.Ident = ident
+	return v
 }
 
 func NewValInteger(i int64) Val {
@@ -342,6 +376,8 @@ type FuncDef struct {
 	Ident   Ident
 	Params  []Param
 	Blocks  []Block
+	// For type checking
+	ReturnType TypeKind
 }
 
 func (fd *FuncDef) Accept(visitor Visitor) string {
@@ -371,6 +407,8 @@ type Param struct {
 	Type  ParamType
 	AbiTy AbiTy
 	Ident Ident
+	// For type checking
+	Ty TypeKind
 }
 
 func NewParamRegular(abiTy AbiTy, ident Ident) Param {
@@ -432,6 +470,7 @@ const (
 type Block struct {
 	Label        string
 	Instructions []Instruction
+	Locals       map[string]TypeKind // name -> type
 }
 
 // Instruction is a marker interface for all instruction types.
@@ -485,6 +524,21 @@ func (c Call) WithRet(lhs Ident, retTy AbiTy) Call {
 	return c
 }
 
+// Add represents an SSA add instruction.
+type Add struct {
+	Lhs, Rhs Val
+	Ret      Val
+}
+
+func (a *Add) isInstruction() {}
+func (a *Add) Accept(visitor Visitor) string {
+	return visitor.VisitAdd(a)
+}
+
+func NewAdd(Ret, Lhs, Rhs Val) *Add {
+	return &Add{Lhs: Lhs, Rhs: Rhs, Ret: Ret}
+}
+
 type Arg struct {
 	Type  ArgType
 	AbiTy AbiTy
@@ -510,32 +564,3 @@ const (
 	ArgEnv      ArgType = "env"
 	ArgVariadic ArgType = "variadic"
 )
-
-// Add represents an SSA add instruction.
-type Add struct {
-	Lhs, Rhs Val
-	Ret      Val
-}
-
-func (a *Add) isInstruction() {}
-func (a *Add) Accept(visitor Visitor) string {
-	return visitor.VisitAdd(a)
-}
-
-func NewAdd(Ret, Lhs, Rhs Val) *Add {
-	return &Add{Lhs: Lhs, Rhs: Rhs, Ret: Ret}
-}
-
-// Instr represents a raw SSA instruction string.
-type Instr struct {
-	Str string
-}
-
-func (i *Instr) isInstruction() {}
-func (i *Instr) Accept(visitor Visitor) string {
-	return visitor.VisitInstr(i)
-}
-
-func NewInstr(str string) *Instr {
-	return &Instr{Str: str}
-}

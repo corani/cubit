@@ -13,7 +13,8 @@ hello :: func(arg: int) {
 // Export the main function
 @(export)
 main :: func() -> int {
-  count : int = 11 + 12
+  // Type of count is inferred as int
+  count := 11 + 12
 
   hello(count + 10)
 

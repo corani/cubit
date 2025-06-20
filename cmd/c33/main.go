@@ -103,6 +103,11 @@ func main() {
 		panic(fmt.Sprintf("failed to parse: %v", err))
 	}
 
+	// Type checking
+	if err := parserpkg.Check(unit); err != nil {
+		panic(fmt.Sprintf("type checking failed: %v", err))
+	}
+
 	if writeSSA {
 		if err := codegen.WriteSSA(unit, ssaFile); err != nil {
 			panic(fmt.Sprintf("failed to write SSA file: %v", err))

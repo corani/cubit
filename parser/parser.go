@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/corani/refactored-giggle/ast"
-	"github.com/corani/refactored-giggle/codegen"
 	"github.com/corani/refactored-giggle/lexer"
 )
 
@@ -25,10 +24,12 @@ func New(tok []lexer.Token) *Parser {
 	// TODO(daniel): instead of accepting all tokens, maybe we should accept a
 	// lexer and pull in the tokens on demand.
 
+	unit := new(ast.CompilationUnit)
+	unit.FuncSigs = make(map[string]ast.FuncSig)
 	return &Parser{
 		tok:        tok,
 		index:      0,
-		unit:       new(ast.CompilationUnit),
+		unit:       unit,
 		blocks:     nil,
 		attributes: make(map[ast.AttrKey]ast.AttrValue),
 		pkgName:    "",
@@ -194,12 +195,17 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			return err
 		}
 
+		var ty ast.TypeKind
+		var abiTy ast.AbiTy
 		switch argType.Keyword {
 		case lexer.KeywordInt:
-			params = append(params, ast.NewParamRegular(ast.NewAbiTyBase(ast.BaseWord), ast.Ident(arg.StringVal)))
+			ty = ast.TypeInt
+			abiTy = ast.NewAbiTyBase(ast.BaseWord)
 		case lexer.KeywordString:
-			params = append(params, ast.NewParamRegular(ast.NewAbiTyBase(ast.BaseLong), ast.Ident(arg.StringVal)))
+			ty = ast.TypeString
+			abiTy = ast.NewAbiTyBase(ast.BaseLong)
 		}
+		params = append(params, ast.Param{Type: ast.ParamRegular, AbiTy: abiTy, Ident: ast.Ident(arg.StringVal), Ty: ty})
 
 		tok, err := p.expectType(lexer.TypeComma, lexer.TypeRparen)
 		if err != nil {
@@ -219,15 +225,36 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 	retType := lexer.Token{
 		Keyword: lexer.KeywordVoid,
 	}
-
+	var returnType ast.TypeKind = ast.TypeVoid
 	if arrow.Type == lexer.TypeArrow {
 		retType, err = p.expectKeyword(lexer.KeywordInt, lexer.KeywordString, lexer.KeywordVoid)
 		if err != nil {
 			return err
 		}
+		switch retType.Keyword {
+		case lexer.KeywordInt:
+			returnType = ast.TypeInt
+		case lexer.KeywordString:
+			returnType = ast.TypeString
+		case lexer.KeywordVoid:
+			returnType = ast.TypeVoid
+		}
+	}
+
+	// Add function signature for both extern and regular functions
+	paramTypes := make([]ast.TypeKind, 0, len(params))
+
+	for _, p := range params {
+		paramTypes = append(paramTypes, p.Ty)
+	}
+
+	p.unit.FuncSigs[name.StringVal] = ast.FuncSig{
+		ParamTypes: paramTypes,
+		ReturnType: returnType,
 	}
 
 	if _, ok := p.attributes["extern"]; ok {
+		// Extern: only add signature, no body
 		return nil
 	} else {
 		lbrace, err := p.expectType(lexer.TypeLbrace)
@@ -245,6 +272,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 
 		fn := ast.NewFuncDef(ast.Ident(name.StringVal), params...).
 			WithBlocks(p.blocks...)
+		fn.ReturnType = returnType
 
 		if _, ok := p.attributes["export"]; ok {
 			fn = fn.WithLinkage(ast.NewLinkageExport())
@@ -266,7 +294,7 @@ func (p *Parser) parseBody(start, retType lexer.Token) error {
 			start.Location, start.StringVal)
 	}
 
-	block := &ast.Block{Label: "start"}
+	block := &ast.Block{Label: "start", Locals: make(map[string]ast.TypeKind)}
 
 	for {
 		first, err := p.nextToken()
@@ -311,6 +339,7 @@ func (p *Parser) parseBody(start, retType lexer.Token) error {
 				switch ret.Type {
 				case lexer.TypeNumber:
 					val = ast.NewValInteger(int64(ret.NumberVal))
+					val.Ty = ast.TypeInt
 				default:
 					panic(fmt.Sprintf("unexpected return type %s at %s, expected number",
 						ret.Type, ret.Location))
@@ -341,27 +370,39 @@ func (p *Parser) parseBody(start, retType lexer.Token) error {
 	}
 }
 
-func (p *Parser) parseDecl(first lexer.Token, block *ast.Block) error {
-	ty, err := p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
+func (p *Parser) parseDecl(name lexer.Token, block *ast.Block) error {
+	next, err := p.peekType(lexer.TypeEquals, lexer.TypeKeyword)
 	if err != nil {
 		return err
 	}
 
-	var abiTy ast.AbiTy
+	returnType := ast.TypeUnknown
 
-	switch ty.Keyword {
-	case lexer.KeywordInt:
-		abiTy = ast.NewAbiTyBase(ast.BaseWord)
-	case lexer.KeywordString:
-		abiTy = ast.NewAbiTyBase(ast.BaseLong)
-	default:
-		return fmt.Errorf("unexpected type %s at %s", ty.Keyword, ty.Location)
+	// type
+	if next.Type != lexer.TypeEquals {
+		p.index--
+
+		ty, err := p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
+		if err != nil {
+			return err
+		}
+
+		if _, err := p.expectType(lexer.TypeEquals); err != nil {
+			return err
+		}
+
+		switch ty.Keyword {
+		case lexer.KeywordInt:
+			returnType = ast.TypeInt
+		case lexer.KeywordString:
+			returnType = ast.TypeString
+		default:
+			return fmt.Errorf("unexpected type %s at %s, expected int or string",
+				ty.Keyword, ty.Location)
+		}
 	}
 
-	if _, err := p.expectType(lexer.TypeEquals); err != nil {
-		return err
-	}
-
+	// value
 	lhs, err := p.expectType(lexer.TypeNumber, lexer.TypeIdent)
 	if err != nil {
 		return err
@@ -375,15 +416,28 @@ func (p *Parser) parseDecl(first lexer.Token, block *ast.Block) error {
 		if err != nil {
 			return err
 		}
+
+		val.Ty = ast.TypeInt
 	case lexer.TypeIdent:
 		val, err = p.parseVal(ast.NewValIdent(ast.Ident(lhs.StringVal)), block)
 		if err != nil {
 			return err
 		}
+
+		val.Ty = ast.TypeUnknown // Will be resolved in type checking
 	}
 
+	// Validate return type if specified
+	if returnType != ast.TypeUnknown && val.Ty != returnType {
+		return fmt.Errorf("type mismatch for variable %s at %s: got %s, want %s",
+			name.StringVal, name.Location, val.Ty, returnType)
+	}
+
+	// Use structured Add instruction with ast.Val for dest, lhs, rhs
+	dest := ast.NewValIdent(ast.Ident(name.StringVal))
+
 	block.Instructions = append(block.Instructions,
-		ast.NewInstr(fmt.Sprintf("%%%s =%s add 0, %%%s", first.StringVal, codegen.NewSSAVisitor().VisitAbiTy(abiTy), val.Ident)))
+		ast.NewAdd(dest, ast.NewValInteger(0), val))
 
 	return nil
 }
@@ -403,7 +457,10 @@ func (p *Parser) parseCall(first lexer.Token, block *ast.Block) error {
 
 			p.unit.WithDataDefs(ast.NewDataDefStringZ(ast.Ident(id), arg.StringVal))
 
-			args = append(args, ast.NewArgRegular(ast.NewAbiTyBase(ast.BaseLong), ast.NewValGlobal(ast.Ident(id))))
+			val := ast.NewValGlobal(ast.Ident(id))
+			val.Ty = ast.TypeString
+
+			args = append(args, ast.NewArgRegular(ast.NewAbiTyBase(ast.BaseLong), val))
 		case lexer.TypeNumber:
 			lhs := ast.NewValInteger(int64(arg.NumberVal))
 
@@ -411,6 +468,7 @@ func (p *Parser) parseCall(first lexer.Token, block *ast.Block) error {
 			if err != nil {
 				return err
 			}
+			lhs.Ty = ast.TypeInt
 
 			args = append(args, ast.NewArgRegular(ast.NewAbiTyBase(ast.BaseWord), lhs))
 		case lexer.TypeIdent:
@@ -420,6 +478,7 @@ func (p *Parser) parseCall(first lexer.Token, block *ast.Block) error {
 			if err != nil {
 				return err
 			}
+			lhs.Ty = ast.TypeUnknown // Will be resolved in type checking
 
 			args = append(args, ast.NewArgRegular(ast.NewAbiTyBase(ast.BaseWord), lhs))
 		default:
@@ -462,6 +521,7 @@ func (p *Parser) parseVal(lhs ast.Val, block *ast.Block) (ast.Val, error) {
 		ret := ast.NewValIdent(ast.Ident(fmt.Sprintf("local_%d", p.localID)))
 		p.localID++
 		block.Instructions = append(block.Instructions, ast.NewAdd(ret, lhs, rhs))
+		block.Locals[string(ret.Ident)] = ast.TypeInt // Add the new local to Locals
 		lhs = ret
 	}
 
