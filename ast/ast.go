@@ -1,8 +1,6 @@
 // Package ast contains the abstract syntax tree definitions and related attributes.
 package ast
 
-// (imports removed; no longer needed)
-
 type CompilationUnit struct {
 	Types    []TypeDef
 	DataDefs []DataDef
@@ -32,8 +30,6 @@ func (cu *CompilationUnit) WithFuncDefs(funcDefs ...FuncDef) *CompilationUnit {
 	return cu
 }
 
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
-
 type Ident string
 type BaseTy string
 
@@ -61,8 +57,6 @@ type SubTy struct {
 	Ident Ident
 }
 
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
-
 type SubTyType string
 
 const (
@@ -88,8 +82,6 @@ func NewSubTyIdentSize(ident Ident, size int) SubTySize {
 	}
 }
 
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
-
 type Const struct {
 	Type  ConstType
 	F32   float32
@@ -101,17 +93,18 @@ type Const struct {
 func NewConstInteger(i int64) Const {
 	return Const{Type: ConstInteger, I64: i}
 }
+
 func NewConstSingle(f float32) Const {
 	return Const{Type: ConstSingle, F32: f}
 }
+
 func NewConstDouble(f float64) Const {
 	return Const{Type: ConstDouble, F64: f}
 }
+
 func NewConstIdent(ident Ident) Const {
 	return Const{Type: ConstIdent, Ident: ident}
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type ConstType string
 
@@ -131,11 +124,10 @@ type DynConst struct {
 func NewDynConst(constv Const) DynConst {
 	return DynConst{Type: DynConstConst, Const: constv}
 }
+
 func NewDynConstThread(ident Ident) DynConst {
 	return DynConst{Type: DynConstThread, Ident: ident}
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type DynConstType string
 
@@ -153,17 +145,18 @@ type Val struct {
 func NewValDynConst(dc DynConst) Val {
 	return Val{Type: ValDynConst, DynConst: dc}
 }
+
 func NewValGlobal(ident Ident) Val {
 	return NewValDynConst(NewDynConst(NewConstIdent(ident)))
 }
+
 func NewValInteger(i int64) Val {
 	return NewValDynConst(NewDynConst(NewConstInteger(i)))
 }
+
 func NewValIdent(ident Ident) Val {
 	return Val{Type: ValIdent, Ident: ident}
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type ValType string
 
@@ -181,14 +174,14 @@ type Linkage struct {
 func NewLinkageExport() Linkage {
 	return Linkage{Type: LinkageExport}
 }
+
 func NewLinkageThread() Linkage {
 	return Linkage{Type: LinkageThread}
 }
+
 func NewLinkageSection(secName, secFlags string) Linkage {
 	return Linkage{Type: LinkageSection, SecName: secName, SecFlags: secFlags}
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type LinkageType string
 
@@ -210,18 +203,19 @@ type TypeDef struct {
 func NewTypeDefRegular(ident Ident, fields ...SubTySize) TypeDef {
 	return TypeDef{Type: TypeDefRegular, Ident: ident, Fields: fields}
 }
+
 func NewTypeDefUnion(ident Ident, unionFields ...[]SubTySize) TypeDef {
 	return TypeDef{Type: TypeDefUnion, Ident: ident, UnionFields: unionFields}
 }
+
 func NewTypeDefOpaque(ident Ident, opaqueSize int) TypeDef {
 	return TypeDef{Type: TypeDefOpaque, Ident: ident, OpaqueSize: opaqueSize}
 }
+
 func (td TypeDef) WithAlign(align int) TypeDef {
 	td.Align = align
 	return td
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type TypeDefType string
 
@@ -241,22 +235,23 @@ type DataDef struct {
 func NewDataDef(ident Ident, initializer ...DataInit) DataDef {
 	return DataDef{Ident: ident, Initializer: initializer}
 }
+
 func NewDataDefStringZ(ident Ident, val string) DataDef {
 	return NewDataDef(ident,
 		NewDataInitString(val),
 		NewDataInitExt(ExtByte, NewDataItemInteger(0)),
 	)
 }
+
 func (dd DataDef) WithLinkage(linkage Linkage) DataDef {
 	dd.Linkage = &linkage
 	return dd
 }
+
 func (dd DataDef) WithAlign(align int) DataDef {
 	dd.Align = align
 	return dd
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type DataInit struct {
 	Type  DataInitType
@@ -268,14 +263,14 @@ type DataInit struct {
 func NewDataInitExt(extTy ExtTy, items ...DataItem) DataInit {
 	return DataInit{Type: DataInitExt, ExtTy: extTy, Items: items}
 }
+
 func NewDataInitString(val string) DataInit {
 	return DataInit{Type: DataInitExt, ExtTy: ExtByte, Items: []DataItem{NewDataItemString(val)}}
 }
+
 func NewDataInitZero(size int) DataInit {
 	return DataInit{Type: DataInitZero, Size: size}
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type DataInitType string
 
@@ -295,17 +290,18 @@ type DataItem struct {
 func NewDataItemConst(c Const) DataItem {
 	return DataItem{Type: DataItemConst, Const: c}
 }
+
 func NewDataItemString(val string) DataItem {
 	return DataItem{Type: DataItemString, StringVal: val}
 }
+
 func NewDataItemInteger(i int64) DataItem {
 	return NewDataItemConst(NewConstInteger(i))
 }
+
 func NewDataItemSymbol(ident Ident, offset int) DataItem {
 	return DataItem{Type: DataItemSymbol, Ident: ident, Offset: offset}
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type DataItemType string
 
@@ -326,20 +322,21 @@ type FuncDef struct {
 func NewFuncDef(ident Ident, params ...Param) FuncDef {
 	return FuncDef{Ident: ident, Params: params}
 }
+
 func (fd FuncDef) WithLinkage(linkage Linkage) FuncDef {
 	fd.Linkage = &linkage
 	return fd
 }
+
 func (fd FuncDef) WithRetTy(retTy AbiTy) FuncDef {
 	fd.RetTy = &retTy
 	return fd
 }
+
 func (fd FuncDef) WithBlocks(blocks ...Block) FuncDef {
 	fd.Blocks = append(fd.Blocks, blocks...)
 	return fd
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type Param struct {
 	Type  ParamType
@@ -350,14 +347,14 @@ type Param struct {
 func NewParamRegular(abiTy AbiTy, ident Ident) Param {
 	return Param{Type: ParamRegular, AbiTy: abiTy, Ident: ident}
 }
+
 func NewParamEnv(ident Ident) Param {
 	return Param{Type: ParamEnv, Ident: ident}
 }
+
 func NewParamVariadic() Param {
 	return Param{Type: ParamVariadic}
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type ParamType string
 
@@ -377,14 +374,14 @@ type AbiTy struct {
 func NewAbiTyBase(baseTy BaseTy) AbiTy {
 	return AbiTy{Type: AbiTyBase, BaseTy: baseTy}
 }
+
 func NewAbiTySubW(subWTy SubWTy) AbiTy {
 	return AbiTy{Type: AbiTySubW, SubWTy: subWTy}
 }
+
 func NewAbiTyIdent(ident Ident) AbiTy {
 	return AbiTy{Type: AbiTyIdent, Ident: ident}
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type AbiTyType string
 
@@ -408,8 +405,6 @@ type Block struct {
 	Instructions []Instruction
 }
 
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
-
 // Instruction is a marker interface for all instruction types.
 type Instruction interface {
 	isInstruction()
@@ -421,13 +416,16 @@ type Ret struct {
 }
 
 func (Ret) isInstruction() {}
+
 func NewRet(val ...Val) Ret {
 	if len(val) > 1 {
 		panic("NewRet accepts at most one value")
 	}
+
 	if len(val) == 0 {
 		return Ret{}
 	}
+
 	return Ret{Val: &val[0]}
 }
 
@@ -440,16 +438,16 @@ type Call struct {
 }
 
 func (Call) isInstruction() {}
+
 func NewCall(val Val, args ...Arg) Call {
 	return Call{Val: val, Args: args}
 }
+
 func (c Call) WithRet(lhs Ident, retTy AbiTy) Call {
 	c.LHS = &lhs
 	c.RetTy = &retTy
 	return c
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type Arg struct {
 	Type  ArgType
@@ -460,14 +458,14 @@ type Arg struct {
 func NewArgRegular(abiTy AbiTy, val Val) Arg {
 	return Arg{Type: ArgRegular, AbiTy: abiTy, Val: val}
 }
+
 func NewArgEnv(val Val) Arg {
 	return Arg{Type: ArgEnv, Val: val}
 }
+
 func NewArgVariadic() Arg {
 	return Arg{Type: ArgVariadic}
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.
 
 type ArgType string
 
@@ -484,6 +482,7 @@ type Add struct {
 }
 
 func (Add) isInstruction() {}
+
 func NewAdd(Ret, Lhs, Rhs Val) Add {
 	return Add{Lhs: Lhs, Rhs: Rhs, Ret: Ret}
 }
@@ -494,8 +493,7 @@ type Instr struct {
 }
 
 func (Instr) isInstruction() {}
+
 func NewInstr(str string) Instr {
 	return Instr{Str: str}
 }
-
-// Deprecated: SSA code generation is now handled by the codegen package using a visitor pattern.

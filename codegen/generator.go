@@ -16,14 +16,16 @@ import (
 func WriteSSA(unit *ast.CompilationUnit, filename string) error {
 	visitor := NewSSAVisitor()
 	ssa := visitor.VisitCompilationUnit(unit)
+
 	return os.WriteFile(filename, []byte(ssa), 0644)
 }
 
 // GenerateAssembly generates assembly from the given CompilationUnit.
 func GenerateAssembly(srcfile string, unit *ast.CompilationUnit, asmfile string) error {
-	var w bytes.Buffer
 	visitor := NewSSAVisitor()
 	ssa := visitor.VisitCompilationUnit(unit)
+
+	var w bytes.Buffer
 
 	if err := libqbe.Main(
 		libqbe.DefaultTarget(runtime.GOOS, runtime.GOARCH),

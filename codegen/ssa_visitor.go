@@ -25,42 +25,54 @@ func NewSSAVisitor() SSAVisitor {
 
 func (v *SsaGen) VisitCompilationUnit(cu *ast.CompilationUnit) string {
 	var sb strings.Builder
+
 	for _, typ := range cu.Types {
 		sb.WriteString(v.VisitTypeDef(typ))
 		sb.WriteString("\n")
 	}
+
 	for _, funcDef := range cu.FuncDefs {
 		sb.WriteString(v.VisitFuncDef(funcDef))
 		sb.WriteString("\n")
 	}
+
 	for _, dataDef := range cu.DataDefs {
 		sb.WriteString(v.VisitDataDef(dataDef))
 		sb.WriteString("\n")
 	}
+
 	return sb.String()
 }
 
 func (v *SsaGen) VisitTypeDef(td ast.TypeDef) string {
-	align := ""
+	var align string
+
 	if td.Align > 0 {
 		align = fmt.Sprintf("align %d ", td.Align)
 	}
+
 	switch td.Type {
 	case ast.TypeDefRegular:
 		fields := make([]string, len(td.Fields))
+
 		for i, field := range td.Fields {
 			fields[i] = v.VisitSubTySize(field)
 		}
+
 		return fmt.Sprintf("type :%s = %s{ %s }", td.Ident, align, strings.Join(fields, ", "))
 	case ast.TypeDefUnion:
 		unionFields := make([]string, len(td.UnionFields))
+
 		for i, unionField := range td.UnionFields {
 			fields := make([]string, len(unionField))
+
 			for j, field := range unionField {
 				fields[j] = v.VisitSubTySize(field)
 			}
+
 			unionFields[i] = fmt.Sprintf("{ %s }", strings.Join(fields, ", "))
 		}
+
 		return fmt.Sprintf("type :%s = %s{ %s }", td.Ident, align, strings.Join(unionFields, ", "))
 	case ast.TypeDefOpaque:
 		return fmt.Sprintf("type :%s = %s{ %d }", td.Ident, align, td.OpaqueSize)
@@ -70,38 +82,47 @@ func (v *SsaGen) VisitTypeDef(td ast.TypeDef) string {
 }
 
 func (v *SsaGen) VisitDataDef(dd ast.DataDef) string {
-	linkage := ""
-	align := ""
+	var linkage, align string
+
 	if dd.Linkage != nil {
 		linkage = v.VisitLinkage(*dd.Linkage) + " "
 	}
+
 	if dd.Align > 0 {
 		align = fmt.Sprintf("align %d ", dd.Align)
 	}
+
 	initializer := make([]string, len(dd.Initializer))
+
 	for i, init := range dd.Initializer {
 		initializer[i] = v.VisitDataInit(init)
 	}
+
 	return fmt.Sprintf("%sdata $%s = %s{ %s }", linkage, dd.Ident, align, strings.Join(initializer, ", "))
 }
 
 func (v *SsaGen) VisitFuncDef(fd ast.FuncDef) string {
-	linkage := ""
+	var linkage, retTy string
+
 	if fd.Linkage != nil {
 		linkage = v.VisitLinkage(*fd.Linkage) + " "
 	}
-	retTy := ""
+
 	if fd.RetTy != nil {
 		retTy = v.VisitAbiTy(*fd.RetTy) + " "
 	}
+
 	params := make([]string, len(fd.Params))
+	blocks := make([]string, len(fd.Blocks))
+
 	for i, param := range fd.Params {
 		params[i] = v.VisitParam(param)
 	}
-	blocks := make([]string, len(fd.Blocks))
+
 	for i, block := range fd.Blocks {
 		blocks[i] = v.VisitBlock(block)
 	}
+
 	return fmt.Sprintf("%sfunction %s$%s(%s) {%s}",
 		linkage, retTy, fd.Ident,
 		strings.Join(params, ", "),
@@ -113,6 +134,7 @@ func (v *SsaGen) VisitSubTySize(sts ast.SubTySize) string {
 	if sts.Size > 1 {
 		return fmt.Sprintf("%s %d", v.VisitSubTy(sts.SubTy), sts.Size)
 	}
+
 	return v.VisitSubTy(sts.SubTy)
 }
 
@@ -135,6 +157,7 @@ func (v *SsaGen) VisitLinkage(l ast.Linkage) string {
 		if l.SecFlags == "" {
 			return fmt.Sprintf("%s %q", l.Type, l.SecName)
 		}
+
 		return fmt.Sprintf("%s %q %q", l.Type, l.SecName, l.SecFlags)
 	default:
 		panic("unknown linkage type: " + string(l.Type))
@@ -145,9 +168,11 @@ func (v *SsaGen) VisitDataInit(di ast.DataInit) string {
 	switch di.Type {
 	case ast.DataInitExt:
 		items := make([]string, len(di.Items))
+
 		for i, item := range di.Items {
 			items[i] = v.VisitDataItem(item)
 		}
+
 		return fmt.Sprintf("%s %s", di.ExtTy, strings.Join(items, " "))
 	case ast.DataInitZero:
 		return fmt.Sprintf("z %d", di.Size)
@@ -162,6 +187,7 @@ func (v *SsaGen) VisitDataItem(di ast.DataItem) string {
 		if di.Offset > 0 {
 			return fmt.Sprintf("$%s + %d", di.Ident, di.Offset)
 		}
+
 		return fmt.Sprintf("$%s", di.Ident)
 	case ast.DataItemString:
 		return fmt.Sprintf("\"%s\"", di.StringVal)
@@ -214,14 +240,18 @@ func (v *SsaGen) VisitAbiTy(a ast.AbiTy) string {
 }
 
 func (v *SsaGen) VisitBlock(b ast.Block) string {
-	label := ""
+	var label string
+
 	if b.Label != "" {
 		label = fmt.Sprintf("@%s\n", b.Label)
 	}
+
 	instructions := make([]string, len(b.Instructions))
+
 	for i, instr := range b.Instructions {
 		instructions[i] = "\t" + v.VisitInstruction(instr)
 	}
+
 	return fmt.Sprintf("\n%s%s\n", label, strings.Join(instructions, "\n"))
 }
 
@@ -236,8 +266,7 @@ func (v *SsaGen) VisitInstruction(instr ast.Instruction) string {
 	case ast.Instr:
 		return v.VisitInstr(i)
 	default:
-		// fallback: print type name for unknown instructions
-		return fmt.Sprintf("<unknown instruction %T>", instr)
+		panic(fmt.Sprintf("unknown instruction type: %T", instr))
 	}
 }
 
@@ -245,18 +274,23 @@ func (v *SsaGen) VisitRet(r ast.Ret) string {
 	if r.Val == nil {
 		return "ret"
 	}
+
 	return fmt.Sprintf("ret %s", v.VisitVal(*r.Val))
 }
 
 func (v *SsaGen) VisitCall(c ast.Call) string {
-	lhs := ""
+	var lhs string
+
 	if c.LHS != nil && c.RetTy != nil {
 		lhs = fmt.Sprintf("%%%s = %s ", *c.LHS, v.VisitAbiTy(*c.RetTy))
 	}
+
 	args := make([]string, len(c.Args))
+
 	for i, arg := range c.Args {
 		args[i] = v.VisitArg(arg)
 	}
+
 	return fmt.Sprintf("%scall %s(%s)", lhs, v.VisitVal(c.Val), strings.Join(args, ", "))
 }
 

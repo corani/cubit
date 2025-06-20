@@ -123,8 +123,10 @@ func (t *Tokenizer) Tokens() ([]Token, error) {
 			if errors.Is(err, io.EOF) {
 				return tokens, nil
 			}
+
 			return nil, err
 		}
+
 		tokens = append(tokens, token)
 	}
 }
@@ -133,15 +135,20 @@ func (t *Tokenizer) next() (Token, error) {
 	if len(t.Buffer) > 0 {
 		token := t.Buffer[0]
 		t.Buffer = t.Buffer[1:]
+
 		return token, nil
 	}
+
 	var buf []byte
+
 	for {
 		c, err := t.Scan.Next()
 		if err != nil {
 			return Token{}, err
 		}
+
 		start := t.Scan.Location()
+
 		switch {
 		case c == '=':
 			return Token{Type: TypeEquals, StringVal: "=", Location: start}, nil
@@ -166,6 +173,7 @@ func (t *Tokenizer) next() (Token, error) {
 			if err != nil {
 				return Token{}, err
 			}
+
 			switch {
 			case c == '/':
 				for {
@@ -173,6 +181,7 @@ func (t *Tokenizer) next() (Token, error) {
 					if err != nil {
 						return Token{}, err
 					}
+
 					if c == '\n' || c == '\r' {
 						break
 					}
@@ -185,12 +194,16 @@ func (t *Tokenizer) next() (Token, error) {
 			if err != nil {
 				return Token{}, err
 			}
+
 			switch {
 			case c == '>':
 				return Token{Type: TypeArrow, StringVal: "->", Location: start}, nil
 			case c >= '0' && c <= '9':
 				buf = append(buf, '-')
-				buf = append(buf, c)
+
+				// Unread the number, so we'll fall into the numeric case on continue
+				t.Scan.Unread(1)
+
 				continue
 			default:
 				t.Scan.Unread(1)
@@ -203,19 +216,23 @@ func (t *Tokenizer) next() (Token, error) {
 				if err != nil {
 					return Token{}, err
 				}
+
 				if c == '"' {
 					break
 				}
+
 				if c == '\\' {
 					c, err = t.Scan.Next()
 					if err != nil {
 						return Token{}, err
 					}
+
 					buf = append(buf, '\\', c)
 				} else {
 					buf = append(buf, c)
 				}
 			}
+
 			return Token{Type: TypeString, StringVal: string(buf), Location: start}, nil
 		case isNumeric(c):
 			buf = append(buf, c)
@@ -224,35 +241,44 @@ func (t *Tokenizer) next() (Token, error) {
 				if err != nil {
 					return Token{}, err
 				}
+
 				if isNumeric(c) {
 					buf = append(buf, c)
 				} else {
 					t.Scan.Unread(1)
+
 					break
 				}
 			}
+
 			num, err := strconv.Atoi(string(buf))
 			if err != nil {
 				return Token{}, err
 			}
+
 			return Token{Type: TypeNumber, NumberVal: num, StringVal: string(buf), Location: start}, nil
 		case isAlpha(c):
 			buf = append(buf, c)
+
 			for {
 				c, err = t.Scan.Next()
 				if err != nil {
 					return Token{}, err
 				}
+
 				if isAlphanumeric(c) {
 					buf = append(buf, c)
 				} else {
 					t.Scan.Unread(1)
+
 					break
 				}
 			}
+
 			if kw, ok := checkKeyword(string(buf)); ok {
 				return Token{Type: TypeKeyword, Keyword: kw, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
 			}
+
 			return Token{Type: TypeIdent, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
 		}
 	}
