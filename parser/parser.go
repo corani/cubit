@@ -282,7 +282,7 @@ func (p *Parser) parseBody(start, retType lexer.Token) error {
 			if len(block.Instructions) == 0 {
 				addRet = true
 			} else {
-				_, hasRet := block.Instructions[len(block.Instructions)-1].(ast.Ret)
+				_, hasRet := block.Instructions[len(block.Instructions)-1].(*ast.Ret)
 				addRet = !hasRet
 			}
 

@@ -7,7 +7,7 @@ import (
 	"github.com/corani/refactored-giggle/ast"
 )
 
-// SsaGen implements ast.SSAVisitor and generates SSA code.
+// SsaGen implements ast.Visitor and generates SSA code.
 type SsaGen struct{}
 
 // NewSSAVisitor returns a new SSAVisitor.
@@ -218,28 +218,13 @@ func (v *SsaGen) VisitBlock(b ast.Block) string {
 	instructions := make([]string, len(b.Instructions))
 
 	for i, instr := range b.Instructions {
-		instructions[i] = "\t" + v.VisitInstruction(instr)
+		instructions[i] = "\t" + instr.Accept(v)
 	}
 
 	return fmt.Sprintf("\n%s%s\n", label, strings.Join(instructions, "\n"))
 }
 
-func (v *SsaGen) VisitInstruction(instr ast.Instruction) string {
-	switch i := instr.(type) {
-	case ast.Ret:
-		return v.VisitRet(i)
-	case ast.Call:
-		return v.VisitCall(i)
-	case ast.Add:
-		return v.VisitAdd(i)
-	case ast.Instr:
-		return v.VisitInstr(i)
-	default:
-		panic(fmt.Sprintf("unknown instruction type: %T", instr))
-	}
-}
-
-func (v *SsaGen) VisitRet(r ast.Ret) string {
+func (v *SsaGen) VisitRet(r *ast.Ret) string {
 	if r.Val == nil {
 		return "ret"
 	}
@@ -247,7 +232,7 @@ func (v *SsaGen) VisitRet(r ast.Ret) string {
 	return fmt.Sprintf("ret %s", v.VisitVal(*r.Val))
 }
 
-func (v *SsaGen) VisitCall(c ast.Call) string {
+func (v *SsaGen) VisitCall(c *ast.Call) string {
 	var lhs string
 
 	if c.LHS != nil && c.RetTy != nil {
@@ -263,11 +248,11 @@ func (v *SsaGen) VisitCall(c ast.Call) string {
 	return fmt.Sprintf("%scall %s(%s)", lhs, v.VisitVal(c.Val), strings.Join(args, ", "))
 }
 
-func (v *SsaGen) VisitAdd(a ast.Add) string {
+func (v *SsaGen) VisitAdd(a *ast.Add) string {
 	return fmt.Sprintf("%s =w add %s, %s", v.VisitVal(a.Ret), v.VisitVal(a.Lhs), v.VisitVal(a.Rhs))
 }
 
-func (v *SsaGen) VisitInstr(i ast.Instr) string {
+func (v *SsaGen) VisitInstr(i *ast.Instr) string {
 	return i.Str
 }
 

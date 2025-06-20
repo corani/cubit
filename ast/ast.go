@@ -1,12 +1,16 @@
 // Package ast contains the abstract syntax tree definitions and related attributes.
 package ast
 
-// SSAVisitor defines the visitor interface for SSA code generation.
-type SSAVisitor interface {
+// Visitor defines the visitor interface for SSA code generation.
+type Visitor interface {
 	VisitCompilationUnit(cu *CompilationUnit) string
 	VisitTypeDef(td *TypeDef) string
 	VisitDataDef(dd *DataDef) string
 	VisitFuncDef(fd *FuncDef) string
+	VisitRet(r *Ret) string
+	VisitCall(c *Call) string
+	VisitAdd(a *Add) string
+	VisitInstr(i *Instr) string
 }
 
 type CompilationUnit struct {
@@ -16,7 +20,7 @@ type CompilationUnit struct {
 }
 
 // Accept implements the classic visitor pattern for CompilationUnit.
-func (cu *CompilationUnit) Accept(visitor SSAVisitor) string {
+func (cu *CompilationUnit) Accept(visitor Visitor) string {
 	return visitor.VisitCompilationUnit(cu)
 }
 
@@ -213,7 +217,7 @@ type TypeDef struct {
 	OpaqueSize  int
 }
 
-func (td *TypeDef) Accept(visitor SSAVisitor) string {
+func (td *TypeDef) Accept(visitor Visitor) string {
 	return visitor.VisitTypeDef(td)
 }
 
@@ -249,7 +253,7 @@ type DataDef struct {
 	Initializer []DataInit
 }
 
-func (dd *DataDef) Accept(visitor SSAVisitor) string {
+func (dd *DataDef) Accept(visitor Visitor) string {
 	return visitor.VisitDataDef(dd)
 }
 
@@ -340,7 +344,7 @@ type FuncDef struct {
 	Blocks  []Block
 }
 
-func (fd *FuncDef) Accept(visitor SSAVisitor) string {
+func (fd *FuncDef) Accept(visitor Visitor) string {
 	return visitor.VisitFuncDef(fd)
 }
 
@@ -433,6 +437,7 @@ type Block struct {
 // Instruction is a marker interface for all instruction types.
 type Instruction interface {
 	isInstruction()
+	Accept(visitor Visitor) string
 }
 
 // Ret represents an SSA return instruction.
@@ -441,17 +446,20 @@ type Ret struct {
 }
 
 func (Ret) isInstruction() {}
+func (r *Ret) Accept(visitor Visitor) string {
+	return visitor.VisitRet(r)
+}
 
-func NewRet(val ...Val) Ret {
+func NewRet(val ...Val) *Ret {
 	if len(val) > 1 {
 		panic("NewRet accepts at most one value")
 	}
 
 	if len(val) == 0 {
-		return Ret{}
+		return &Ret{}
 	}
 
-	return Ret{Val: &val[0]}
+	return &Ret{Val: &val[0]}
 }
 
 // Call represents an SSA call instruction.
@@ -462,10 +470,13 @@ type Call struct {
 	Args  []Arg
 }
 
-func (Call) isInstruction() {}
+func (c *Call) isInstruction() {}
+func (c *Call) Accept(visitor Visitor) string {
+	return visitor.VisitCall(c)
+}
 
-func NewCall(val Val, args ...Arg) Call {
-	return Call{Val: val, Args: args}
+func NewCall(val Val, args ...Arg) *Call {
+	return &Call{Val: val, Args: args}
 }
 
 func (c Call) WithRet(lhs Ident, retTy AbiTy) Call {
@@ -506,10 +517,13 @@ type Add struct {
 	Ret      Val
 }
 
-func (Add) isInstruction() {}
+func (a *Add) isInstruction() {}
+func (a *Add) Accept(visitor Visitor) string {
+	return visitor.VisitAdd(a)
+}
 
-func NewAdd(Ret, Lhs, Rhs Val) Add {
-	return Add{Lhs: Lhs, Rhs: Rhs, Ret: Ret}
+func NewAdd(Ret, Lhs, Rhs Val) *Add {
+	return &Add{Lhs: Lhs, Rhs: Rhs, Ret: Ret}
 }
 
 // Instr represents a raw SSA instruction string.
@@ -517,8 +531,11 @@ type Instr struct {
 	Str string
 }
 
-func (Instr) isInstruction() {}
+func (i *Instr) isInstruction() {}
+func (i *Instr) Accept(visitor Visitor) string {
+	return visitor.VisitInstr(i)
+}
 
-func NewInstr(str string) Instr {
-	return Instr{Str: str}
+func NewInstr(str string) *Instr {
+	return &Instr{Str: str}
 }
