@@ -36,17 +36,35 @@ func main() {
 	flag.Parse()
 
 	if help {
-		fmt.Println("Usage: go run main.go [options]")
+		fmt.Println("Usage: go run main.go [options] [source_file]")
 		fmt.Println("Options:")
 		flag.PrintDefaults()
 		return
 	}
 
 	srcFile := "example.in"
-	tokFile, _ := filepath.Abs(filepath.Join("out", withExt(srcFile, ".tok")))
-	ssaFile, _ := filepath.Abs(filepath.Join("out", withExt(srcFile, ".ssa")))
-	asmFile, _ := filepath.Abs(filepath.Join("out", withExt(srcFile, ".s")))
-	binFile, _ := filepath.Abs(filepath.Join("out", withExt(srcFile, "")))
+	if flag.NArg() > 0 {
+		srcFile = flag.Arg(0)
+	}
+
+	// ensure the source file exists
+	if _, err := os.Stat(srcFile); errors.Is(err, os.ErrNotExist) {
+		fmt.Printf("Source file %s does not exist.\n", srcFile)
+		os.Exit(1)
+	}
+
+	// output directory is relative to the source file
+	srcDir := filepath.Dir(srcFile)
+	outDir := filepath.Join(srcDir, "out")
+
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		panic(fmt.Sprintf("failed to create output directory: %v", err))
+	}
+
+	tokFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".tok"))
+	ssaFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".ssa"))
+	asmFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".s"))
+	binFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ""))
 
 	reader, err := os.Open(srcFile)
 	if err != nil {
@@ -79,6 +97,7 @@ func main() {
 	}
 
 	pr := parserpkg.New(tokens)
+
 	unit, err := pr.Parse()
 	if err != nil && !errors.Is(err, io.EOF) {
 		panic(fmt.Sprintf("failed to parse: %v", err))
