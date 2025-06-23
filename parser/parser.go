@@ -172,7 +172,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 
 	for {
 		// Check for optional attributes before parameter
-		var paramAttrs ast.Attributes
+		var attrs ast.Attributes
 
 		nextTok, err := p.expectType(lexer.TypeRparen, lexer.TypeAt, lexer.TypeIdent)
 		if err != nil {
@@ -190,7 +190,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			}
 
 			// Copy and clear parser attributes for this param
-			paramAttrs = maps.Clone(p.attributes)
+			attrs = maps.Clone(p.attributes)
 			clear(p.attributes)
 
 			// Now expect identifier
@@ -198,11 +198,6 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			if err != nil {
 				return err
 			}
-		}
-
-		param := ast.FuncParam{
-			Ident:      nextTok.StringVal,
-			Attributes: paramAttrs,
 		}
 
 		if _, err := p.expectType(lexer.TypeColon); err != nil {
@@ -214,14 +209,11 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			return err
 		}
 
-		switch argType.Keyword {
-		case lexer.KeywordInt:
-			param.Type = ast.TypeInt
-		case lexer.KeywordString:
-			param.Type = ast.TypeString
-		}
-
-		def.Params = append(def.Params, param)
+		def.Params = append(def.Params, ast.FuncParam{
+			Ident:      nextTok.StringVal,
+			Type:       p.mapKeywordToType(argType.Keyword),
+			Attributes: attrs,
+		})
 
 		tok, err := p.expectType(lexer.TypeComma, lexer.TypeRparen)
 		if err != nil {
@@ -247,14 +239,8 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 		if err != nil {
 			return err
 		}
-		switch retType.Keyword {
-		case lexer.KeywordInt:
-			def.ReturnType = ast.TypeInt
-		case lexer.KeywordString:
-			def.ReturnType = ast.TypeString
-		case lexer.KeywordVoid:
-			def.ReturnType = ast.TypeVoid
-		}
+
+		def.ReturnType = p.mapKeywordToType(retType.Keyword)
 	}
 
 	// If the function is not `extern`, we expect a body.
@@ -398,15 +384,7 @@ func (p *Parser) parseAssign(name lexer.Token) (ast.Instruction, error) {
 			return nil, err
 		}
 
-		switch ty.Keyword {
-		case lexer.KeywordInt:
-			returnType = ast.TypeInt
-		case lexer.KeywordString:
-			returnType = ast.TypeString
-		default:
-			return nil, fmt.Errorf("unexpected type %s at %s, expected int or string",
-				ty.Keyword, ty.Location)
-		}
+		returnType = p.mapKeywordToType(ty.Keyword)
 	}
 
 	// value
@@ -574,4 +552,17 @@ func (p *Parser) nextToken() (lexer.Token, error) {
 	p.index++
 
 	return token, nil
+}
+
+func (p *Parser) mapKeywordToType(kw lexer.Keyword) ast.TypeKind {
+	switch kw {
+	case lexer.KeywordInt:
+		return ast.TypeInt
+	case lexer.KeywordString:
+		return ast.TypeString
+	case lexer.KeywordVoid:
+		return ast.TypeVoid
+	default:
+		return ast.TypeUnknown
+	}
 }
