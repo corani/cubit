@@ -15,7 +15,6 @@ type Parser struct {
 	index      int
 	unit       *ast.CompilationUnit
 	attributes ast.Attributes
-	pkgName    string
 	localID    int
 }
 
@@ -27,7 +26,6 @@ func New(tok []lexer.Token) *Parser {
 		index:      0,
 		unit:       ast.NewCompilationUnit(),
 		attributes: ast.Attributes{},
-		pkgName:    "",
 		localID:    0,
 	}
 }
@@ -55,7 +53,7 @@ func (p *Parser) Parse() (*ast.CompilationUnit, error) {
 					start.Location, start.StringVal)
 			}
 		case lexer.TypeIdent:
-			if p.pkgName == "" {
+			if p.unit.Ident == "" {
 				return p.unit, fmt.Errorf("package must be defined before any other declarations at %s",
 					start.Location)
 			}
@@ -84,7 +82,7 @@ func (p *Parser) Parse() (*ast.CompilationUnit, error) {
 func (p *Parser) parsePackage(start lexer.Token) error {
 	_ = start
 
-	if p.pkgName != "" {
+	if p.unit.Ident != "" {
 		return fmt.Errorf("package already defined at %s, cannot redefine",
 			p.tok[p.index-1].Location)
 	}
@@ -94,7 +92,7 @@ func (p *Parser) parsePackage(start lexer.Token) error {
 		return err
 	}
 
-	p.pkgName = pkgName.StringVal
+	p.unit.Ident = pkgName.StringVal
 
 	return nil
 }
