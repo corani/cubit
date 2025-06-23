@@ -6,101 +6,97 @@ import (
 	"github.com/corani/refactored-giggle/ast"
 )
 
-// Check runs type checking on the given CompilationUnit.
-
-func checkFuncDef(unit *ast.CompilationUnit, fn *ast.FuncDef) error {
-	// Build symbol table for parameters
-	symbols := make(map[string]ast.TypeKind)
-	for _, param := range fn.Params {
-		symbols[string(param.Ident)] = param.Ty
-	}
-
-	// Add all locals from all blocks to the symbol table
-	for _, block := range fn.Blocks {
-		for name, ty := range block.Locals {
-			symbols[name] = ty
+func Check(unit *ast.CompilationUnit) error {
+	for _, fn := range unit.Funcs {
+		if fn.Body == nil {
+			continue
 		}
-	}
-
-	// Check each block
-	for _, block := range fn.Blocks {
-		for _, instr := range block.Instructions {
-			switch v := instr.(type) {
-			case *ast.Ret:
-				if v.Val != nil {
-					if v.Val.Ty != fn.ReturnType {
-						return typeError("return type mismatch in function '%s': got %s, want %s", fn.Ident, v.Val.Ty, fn.ReturnType)
-					}
-				} else if fn.ReturnType != ast.TypeVoid {
-					return typeError("missing return value in function '%s' with non-void return type", fn.Ident)
-				}
-			case *ast.Call:
-				// Check function call argument types
-				callee := string(v.Val.Ident)
-				sig, ok := fnUnitSig(unit, callee)
-				if !ok {
-					return typeError("call to unknown function '%s' in '%s'", callee, fn.Ident)
-				}
-				if len(sig.ParamTypes) != len(v.Args) {
-					return typeError("call to '%s' in '%s': argument count mismatch (got %d, want %d)", callee, fn.Ident, len(v.Args), len(sig.ParamTypes))
-				}
-				for i, arg := range v.Args {
-					argType := arg.Val.Ty
-					// If the argument is an identifier and type is unknown, look up in symbol table
-					if argType == ast.TypeUnknown && arg.Val.Ident != "" {
-						if t, ok := symbols[string(arg.Val.Ident)]; ok {
-							argType = t
-							arg.Val.Ty = t // Set the type for later phases
+		// Symbol table for variable types in this function
+		vars := make(map[string]ast.TypeKind)
+		// Add function parameters to the symbol table
+		for _, param := range fn.Params {
+			vars[param.Ident] = param.Type
+		}
+		changed := true
+		// Iterate until no new types are inferred
+		for changed {
+			changed = false
+			for _, instr := range fn.Body.Instructions {
+				switch a := instr.(type) {
+				case *ast.Assign:
+					rhsType := inferExprType(a.Value, vars)
+					if a.Type == ast.TypeUnknown {
+						if prev, ok := vars[a.Ident]; !ok || prev != rhsType {
+							a.Type = rhsType
+							vars[a.Ident] = rhsType
+							changed = true
+						}
+					} else {
+						if a.Type != rhsType {
+							return fmt.Errorf("type error: variable '%s' declared as %s but assigned %s", a.Ident, a.Type, rhsType)
+						}
+						if prev, ok := vars[a.Ident]; !ok || prev != a.Type {
+							vars[a.Ident] = a.Type
+							changed = true
 						}
 					}
-					if argType != sig.ParamTypes[i] {
-						return typeError("call to '%s' in '%s': argument %d type mismatch (got %s, want %s)", callee, fn.Ident, i+1, argType, sig.ParamTypes[i])
+				case *ast.Call:
+					// Check function existence and argument types
+					var fnDef *ast.FuncDef
+					for i := range unit.Funcs {
+						if unit.Funcs[i].Ident == a.Ident {
+							fnDef = &unit.Funcs[i]
+							break
+						}
 					}
-				}
-			case *ast.Add:
-				// Typecheck Add: both operands must be int
-				lhsType := v.Lhs.Ty
-				rhsType := v.Rhs.Ty
-				// If lhs is an identifier and type is unknown, look up in symbol table
-				if lhsType == ast.TypeUnknown && v.Lhs.Ident != "" {
-					if t, ok := symbols[string(v.Lhs.Ident)]; ok {
-						lhsType = t
-						v.Lhs.Ty = t
+					if fnDef == nil {
+						return fmt.Errorf("call to undefined function '%s'", a.Ident)
 					}
-				}
-				if rhsType == ast.TypeUnknown && v.Rhs.Ident != "" {
-					if t, ok := symbols[string(v.Rhs.Ident)]; ok {
-						rhsType = t
-						v.Rhs.Ty = t
+					if len(a.Args) != len(fnDef.Params) {
+						return fmt.Errorf("call to '%s' expects %d arguments, got %d", a.Ident, len(fnDef.Params), len(a.Args))
 					}
+					for i, arg := range a.Args {
+						argType := inferExprType(arg.Value, vars)
+						paramType := fnDef.Params[i].Type
+						if paramType != ast.TypeUnknown && argType != paramType {
+							return fmt.Errorf("call to '%s': argument %d type mismatch: expected %s, got %s", a.Ident, i+1, paramType, argType)
+						}
+					}
+				case *ast.Return:
+					// Optionally: check return type matches fn.ReturnType
 				}
-				if lhsType != ast.TypeInt || rhsType != ast.TypeInt {
-					return typeError("add instruction in function '%s': operands must be int (got %s, %s)", fn.Ident, lhsType, rhsType)
-				}
-				// Set result type to int for later phases
-				v.Ret.Ty = ast.TypeInt
 			}
 		}
 	}
 	return nil
 }
 
-// fnUnitSig finds the function signature for a callee, searching the compilation unit.
-func fnUnitSig(unit *ast.CompilationUnit, name string) (ast.FuncSig, bool) {
-	sig, ok := unit.FuncSigs[name]
-	return sig, ok
-}
-
-func Check(unit *ast.CompilationUnit) error {
-	for i := range unit.FuncDefs {
-		fn := &unit.FuncDefs[i]
-		if err := checkFuncDef(unit, fn); err != nil {
-			return err
+// inferExprType infers the type of an expression, using the symbol table for variable references.
+func inferExprType(expr ast.Expression, vars map[string]ast.TypeKind) ast.TypeKind {
+	switch e := expr.(type) {
+	case *ast.Literal:
+		return e.Type
+	case *ast.Binop:
+		// For now, assume both sides must be the same type
+		lhs := inferExprType(e.Lhs, vars)
+		rhs := inferExprType(e.Rhs, vars)
+		if lhs == rhs {
+			if e.Type != lhs {
+				e.Type = lhs
+			}
+			return lhs
 		}
+		e.Type = ast.TypeUnknown
+		return ast.TypeUnknown
+	case *ast.VariableRef:
+		if t, ok := vars[e.Ident]; ok {
+			if e.Type != t {
+				e.Type = t
+			}
+			return t
+		}
+		return e.Type
+	default:
+		return ast.TypeUnknown
 	}
-	return nil
-}
-
-func typeError(format string, args ...interface{}) error {
-	return fmt.Errorf("type error: "+format, args...)
 }

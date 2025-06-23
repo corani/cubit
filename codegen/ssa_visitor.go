@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/corani/refactored-giggle/ast"
+	"github.com/corani/refactored-giggle/ir"
 )
 
 // SsaGen implements ast.Visitor and generates SSA code.
@@ -15,7 +15,7 @@ func NewSSAVisitor() *SsaGen {
 	return &SsaGen{}
 }
 
-func (v *SsaGen) VisitCompilationUnit(cu *ast.CompilationUnit) string {
+func (v *SsaGen) VisitCompilationUnit(cu *ir.CompilationUnit) string {
 	var sb strings.Builder
 	for i := range cu.Types {
 		sb.WriteString(cu.Types[i].Accept(v))
@@ -32,19 +32,19 @@ func (v *SsaGen) VisitCompilationUnit(cu *ast.CompilationUnit) string {
 	return sb.String()
 }
 
-func (v *SsaGen) VisitTypeDef(td *ast.TypeDef) string {
+func (v *SsaGen) VisitTypeDef(td *ir.TypeDef) string {
 	var align string
 	if td.Align > 0 {
 		align = fmt.Sprintf("align %d ", td.Align)
 	}
 	switch td.Type {
-	case ast.TypeDefRegular:
+	case ir.TypeDefRegular:
 		fields := make([]string, len(td.Fields))
 		for i, field := range td.Fields {
 			fields[i] = v.VisitSubTySize(field)
 		}
 		return fmt.Sprintf("type :%s = %s{ %s }", td.Ident, align, strings.Join(fields, ", "))
-	case ast.TypeDefUnion:
+	case ir.TypeDefUnion:
 		unionFields := make([]string, len(td.UnionFields))
 		for i, unionField := range td.UnionFields {
 			fields := make([]string, len(unionField))
@@ -54,14 +54,14 @@ func (v *SsaGen) VisitTypeDef(td *ast.TypeDef) string {
 			unionFields[i] = fmt.Sprintf("{ %s }", strings.Join(fields, ", "))
 		}
 		return fmt.Sprintf("type :%s = %s{ %s }", td.Ident, align, strings.Join(unionFields, ", "))
-	case ast.TypeDefOpaque:
+	case ir.TypeDefOpaque:
 		return fmt.Sprintf("type :%s = %s{ %d }", td.Ident, align, td.OpaqueSize)
 	default:
 		panic("unknown type definition type: " + string(td.Type))
 	}
 }
 
-func (v *SsaGen) VisitDataDef(dd *ast.DataDef) string {
+func (v *SsaGen) VisitDataDef(dd *ir.DataDef) string {
 	var linkage, align string
 	if dd.Linkage != nil {
 		linkage = v.VisitLinkage(*dd.Linkage) + " "
@@ -76,7 +76,7 @@ func (v *SsaGen) VisitDataDef(dd *ast.DataDef) string {
 	return fmt.Sprintf("%sdata $%s = %s{ %s }", linkage, dd.Ident, align, strings.Join(initializer, ", "))
 }
 
-func (v *SsaGen) VisitFuncDef(fd *ast.FuncDef) string {
+func (v *SsaGen) VisitFuncDef(fd *ir.FuncDef) string {
 	var linkage, retTy string
 	if fd.Linkage != nil {
 		linkage = v.VisitLinkage(*fd.Linkage) + " "
@@ -99,7 +99,7 @@ func (v *SsaGen) VisitFuncDef(fd *ast.FuncDef) string {
 }
 
 // --- Helper visitor methods for nested types ---
-func (v *SsaGen) VisitSubTySize(sts ast.SubTySize) string {
+func (v *SsaGen) VisitSubTySize(sts ir.SubTySize) string {
 	if sts.Size > 1 {
 		return fmt.Sprintf("%s %d", v.VisitSubTy(sts.SubTy), sts.Size)
 	}
@@ -107,22 +107,22 @@ func (v *SsaGen) VisitSubTySize(sts ast.SubTySize) string {
 	return v.VisitSubTy(sts.SubTy)
 }
 
-func (v *SsaGen) VisitSubTy(st ast.SubTy) string {
+func (v *SsaGen) VisitSubTy(st ir.SubTy) string {
 	switch st.Type {
-	case ast.SubTyExt:
+	case ir.SubTyExt:
 		return string(st.ExtTy)
-	case ast.SubTyIdent:
+	case ir.SubTyIdent:
 		return fmt.Sprintf(":%s", st.Ident)
 	default:
 		panic("unknown subtype type: " + string(st.Type))
 	}
 }
 
-func (v *SsaGen) VisitLinkage(l ast.Linkage) string {
+func (v *SsaGen) VisitLinkage(l ir.Linkage) string {
 	switch l.Type {
-	case ast.LinkageExport, ast.LinkageThread:
+	case ir.LinkageExport, ir.LinkageThread:
 		return string(l.Type)
-	case ast.LinkageSection:
+	case ir.LinkageSection:
 		if l.SecFlags == "" {
 			return fmt.Sprintf("%s %q", l.Type, l.SecName)
 		}
@@ -133,9 +133,9 @@ func (v *SsaGen) VisitLinkage(l ast.Linkage) string {
 	}
 }
 
-func (v *SsaGen) VisitDataInit(di ast.DataInit) string {
+func (v *SsaGen) VisitDataInit(di ir.DataInit) string {
 	switch di.Type {
-	case ast.DataInitExt:
+	case ir.DataInitExt:
 		items := make([]string, len(di.Items))
 
 		for i, item := range di.Items {
@@ -143,72 +143,72 @@ func (v *SsaGen) VisitDataInit(di ast.DataInit) string {
 		}
 
 		return fmt.Sprintf("%s %s", di.ExtTy, strings.Join(items, " "))
-	case ast.DataInitZero:
+	case ir.DataInitZero:
 		return fmt.Sprintf("z %d", di.Size)
 	default:
 		panic("unknown data initialization type: " + string(di.Type))
 	}
 }
 
-func (v *SsaGen) VisitDataItem(di ast.DataItem) string {
+func (v *SsaGen) VisitDataItem(di ir.DataItem) string {
 	switch di.Type {
-	case ast.DataItemSymbol:
+	case ir.DataItemSymbol:
 		if di.Offset > 0 {
 			return fmt.Sprintf("$%s + %d", di.Ident, di.Offset)
 		}
 
 		return fmt.Sprintf("$%s", di.Ident)
-	case ast.DataItemString:
+	case ir.DataItemString:
 		return fmt.Sprintf("\"%s\"", di.StringVal)
-	case ast.DataItemConst:
+	case ir.DataItemConst:
 		return v.VisitConst(di.Const)
 	default:
 		panic("unknown data item type: " + string(di.Type))
 	}
 }
 
-func (v *SsaGen) VisitConst(c ast.Const) string {
+func (v *SsaGen) VisitConst(c ir.Const) string {
 	switch c.Type {
-	case ast.ConstInteger:
+	case ir.ConstInteger:
 		return fmt.Sprintf("%d", c.I64)
-	case ast.ConstSingle:
+	case ir.ConstSingle:
 		return fmt.Sprintf("s_%f", c.F32)
-	case ast.ConstDouble:
+	case ir.ConstDouble:
 		return fmt.Sprintf("d_%f", c.F64)
-	case ast.ConstIdent:
+	case ir.ConstIdent:
 		return fmt.Sprintf("$%s", c.Ident)
 	default:
 		panic("unknown constant type: " + string(c.Type))
 	}
 }
 
-func (v *SsaGen) VisitParam(p ast.Param) string {
+func (v *SsaGen) VisitParam(p ir.Param) string {
 	switch p.Type {
-	case ast.ParamRegular:
+	case ir.ParamRegular:
 		return fmt.Sprintf("%s %%%s", v.VisitAbiTy(p.AbiTy), p.Ident)
-	case ast.ParamEnv:
+	case ir.ParamEnv:
 		return fmt.Sprintf("env %%%s", p.Ident)
-	case ast.ParamVariadic:
+	case ir.ParamVariadic:
 		return "..."
 	default:
 		panic("unknown parameter type: " + string(p.Type))
 	}
 }
 
-func (v *SsaGen) VisitAbiTy(a ast.AbiTy) string {
+func (v *SsaGen) VisitAbiTy(a ir.AbiTy) string {
 	switch a.Type {
-	case ast.AbiTyBase:
+	case ir.AbiTyBase:
 		return string(a.BaseTy)
-	case ast.AbiTySubW:
+	case ir.AbiTySubW:
 		return string(a.SubWTy)
-	case ast.AbiTyIdent:
+	case ir.AbiTyIdent:
 		return fmt.Sprintf(":%s", a.Ident)
 	default:
 		panic("unknown ABI type: " + string(a.Type))
 	}
 }
 
-func (v *SsaGen) VisitBlock(b ast.Block) string {
+func (v *SsaGen) VisitBlock(b ir.Block) string {
 	var label string
 
 	if b.Label != "" {
@@ -224,7 +224,7 @@ func (v *SsaGen) VisitBlock(b ast.Block) string {
 	return fmt.Sprintf("\n%s%s\n", label, strings.Join(instructions, "\n"))
 }
 
-func (v *SsaGen) VisitRet(r *ast.Ret) string {
+func (v *SsaGen) VisitRet(r *ir.Ret) string {
 	if r.Val == nil {
 		return "ret"
 	}
@@ -232,11 +232,11 @@ func (v *SsaGen) VisitRet(r *ast.Ret) string {
 	return fmt.Sprintf("ret %s", v.VisitVal(*r.Val))
 }
 
-func (v *SsaGen) VisitCall(c *ast.Call) string {
+func (v *SsaGen) VisitCall(c *ir.Call) string {
 	var lhs string
 
 	if c.LHS != nil && c.RetTy != nil {
-		lhs = fmt.Sprintf("%%%s = %s ", *c.LHS, v.VisitAbiTy(*c.RetTy))
+		lhs = fmt.Sprintf("%%%s =%s ", *c.LHS, v.VisitAbiTy(*c.RetTy))
 	}
 
 	args := make([]string, len(c.Args))
@@ -248,39 +248,39 @@ func (v *SsaGen) VisitCall(c *ast.Call) string {
 	return fmt.Sprintf("%scall %s(%s)", lhs, v.VisitVal(c.Val), strings.Join(args, ", "))
 }
 
-func (v *SsaGen) VisitAdd(a *ast.Add) string {
+func (v *SsaGen) VisitAdd(a *ir.Add) string {
 	return fmt.Sprintf("%s =w add %s, %s", v.VisitVal(a.Ret), v.VisitVal(a.Lhs), v.VisitVal(a.Rhs))
 }
 
-func (v *SsaGen) VisitVal(val ast.Val) string {
+func (v *SsaGen) VisitVal(val ir.Val) string {
 	switch val.Type {
-	case ast.ValDynConst:
+	case ir.ValDynConst:
 		return v.VisitDynConst(val.DynConst)
-	case ast.ValIdent:
+	case ir.ValIdent:
 		return fmt.Sprintf("%%%s", val.Ident)
 	default:
 		panic("unknown value type: " + string(val.Type))
 	}
 }
 
-func (v *SsaGen) VisitDynConst(dc ast.DynConst) string {
+func (v *SsaGen) VisitDynConst(dc ir.DynConst) string {
 	switch dc.Type {
-	case ast.DynConstConst:
+	case ir.DynConstConst:
 		return v.VisitConst(dc.Const)
-	case ast.DynConstThread:
+	case ir.DynConstThread:
 		return fmt.Sprintf("thread $%s", dc.Ident)
 	default:
 		panic("unknown dynamic constant type: " + string(dc.Type))
 	}
 }
 
-func (v *SsaGen) VisitArg(a ast.Arg) string {
+func (v *SsaGen) VisitArg(a ir.Arg) string {
 	switch a.Type {
-	case ast.ArgRegular:
+	case ir.ArgRegular:
 		return fmt.Sprintf("%s %s", v.VisitAbiTy(a.AbiTy), v.VisitVal(a.Val))
-	case ast.ArgEnv:
+	case ir.ArgEnv:
 		return fmt.Sprintf("env %s", v.VisitVal(a.Val))
-	case ast.ArgVariadic:
+	case ir.ArgVariadic:
 		return "..."
 	default:
 		panic("unknown argument type: " + string(a.Type))

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/corani/refactored-giggle/codegen"
+	"github.com/corani/refactored-giggle/ir"
 	"github.com/corani/refactored-giggle/lexer"
 	parserpkg "github.com/corani/refactored-giggle/parser"
 )
@@ -26,9 +27,10 @@ func withExt(filename, ext string) string {
 }
 
 func main() {
-	var writeTokens, writeSSA, run, help bool
+	var writeTokens, writeAST, writeSSA, run, help bool
 
 	flag.BoolVar(&writeTokens, "tok", false, "write tokens to file")
+	flag.BoolVar(&writeAST, "ast", false, "write AST to file")
 	flag.BoolVar(&writeSSA, "ssa", false, "write SSA code to file")
 	flag.BoolVar(&run, "run", false, "run the compiled code")
 	flag.BoolVar(&help, "help", false, "show help message")
@@ -62,6 +64,8 @@ func main() {
 	}
 
 	tokFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".tok"))
+	astuFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".astu"))
+	asttFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".astt"))
 	ssaFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".ssa"))
 	asmFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".s"))
 	binFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ""))
@@ -103,18 +107,37 @@ func main() {
 		panic(fmt.Sprintf("failed to parse: %v", err))
 	}
 
+	if writeAST {
+		// Before type checking
+		if err := os.WriteFile(astuFile, []byte(unit.String()), 0644); err != nil {
+			panic(fmt.Sprintf("failed to write AST file: %v", err))
+		}
+	}
+
 	// Type checking
 	if err := parserpkg.Check(unit); err != nil {
 		panic(fmt.Sprintf("type checking failed: %v", err))
 	}
 
+	if writeAST {
+		// After type checking
+		if err := os.WriteFile(asttFile, []byte(unit.String()), 0644); err != nil {
+			panic(fmt.Sprintf("failed to write AST file: %v", err))
+		}
+	}
+
+	lowUnit, err := ir.Lower(unit)
+	if err != nil {
+		panic(fmt.Sprintf("failed to lower IR: %v", err))
+	}
+
 	if writeSSA {
-		if err := codegen.WriteSSA(unit, ssaFile); err != nil {
+		if err := codegen.WriteSSA(lowUnit, ssaFile); err != nil {
 			panic(fmt.Sprintf("failed to write SSA file: %v", err))
 		}
 	}
 
-	if err := codegen.GenerateAssembly(srcFile, unit, asmFile); err != nil {
+	if err := codegen.GenerateAssembly(srcFile, lowUnit, asmFile); err != nil {
 		panic(fmt.Sprintf("failed to generate assembly: %v", err))
 	}
 

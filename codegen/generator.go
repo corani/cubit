@@ -8,12 +8,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/corani/refactored-giggle/ast"
+	"github.com/corani/refactored-giggle/ir"
 	"modernc.org/libqbe"
 )
 
 // WriteSSA writes the SSA code for the given CompilationUnit to the specified filename.
-func WriteSSA(unit *ast.CompilationUnit, filename string) error {
+func WriteSSA(unit *ir.CompilationUnit, filename string) error {
 	visitor := NewSSAVisitor()
 	ssa := unit.Accept(visitor)
 
@@ -21,7 +21,7 @@ func WriteSSA(unit *ast.CompilationUnit, filename string) error {
 }
 
 // GenerateAssembly generates assembly from the given CompilationUnit.
-func GenerateAssembly(srcfile string, unit *ast.CompilationUnit, asmfile string) error {
+func GenerateAssembly(srcfile string, unit *ir.CompilationUnit, asmfile string) error {
 	visitor := NewSSAVisitor()
 	ssa := visitor.VisitCompilationUnit(unit)
 

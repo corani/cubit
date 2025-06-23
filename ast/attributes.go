@@ -2,6 +2,7 @@ package ast
 
 import (
 	"fmt"
+	"strings"
 )
 
 // AttrKey is a type for attribute keys.
@@ -46,4 +47,27 @@ type AttrInt int
 
 func (AttrInt) Type() AttrValueType {
 	return AttrIntType
+}
+
+type Attributes map[AttrKey]AttrValue
+
+func (a Attributes) String() string {
+	var attrs []string
+
+	for k, v := range a {
+		switch v := v.(type) {
+		case AttrString:
+			attrs = append(attrs, fmt.Sprintf("%s=%q", k, v))
+		case AttrInt:
+			attrs = append(attrs, fmt.Sprintf("%s=%d", k, v))
+		default:
+			attrs = append(attrs, string(k))
+		}
+	}
+
+	if len(attrs) == 0 {
+		return "(attr)"
+	}
+
+	return fmt.Sprintf("(attr %s)", strings.Join(attrs, " "))
 }
