@@ -171,18 +171,38 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 	clear(p.attributes)
 
 	for {
-		arg, err := p.expectType(lexer.TypeRparen, lexer.TypeIdent)
+		// Check for optional attributes before parameter
+		var paramAttrs ast.Attributes
+
+		nextTok, err := p.expectType(lexer.TypeRparen, lexer.TypeAt, lexer.TypeIdent)
 		if err != nil {
 			return err
 		}
 
-		if arg.Type == lexer.TypeRparen {
+		if nextTok.Type == lexer.TypeRparen {
 			break
 		}
 
+		if nextTok.Type == lexer.TypeAt {
+			// Parse parameter attributes
+			if err := p.parseAttributes(nextTok); err != nil {
+				return err
+			}
+
+			// Copy and clear parser attributes for this param
+			paramAttrs = maps.Clone(p.attributes)
+			clear(p.attributes)
+
+			// Now expect identifier
+			nextTok, err = p.expectType(lexer.TypeIdent)
+			if err != nil {
+				return err
+			}
+		}
+
 		param := ast.FuncParam{
-			Ident: arg.StringVal,
-			Type:  ast.TypeUnknown, // Default to unknown, will be set later
+			Ident:      nextTok.StringVal,
+			Attributes: paramAttrs,
 		}
 
 		if _, err := p.expectType(lexer.TypeColon); err != nil {
