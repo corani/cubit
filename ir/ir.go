@@ -1,16 +1,14 @@
 package ir
 
-import "github.com/corani/refactored-giggle/ast"
-
 // Visitor defines the visitor interface for SSA code generation.
 type Visitor interface {
-	VisitCompilationUnit(cu *CompilationUnit) string
-	VisitTypeDef(td *TypeDef) string
-	VisitDataDef(dd *DataDef) string
-	VisitFuncDef(fd *FuncDef) string
-	VisitRet(r *Ret) string
-	VisitCall(c *Call) string
-	VisitAdd(a *Add) string
+	VisitCompilationUnit(*CompilationUnit) string
+	VisitTypeDef(*TypeDef) string
+	VisitDataDef(*DataDef) string
+	VisitFuncDef(*FuncDef) string
+	VisitRet(*Ret) string
+	VisitCall(*Call) string
+	VisitAdd(*Add) string
 }
 
 type CompilationUnit struct {
@@ -24,8 +22,8 @@ func (cu *CompilationUnit) Accept(visitor Visitor) string {
 	return visitor.VisitCompilationUnit(cu)
 }
 
-func NewCompilationUnit() CompilationUnit {
-	return CompilationUnit{
+func NewCompilationUnit() *CompilationUnit {
+	return &CompilationUnit{
 		Types:    []TypeDef{},
 		DataDefs: []DataDef{},
 		FuncDefs: []FuncDef{},
@@ -34,16 +32,19 @@ func NewCompilationUnit() CompilationUnit {
 
 func (cu *CompilationUnit) WithTypes(types ...TypeDef) *CompilationUnit {
 	cu.Types = append(cu.Types, types...)
+
 	return cu
 }
 
 func (cu *CompilationUnit) WithDataDefs(dataDefs ...DataDef) *CompilationUnit {
 	cu.DataDefs = append(cu.DataDefs, dataDefs...)
+
 	return cu
 }
 
 func (cu *CompilationUnit) WithFuncDefs(funcDefs ...FuncDef) *CompilationUnit {
 	cu.FuncDefs = append(cu.FuncDefs, funcDefs...)
+
 	return cu
 }
 
@@ -160,26 +161,25 @@ type Val struct {
 	Type     ValType
 	DynConst DynConst
 	Ident    Ident
-	// For type checking (if this Val is a literal or variable)
-	Ty ast.TypeKind
 }
 
-func NewValDynConst(dc DynConst) Val {
-	return Val{Type: ValDynConst, DynConst: dc}
+func NewValDynConst(dc DynConst) *Val {
+	return &Val{Type: ValDynConst, DynConst: dc}
 }
 
-func NewValGlobal(ident Ident) Val {
+func NewValGlobal(ident Ident) *Val {
 	v := NewValDynConst(NewDynConst(NewConstIdent(ident)))
 	v.Ident = ident
+
 	return v
 }
 
-func NewValInteger(i int64) Val {
+func NewValInteger(i int64) *Val {
 	return NewValDynConst(NewDynConst(NewConstInteger(i)))
 }
 
-func NewValIdent(ident Ident) Val {
-	return Val{Type: ValIdent, Ident: ident}
+func NewValIdent(ident Ident) *Val {
+	return &Val{Type: ValIdent, Ident: ident}
 }
 
 type ValType string
@@ -242,6 +242,7 @@ func NewTypeDefOpaque(ident Ident, opaqueSize int) TypeDef {
 
 func (td TypeDef) WithAlign(align int) TypeDef {
 	td.Align = align
+
 	return td
 }
 
@@ -277,11 +278,13 @@ func NewDataDefStringZ(ident Ident, val string) DataDef {
 
 func (dd DataDef) WithLinkage(linkage Linkage) DataDef {
 	dd.Linkage = &linkage
+
 	return dd
 }
 
 func (dd DataDef) WithAlign(align int) DataDef {
 	dd.Align = align
+
 	return dd
 }
 
@@ -347,17 +350,15 @@ type FuncDef struct {
 	Linkage *Linkage
 	RetTy   *AbiTy
 	Ident   Ident
-	Params  []Param
+	Params  []*Param
 	Blocks  []Block
-	// For type checking
-	ReturnType ast.TypeKind
 }
 
 func (fd *FuncDef) Accept(visitor Visitor) string {
 	return visitor.VisitFuncDef(fd)
 }
 
-func NewFuncDef(ident Ident, params ...Param) FuncDef {
+func NewFuncDef(ident Ident, params ...*Param) FuncDef {
 	return FuncDef{Ident: ident, Params: params}
 }
 
@@ -380,20 +381,18 @@ type Param struct {
 	Type  ParamType
 	AbiTy AbiTy
 	Ident Ident
-	// For type checking
-	Ty ast.TypeKind
 }
 
-func NewParamRegular(abiTy AbiTy, ident Ident) Param {
-	return Param{Type: ParamRegular, AbiTy: abiTy, Ident: ident}
+func NewParamRegular(abiTy AbiTy, ident Ident) *Param {
+	return &Param{Type: ParamRegular, AbiTy: abiTy, Ident: ident}
 }
 
-func NewParamEnv(ident Ident) Param {
-	return Param{Type: ParamEnv, Ident: ident}
+func NewParamEnv(ident Ident) *Param {
+	return &Param{Type: ParamEnv, Ident: ident}
 }
 
-func NewParamVariadic() Param {
-	return Param{Type: ParamVariadic}
+func NewParamVariadic() *Param {
+	return &Param{Type: ParamVariadic}
 }
 
 type ParamType string
@@ -443,7 +442,6 @@ const (
 type Block struct {
 	Label        string
 	Instructions []Instruction
-	Locals       map[string]ast.TypeKind // name -> type
 }
 
 // Instruction is a marker interface for all instruction types.
@@ -458,11 +456,12 @@ type Ret struct {
 }
 
 func (Ret) isInstruction() {}
+
 func (r *Ret) Accept(visitor Visitor) string {
 	return visitor.VisitRet(r)
 }
 
-func NewRet(val ...Val) *Ret {
+func NewRet(val ...*Val) *Ret {
 	if len(val) > 1 {
 		panic("NewRet accepts at most one value")
 	}
@@ -471,58 +470,61 @@ func NewRet(val ...Val) *Ret {
 		return &Ret{}
 	}
 
-	return &Ret{Val: &val[0]}
+	return &Ret{Val: val[0]}
 }
 
 // Call represents an SSA call instruction.
 type Call struct {
 	LHS   *Ident
 	RetTy *AbiTy
-	Val   Val
+	Val   *Val
 	Args  []Arg
 }
 
 func (c *Call) isInstruction() {}
+
 func (c *Call) Accept(visitor Visitor) string {
 	return visitor.VisitCall(c)
 }
 
-func NewCall(val Val, args ...Arg) *Call {
+func NewCall(val *Val, args ...Arg) *Call {
 	return &Call{Val: val, Args: args}
 }
 
-func (c Call) WithRet(lhs Ident, retTy AbiTy) Call {
+func (c *Call) WithRet(lhs Ident, retTy AbiTy) *Call {
 	c.LHS = &lhs
 	c.RetTy = &retTy
+
 	return c
 }
 
 // Add represents an SSA add instruction.
 type Add struct {
-	Lhs, Rhs Val
-	Ret      Val
+	Lhs, Rhs *Val
+	Ret      *Val
 }
 
 func (a *Add) isInstruction() {}
+
 func (a *Add) Accept(visitor Visitor) string {
 	return visitor.VisitAdd(a)
 }
 
-func NewAdd(Ret, Lhs, Rhs Val) *Add {
+func NewAdd(Ret, Lhs, Rhs *Val) *Add {
 	return &Add{Lhs: Lhs, Rhs: Rhs, Ret: Ret}
 }
 
 type Arg struct {
 	Type  ArgType
 	AbiTy AbiTy
-	Val   Val
+	Val   *Val
 }
 
-func NewArgRegular(abiTy AbiTy, val Val) Arg {
+func NewArgRegular(abiTy AbiTy, val *Val) Arg {
 	return Arg{Type: ArgRegular, AbiTy: abiTy, Val: val}
 }
 
-func NewArgEnv(val Val) Arg {
+func NewArgEnv(val *Val) Arg {
 	return Arg{Type: ArgEnv, Val: val}
 }
 

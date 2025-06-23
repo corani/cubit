@@ -87,7 +87,7 @@ func (v *SsaGen) VisitFuncDef(fd *ir.FuncDef) string {
 	params := make([]string, len(fd.Params))
 	blocks := make([]string, len(fd.Blocks))
 	for i, param := range fd.Params {
-		params[i] = v.VisitParam(param)
+		params[i] = v.VisitParam(*param)
 	}
 	for i, block := range fd.Blocks {
 		blocks[i] = v.VisitBlock(block)
@@ -229,7 +229,7 @@ func (v *SsaGen) VisitRet(r *ir.Ret) string {
 		return "ret"
 	}
 
-	return fmt.Sprintf("ret %s", v.VisitVal(*r.Val))
+	return fmt.Sprintf("ret %s", v.VisitVal(r.Val))
 }
 
 func (v *SsaGen) VisitCall(c *ir.Call) string {
@@ -252,7 +252,7 @@ func (v *SsaGen) VisitAdd(a *ir.Add) string {
 	return fmt.Sprintf("%s =w add %s, %s", v.VisitVal(a.Ret), v.VisitVal(a.Lhs), v.VisitVal(a.Rhs))
 }
 
-func (v *SsaGen) VisitVal(val ir.Val) string {
+func (v *SsaGen) VisitVal(val *ir.Val) string {
 	switch val.Type {
 	case ir.ValDynConst:
 		return v.VisitDynConst(val.DynConst)

@@ -1,5 +1,7 @@
 package ast
 
+import "maps"
+
 // Visitor interface for double-dispatch on AST nodes.
 type Visitor interface {
 	VisitCompilationUnit(*CompilationUnit)
@@ -20,18 +22,28 @@ type Visitor interface {
 type TypeKind int
 
 const (
-	TypeInt TypeKind = iota
+	TypeUnknown TypeKind = iota
+	TypeInt
 	TypeString
 	TypeVoid
-	TypeUnknown
 )
 
 type CompilationUnit struct {
 	Ident      string // package name
-	Types      []TypeDef
-	Data       []DataDef
-	Funcs      []FuncDef
+	Types      []*TypeDef
+	Data       []*DataDef
+	Funcs      []*FuncDef
 	Attributes Attributes
+}
+
+// NewCompilationUnit creates a new, empty CompilationUnit.
+func NewCompilationUnit() *CompilationUnit {
+	return &CompilationUnit{
+		Types:      nil,
+		Data:       nil,
+		Funcs:      nil,
+		Attributes: Attributes{},
+	}
 }
 
 // Accept implements the Visitor pattern for CompilationUnit.
@@ -67,6 +79,16 @@ type FuncDef struct {
 	ReturnType TypeKind
 	Body       *Body
 	Attributes Attributes
+}
+
+func NewFuncDef(ident string, attributes Attributes) *FuncDef {
+	return &FuncDef{
+		Ident:      ident,
+		Params:     nil,
+		ReturnType: TypeVoid,
+		Body:       nil,
+		Attributes: maps.Clone(attributes),
+	}
 }
 
 func (fd *FuncDef) Accept(v Visitor) {
@@ -105,7 +127,8 @@ var _ []Instruction = []Instruction{
 }
 
 type Call struct {
-	Ident string // function name
+	Ident string   // function name
+	Type  TypeKind // return type, if any
 	Args  []Arg
 }
 
@@ -125,6 +148,7 @@ func (*Call) isInstruction() {}
 type Arg struct {
 	Ident string     // (optional) argument name
 	Value Expression // argument value
+	Type  TypeKind
 }
 
 type Assign struct {
@@ -216,17 +240,25 @@ func NewStringLiteral(val string) *Literal {
 
 func (*Literal) isExpression() {}
 
+// BinOpKind represents the kind of binary operation.
+type BinOpKind string
+
+const (
+	BinOpAdd BinOpKind = "+"
+)
+
 type Binop struct {
 	Lhs, Rhs  Expression
 	Type      TypeKind
-	Operation string // e.g., "+", "-", "*", "/"
+	Operation BinOpKind
 }
 
 func (b *Binop) Accept(v Visitor) {
 	v.VisitBinop(b)
 }
 
-func NewBinop(op string, lhs, rhs Expression) *Binop {
+// NewBinop creates a new Binop node. Only Add is supported for now.
+func NewBinop(op BinOpKind, lhs, rhs Expression) *Binop {
 	return &Binop{
 		Lhs:       lhs,
 		Rhs:       rhs,

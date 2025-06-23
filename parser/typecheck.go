@@ -45,7 +45,7 @@ func Check(unit *ast.CompilationUnit) error {
 					var fnDef *ast.FuncDef
 					for i := range unit.Funcs {
 						if unit.Funcs[i].Ident == a.Ident {
-							fnDef = &unit.Funcs[i]
+							fnDef = unit.Funcs[i]
 							break
 						}
 					}
@@ -61,6 +61,17 @@ func Check(unit *ast.CompilationUnit) error {
 						if paramType != ast.TypeUnknown && argType != paramType {
 							return fmt.Errorf("call to '%s': argument %d type mismatch: expected %s, got %s", a.Ident, i+1, paramType, argType)
 						}
+						// Set the argument's Type to the parameter type
+						if arg.Type != paramType {
+							arg.Type = paramType
+							a.Args[i] = arg
+							changed = true
+						}
+					}
+					// Assign the return type of the call based on the function definition
+					if a.Type != fnDef.ReturnType {
+						a.Type = fnDef.ReturnType
+						changed = true
 					}
 				case *ast.Return:
 					// Optionally: check return type matches fn.ReturnType

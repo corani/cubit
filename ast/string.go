@@ -87,7 +87,7 @@ func (c *Call) String() string {
 		args = append(args, arg.String())
 	}
 
-	return fmt.Sprintf("(call %q (%s))", c.Ident, strings.Join(args, " "))
+	return fmt.Sprintf("(call %q (%s) %s)", c.Ident, strings.Join(args, " "), c.Type)
 }
 
 func (a Arg) String() string {

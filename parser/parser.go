@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"strings"
 
 	"github.com/corani/refactored-giggle/ast"
@@ -14,7 +13,7 @@ import (
 type Parser struct {
 	tok        []lexer.Token
 	index      int
-	unit       ast.CompilationUnit
+	unit       *ast.CompilationUnit
 	attributes ast.Attributes
 	pkgName    string
 	localID    int
@@ -26,7 +25,7 @@ func New(tok []lexer.Token) *Parser {
 	return &Parser{
 		tok:        tok,
 		index:      0,
-		unit:       ast.CompilationUnit{},
+		unit:       ast.NewCompilationUnit(),
 		attributes: ast.Attributes{},
 		pkgName:    "",
 		localID:    0,
@@ -37,46 +36,46 @@ func (p *Parser) Parse() (*ast.CompilationUnit, error) {
 	for {
 		start, err := p.expectType(lexer.TypeKeyword, lexer.TypeIdent, lexer.TypeAt)
 		if err != nil {
-			return &p.unit, err
+			return p.unit, err
 		}
 
 		switch start.Type {
 		case lexer.TypeAt:
 			if err := p.parseAttributes(start); err != nil {
-				return &p.unit, err
+				return p.unit, err
 			}
 		case lexer.TypeKeyword:
 			switch start.Keyword {
 			case lexer.KeywordPackage:
 				if err := p.parsePackage(start); err != nil {
-					return &p.unit, err
+					return p.unit, err
 				}
 			default:
-				return &p.unit, fmt.Errorf("expected package keyword at %s, got %s",
+				return p.unit, fmt.Errorf("expected package keyword at %s, got %s",
 					start.Location, start.StringVal)
 			}
 		case lexer.TypeIdent:
 			if p.pkgName == "" {
-				return &p.unit, fmt.Errorf("package must be defined before any other declarations at %s",
+				return p.unit, fmt.Errorf("package must be defined before any other declarations at %s",
 					start.Location)
 			}
 
 			if _, err := p.expectType(lexer.TypeColon); err != nil {
-				return &p.unit, err
+				return p.unit, err
 			}
 
 			// TODO(daniel): parse optional type.
 
 			if _, err := p.expectType(lexer.TypeColon); err != nil {
-				return &p.unit, err
+				return p.unit, err
 			}
 
 			if _, err := p.expectKeyword(lexer.KeywordFunc); err != nil {
-				return &p.unit, err
+				return p.unit, err
 			}
 
 			if err := p.parseFunc(start); err != nil {
-				return &p.unit, err
+				return p.unit, err
 			}
 		}
 	}
@@ -169,7 +168,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 		return err
 	}
 
-	var params []ast.FuncParam
+	def := ast.NewFuncDef(name.StringVal, p.attributes)
 
 	for {
 		arg, err := p.expectType(lexer.TypeRparen, lexer.TypeIdent)
@@ -181,6 +180,11 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			break
 		}
 
+		param := ast.FuncParam{
+			Ident: arg.StringVal,
+			Type:  ast.TypeUnknown, // Default to unknown, will be set later
+		}
+
 		if _, err := p.expectType(lexer.TypeColon); err != nil {
 			return err
 		}
@@ -190,19 +194,14 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			return err
 		}
 
-		var ty ast.TypeKind
-
 		switch argType.Keyword {
 		case lexer.KeywordInt:
-			ty = ast.TypeInt
+			param.Type = ast.TypeInt
 		case lexer.KeywordString:
-			ty = ast.TypeString
+			param.Type = ast.TypeString
 		}
 
-		params = append(params, ast.FuncParam{
-			Ident: arg.StringVal,
-			Type:  ty,
-		})
+		def.Params = append(def.Params, param)
 
 		tok, err := p.expectType(lexer.TypeComma, lexer.TypeRparen)
 		if err != nil {
@@ -222,7 +221,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 	retType := lexer.Token{
 		Keyword: lexer.KeywordVoid,
 	}
-	returnType := ast.TypeVoid
+
 	if arrow.Type == lexer.TypeArrow {
 		retType, err = p.expectKeyword(lexer.KeywordInt, lexer.KeywordString, lexer.KeywordVoid)
 		if err != nil {
@@ -230,22 +229,13 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 		}
 		switch retType.Keyword {
 		case lexer.KeywordInt:
-			returnType = ast.TypeInt
+			def.ReturnType = ast.TypeInt
 		case lexer.KeywordString:
-			returnType = ast.TypeString
+			def.ReturnType = ast.TypeString
 		case lexer.KeywordVoid:
-			returnType = ast.TypeVoid
+			def.ReturnType = ast.TypeVoid
 		}
 	}
-
-	def := ast.FuncDef{
-		Ident:      name.StringVal,
-		Params:     params,
-		ReturnType: returnType,
-		Attributes: ast.Attributes{},
-	}
-
-	maps.Copy(def.Attributes, p.attributes)
 
 	// If the function is not `extern`, we expect a body.
 	if _, ok := p.attributes["extern"]; !ok {
@@ -313,14 +303,13 @@ func (p *Parser) parseBody(start, retType lexer.Token) ([]ast.Instruction, error
 			switch first.Keyword {
 			case lexer.KeywordReturn:
 				if retType.Keyword == lexer.KeywordVoid {
-					instructions = append(instructions, ast.NewReturn())
+					instructions = append(instructions,
+						ast.NewReturn())
 				} else {
 					ret, err := p.expectType(lexer.TypeString, lexer.TypeNumber, lexer.TypeIdent)
 					if err != nil {
 						return nil, err
 					}
-
-					var val ast.Expression
 
 					switch ret.Type {
 					case lexer.TypeNumber:
@@ -329,14 +318,14 @@ func (p *Parser) parseBody(start, retType lexer.Token) ([]ast.Instruction, error
 								ret.Type, ret.Location, retType.Keyword)
 						}
 
-						val = ast.NewIntLiteral(ret.NumberVal)
+						instructions = append(instructions,
+							ast.NewReturn(ast.NewIntLiteral(ret.NumberVal)))
 					default:
 						// TODO(daniel): handle string and ident return types
 						panic(fmt.Sprintf("unexpected return type %s at %s, expected number",
 							ret.Type, ret.Location))
 					}
 
-					instructions = append(instructions, ast.NewReturn(val))
 				}
 			}
 		case lexer.TypeIdent:

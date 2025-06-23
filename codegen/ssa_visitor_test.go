@@ -10,13 +10,13 @@ import (
 func TestSSAVisitor_CompilationUnit(t *testing.T) {
 	unit := ir.NewCompilationUnit()
 	visitor := NewSSAVisitor()
-	_ = (&unit).Accept(visitor) // Add real assertions as needed
+	_ = unit.Accept(visitor) // Add real assertions as needed
 }
 
 func TestAST_CompilationUnit(t *testing.T) {
 	t.Parallel()
 
-	unit := new(ir.CompilationUnit)
+	unit := ir.NewCompilationUnit()
 
 	unit.WithDataDefs(
 		ir.NewDataDefStringZ(ir.Ident("data_hello0"), `Hello from test-%d!\n`))
