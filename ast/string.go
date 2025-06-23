@@ -67,7 +67,12 @@ func (fd FuncDef) String() string {
 }
 
 func (fp FuncParam) String() string {
-	return fmt.Sprintf("(param %q %s %s)", fp.Ident, fp.Type, fp.Attributes)
+	value := "()"
+	if fp.Value != nil {
+		value = fp.Value.String()
+	}
+
+	return fmt.Sprintf("(param %q %s %s %s)", fp.Ident, fp.Type, value, fp.Attributes)
 }
 
 func (b *Body) String() string {

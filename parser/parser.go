@@ -209,10 +209,38 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			return err
 		}
 
+		equal, err := p.peekType(lexer.TypeEquals)
+		if err != nil {
+			return err
+		}
+
+		var value ast.Expression
+
+		if equal.Type == lexer.TypeEquals {
+			// If we have an equals sign, we expect a default value
+			defaultValue, err := p.expectType(lexer.TypeNumber, lexer.TypeString)
+			if err != nil {
+				return err
+			}
+
+			switch defaultValue.Type {
+			case lexer.TypeNumber:
+				value = ast.NewIntLiteral(defaultValue.NumberVal)
+			case lexer.TypeString:
+				value = ast.NewStringLiteral(defaultValue.StringVal)
+			}
+
+			value, err = p.parseExpression(value)
+			if err != nil {
+				return err
+			}
+		}
+
 		def.Params = append(def.Params, ast.FuncParam{
 			Ident:      nextTok.StringVal,
 			Type:       p.mapKeywordToType(argType.Keyword),
 			Attributes: attrs,
+			Value:      value,
 		})
 
 		tok, err := p.expectType(lexer.TypeComma, lexer.TypeRparen)
