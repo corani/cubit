@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"strings"
 
 	"github.com/corani/refactored-giggle/ast"
@@ -92,7 +93,11 @@ func (p *Parser) parsePackage(start lexer.Token) error {
 		return err
 	}
 
+	// Store any attributes collected before the package in the unit's Attributes
+	p.unit.Attributes = maps.Clone(p.attributes)
 	p.unit.Ident = pkgName.StringVal
+
+	clear(p.attributes)
 
 	return nil
 }
@@ -158,15 +163,12 @@ func (p *Parser) parseAttributes(start lexer.Token) error {
 }
 
 func (p *Parser) parseFunc(name lexer.Token) error {
-	defer func() {
-		clear(p.attributes)
-	}()
-
 	if _, err := p.expectType(lexer.TypeLparen); err != nil {
 		return err
 	}
 
 	def := ast.NewFuncDef(name.StringVal, p.attributes)
+	clear(p.attributes)
 
 	for {
 		arg, err := p.expectType(lexer.TypeRparen, lexer.TypeIdent)
@@ -236,7 +238,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 	}
 
 	// If the function is not `extern`, we expect a body.
-	if _, ok := p.attributes["extern"]; !ok {
+	if _, ok := def.Attributes["extern"]; !ok {
 		lbrace, err := p.expectType(lexer.TypeLbrace)
 		if err != nil {
 			return err
