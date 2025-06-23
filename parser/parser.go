@@ -171,86 +171,16 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 	clear(p.attributes)
 
 	for {
-		// Check for optional attributes before parameter
-		var attrs ast.Attributes
-
-		nextTok, err := p.expectType(lexer.TypeRparen, lexer.TypeAt, lexer.TypeIdent)
+		param, err := p.parseFuncParam()
 		if err != nil {
 			return err
 		}
 
-		if nextTok.Type == lexer.TypeRparen {
+		if param == nil {
 			break
 		}
 
-		if nextTok.Type == lexer.TypeAt {
-			// Parse parameter attributes
-			if err := p.parseAttributes(nextTok); err != nil {
-				return err
-			}
-
-			// Copy and clear parser attributes for this param
-			attrs = maps.Clone(p.attributes)
-			clear(p.attributes)
-
-			// Now expect identifier
-			nextTok, err = p.expectType(lexer.TypeIdent)
-			if err != nil {
-				return err
-			}
-		}
-
-		if _, err := p.expectType(lexer.TypeColon); err != nil {
-			return err
-		}
-
-		equal, err := p.peekType(lexer.TypeEquals)
-		if err != nil {
-			return err
-		}
-
-		argType := lexer.Token{}
-
-		if equal.Type != lexer.TypeEquals {
-			argType, err = p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
-			if err != nil {
-				return err
-			}
-
-			equal, err = p.peekType(lexer.TypeEquals)
-			if err != nil {
-				return err
-			}
-		}
-
-		var value ast.Expression
-
-		if equal.Type == lexer.TypeEquals {
-			// If we have an equals sign, we expect a default value
-			defaultValue, err := p.expectType(lexer.TypeNumber, lexer.TypeString)
-			if err != nil {
-				return err
-			}
-
-			switch defaultValue.Type {
-			case lexer.TypeNumber:
-				value = ast.NewIntLiteral(defaultValue.NumberVal)
-			case lexer.TypeString:
-				value = ast.NewStringLiteral(defaultValue.StringVal)
-			}
-
-			value, err = p.parseExpression(value)
-			if err != nil {
-				return err
-			}
-		}
-
-		def.Params = append(def.Params, ast.FuncParam{
-			Ident:      nextTok.StringVal,
-			Type:       p.mapKeywordToType(argType.Keyword),
-			Attributes: attrs,
-			Value:      value,
-		})
+		def.Params = append(def.Params, param)
 
 		tok, err := p.expectType(lexer.TypeComma, lexer.TypeRparen)
 		if err != nil {
@@ -262,23 +192,12 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 		}
 	}
 
-	arrow, err := p.peekType(lexer.TypeArrow)
+	retType, err := p.parseFuncReturnType()
 	if err != nil {
-		return err
+		return fmt.Errorf("error parsing return type at %s: %w", name.Location, err)
 	}
 
-	retType := lexer.Token{
-		Keyword: lexer.KeywordVoid,
-	}
-
-	if arrow.Type == lexer.TypeArrow {
-		retType, err = p.expectKeyword(lexer.KeywordInt, lexer.KeywordString, lexer.KeywordVoid)
-		if err != nil {
-			return err
-		}
-
-		def.ReturnType = p.mapKeywordToType(retType.Keyword)
-	}
+	def.ReturnType = p.mapKeywordToType(retType.Keyword)
 
 	// If the function is not `extern`, we expect a body.
 	if _, ok := def.Attributes["extern"]; !ok {
@@ -287,7 +206,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			return err
 		}
 
-		instructions, err := p.parseBody(lbrace, retType)
+		instructions, err := p.parseBody(lbrace, *retType)
 		if err != nil {
 			return err
 		}
@@ -304,6 +223,109 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 	p.unit.Funcs = append(p.unit.Funcs, def)
 
 	return nil
+}
+
+func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
+	// Check for optional attributes before parameter
+	var attrs ast.Attributes
+
+	nextTok, err := p.expectType(lexer.TypeRparen, lexer.TypeAt, lexer.TypeIdent)
+	if err != nil {
+		return nil, err
+	}
+
+	if nextTok.Type == lexer.TypeRparen {
+		return nil, nil
+	}
+
+	if nextTok.Type == lexer.TypeAt {
+		// Parse parameter attributes
+		if err := p.parseAttributes(nextTok); err != nil {
+			return nil, err
+		}
+
+		// Copy and clear parser attributes for this param
+		attrs = maps.Clone(p.attributes)
+		clear(p.attributes)
+
+		// Now expect identifier
+		nextTok, err = p.expectType(lexer.TypeIdent)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if _, err := p.expectType(lexer.TypeColon); err != nil {
+		return nil, err
+	}
+
+	equal, err := p.peekType(lexer.TypeEquals)
+	if err != nil {
+		return nil, err
+	}
+
+	argType := lexer.Token{}
+
+	if equal.Type != lexer.TypeEquals {
+		argType, err = p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
+		if err != nil {
+			return nil, err
+		}
+
+		equal, err = p.peekType(lexer.TypeEquals)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var value ast.Expression
+
+	if equal.Type == lexer.TypeEquals {
+		// If we have an equals sign, we expect a default value
+		defaultValue, err := p.expectType(lexer.TypeNumber, lexer.TypeString)
+		if err != nil {
+			return nil, err
+		}
+
+		switch defaultValue.Type {
+		case lexer.TypeNumber:
+			value = ast.NewIntLiteral(defaultValue.NumberVal)
+		case lexer.TypeString:
+			value = ast.NewStringLiteral(defaultValue.StringVal)
+		}
+
+		value, err = p.parseExpression(value)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &ast.FuncParam{
+		Ident:      nextTok.StringVal,
+		Type:       p.mapKeywordToType(argType.Keyword),
+		Attributes: attrs,
+		Value:      value,
+	}, nil
+}
+
+func (p *Parser) parseFuncReturnType() (*lexer.Token, error) {
+	arrow, err := p.peekType(lexer.TypeArrow)
+	if err != nil {
+		return nil, err
+	}
+
+	retType := lexer.Token{
+		Keyword: lexer.KeywordVoid,
+	}
+
+	if arrow.Type == lexer.TypeArrow {
+		retType, err = p.expectKeyword(lexer.KeywordInt, lexer.KeywordString, lexer.KeywordVoid)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &retType, nil
 }
 
 func (p *Parser) parseBody(start, retType lexer.Token) ([]ast.Instruction, error) {

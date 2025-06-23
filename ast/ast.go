@@ -75,7 +75,7 @@ func (dd *DataDef) Accept(v Visitor) {
 
 type FuncDef struct {
 	Ident      string // function name
-	Params     []FuncParam
+	Params     []*FuncParam
 	ReturnType TypeKind
 	Body       *Body
 	Attributes Attributes
