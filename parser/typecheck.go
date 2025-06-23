@@ -8,16 +8,33 @@ import (
 
 func Check(unit *ast.CompilationUnit) error {
 	for _, fn := range unit.Funcs {
+		// Symbol table for variable types in this function
+		vars := make(map[string]ast.TypeKind)
+
+		// Add function parameters to the symbol table, inferring type from default value if needed
+		for i, param := range fn.Params {
+			paramType := param.Type
+			if paramType == ast.TypeUnknown && param.Value != nil {
+				// Infer type from default value
+				inferred := inferExprType(param.Value, vars)
+				fn.Params[i].Type = inferred
+				paramType = inferred
+			} else if param.Value != nil {
+				// Check that default value type matches declared type
+				valType := inferExprType(param.Value, vars)
+				if paramType != ast.TypeUnknown && valType != paramType {
+					return fmt.Errorf("type error: parameter '%s' declared as %s but default value is %s", param.Ident, paramType, valType)
+				}
+			}
+			vars[param.Ident] = paramType
+		}
+
 		if fn.Body == nil {
 			continue
 		}
-		// Symbol table for variable types in this function
-		vars := make(map[string]ast.TypeKind)
-		// Add function parameters to the symbol table
-		for _, param := range fn.Params {
-			vars[param.Ident] = param.Type
-		}
+
 		changed := true
+
 		// Iterate until no new types are inferred
 		for changed {
 			changed = false

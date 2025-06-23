@@ -204,14 +204,23 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			return err
 		}
 
-		argType, err := p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
+		equal, err := p.peekType(lexer.TypeEquals)
 		if err != nil {
 			return err
 		}
 
-		equal, err := p.peekType(lexer.TypeEquals)
-		if err != nil {
-			return err
+		argType := lexer.Token{}
+
+		if equal.Type != lexer.TypeEquals {
+			argType, err = p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
+			if err != nil {
+				return err
+			}
+
+			equal, err = p.peekType(lexer.TypeEquals)
+			if err != nil {
+				return err
+			}
 		}
 
 		var value ast.Expression
