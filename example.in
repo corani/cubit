@@ -10,11 +10,16 @@ hello :: func(arg: int) {
   printf("Hello from compiler-%d!\n", arg)
 }
 
+@(pure)
+sum :: func(a: int, b: int) -> int {
+  return a + b
+}
+
 // Export the main function
 @(export)
 main :: func() -> int {
   // Type of count is inferred as int
-  count := 11 + 12
+  count := sum(11, 12)
 
   hello(count + 10)
 

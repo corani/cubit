@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/corani/refactored-giggle/analyzer"
 	"github.com/corani/refactored-giggle/codegen"
 	"github.com/corani/refactored-giggle/ir"
 	"github.com/corani/refactored-giggle/lexer"
@@ -115,7 +116,7 @@ func main() {
 	}
 
 	// Type checking
-	if err := parserpkg.Check(unit); err != nil {
+	if err := analyzer.Check(unit); err != nil {
 		panic(fmt.Sprintf("type checking failed: %v", err))
 	}
 

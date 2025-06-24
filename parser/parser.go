@@ -206,7 +206,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			return err
 		}
 
-		instructions, err := p.parseBody(lbrace, *retType)
+		instructions, err := p.parseFuncBody(lbrace, *retType)
 		if err != nil {
 			return err
 		}
@@ -328,7 +328,7 @@ func (p *Parser) parseFuncReturnType() (*lexer.Token, error) {
 	return &retType, nil
 }
 
-func (p *Parser) parseBody(start, retType lexer.Token) ([]ast.Instruction, error) {
+func (p *Parser) parseFuncBody(start, retType lexer.Token) ([]ast.Instruction, error) {
 	if start.Type != lexer.TypeLbrace {
 		return nil, fmt.Errorf("expected { at %s, got %s",
 			start.Location, start.StringVal)
@@ -371,26 +371,26 @@ func (p *Parser) parseBody(start, retType lexer.Token) ([]ast.Instruction, error
 					instructions = append(instructions,
 						ast.NewReturn())
 				} else {
-					ret, err := p.expectType(lexer.TypeString, lexer.TypeNumber, lexer.TypeIdent)
+					// Accept arbitrary expressions for return value
+					firstTok, err := p.expectType(lexer.TypeString, lexer.TypeNumber, lexer.TypeIdent)
 					if err != nil {
 						return nil, err
 					}
-
-					switch ret.Type {
+					var expr ast.Expression
+					switch firstTok.Type {
 					case lexer.TypeNumber:
-						if retType.Keyword != lexer.KeywordInt {
-							return nil, fmt.Errorf("unexpected return type %s at %s, expected %s",
-								ret.Type, ret.Location, retType.Keyword)
-						}
-
-						instructions = append(instructions,
-							ast.NewReturn(ast.NewIntLiteral(ret.NumberVal)))
-					default:
-						// TODO(daniel): handle string and ident return types
-						panic(fmt.Sprintf("unexpected return type %s at %s, expected number",
-							ret.Type, ret.Location))
+						expr = ast.NewIntLiteral(firstTok.NumberVal)
+					case lexer.TypeString:
+						expr = ast.NewStringLiteral(firstTok.StringVal)
+					case lexer.TypeIdent:
+						expr = ast.NewVariableRef(firstTok.StringVal, ast.TypeUnknown)
 					}
-
+					expr, err = p.parseExpression(expr)
+					if err != nil {
+						return nil, err
+					}
+					instructions = append(instructions,
+						ast.NewReturn(expr))
 				}
 			}
 		case lexer.TypeIdent:
@@ -458,7 +458,21 @@ func (p *Parser) parseAssign(name lexer.Token) (ast.Instruction, error) {
 	case lexer.TypeNumber:
 		val = ast.NewIntLiteral(lhs.NumberVal)
 	case lexer.TypeIdent:
-		val = ast.NewVariableRef(lhs.StringVal, ast.TypeUnknown)
+		// Peek to see if this is a function call (ident followed by Lparen)
+		lparen, err := p.peekType(lexer.TypeLparen)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, err
+		}
+
+		if lparen.Type == lexer.TypeLparen {
+			// It's a function call
+			val, err = p.parseCall(lhs)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			val = ast.NewVariableRef(lhs.StringVal, ast.TypeUnknown)
+		}
 	}
 
 	val, err = p.parseExpression(val)
@@ -473,7 +487,7 @@ func (p *Parser) parseAssign(name lexer.Token) (ast.Instruction, error) {
 	}, nil
 }
 
-func (p *Parser) parseCall(first lexer.Token) (ast.Instruction, error) {
+func (p *Parser) parseCall(first lexer.Token) (*ast.Call, error) {
 	arg, err := p.nextToken()
 	if err != nil {
 		return nil, err

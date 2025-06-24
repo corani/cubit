@@ -144,6 +144,7 @@ func NewCall(ident string, args ...Arg) *Call {
 }
 
 func (*Call) isInstruction() {}
+func (*Call) isExpression()  {}
 
 type Arg struct {
 	Ident string     // (optional) argument name

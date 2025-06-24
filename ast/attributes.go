@@ -9,8 +9,10 @@ import (
 type AttrKey string
 
 const (
-	AttrKeyExport AttrKey = "export"
-	AttrKeyExtern AttrKey = "extern"
+	AttrKeyExport  AttrKey = "export"
+	AttrKeyExtern  AttrKey = "extern"
+	AttrKeyPrivate AttrKey = "private"
+	AttrKeyPure    AttrKey = "pure"
 )
 
 // ParseAttrKey validates and returns an AttrKey or an error if invalid.
@@ -20,6 +22,10 @@ func ParseAttrKey(s string) (AttrKey, error) {
 		return AttrKeyExport, nil
 	case string(AttrKeyExtern):
 		return AttrKeyExtern, nil
+	case string(AttrKeyPrivate):
+		return AttrKeyPrivate, nil
+	case string(AttrKeyPure):
+		return AttrKeyPure, nil
 	default:
 		return "", fmt.Errorf("invalid attribute key: %s", s)
 	}
