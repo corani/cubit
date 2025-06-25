@@ -255,6 +255,10 @@ func (v *SsaGen) VisitBinop(b *ir.Binop) string {
 		op = "add"
 	case ir.BinOpSub:
 		op = "sub"
+	case ir.BinOpMul:
+		op = "mul"
+	case ir.BinOpDiv:
+		op = "div"
 	default:
 		panic("unknown binop: " + string(b.Op))
 	}

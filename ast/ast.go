@@ -247,6 +247,8 @@ type BinOpKind string
 const (
 	BinOpAdd BinOpKind = "+"
 	BinOpSub BinOpKind = "-"
+	BinOpMul BinOpKind = "*"
+	BinOpDiv BinOpKind = "/"
 )
 
 type Binop struct {

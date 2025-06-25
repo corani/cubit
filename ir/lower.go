@@ -195,6 +195,10 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 		irOp = BinOpAdd
 	case ast.BinOpSub:
 		irOp = BinOpSub
+	case ast.BinOpMul:
+		irOp = BinOpMul
+	case ast.BinOpDiv:
+		irOp = BinOpDiv
 	default:
 		panic("unsupported binary operation: " + b.Operation)
 	}

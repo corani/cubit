@@ -504,7 +504,8 @@ type BinOpKind string
 const (
 	BinOpAdd BinOpKind = "add"
 	BinOpSub BinOpKind = "sub"
-	// Extend with more ops as needed (mul, div, etc)
+	BinOpMul BinOpKind = "mul"
+	BinOpDiv BinOpKind = "div"
 )
 
 // Binop represents an SSA binary operation instruction (add, sub, etc).
