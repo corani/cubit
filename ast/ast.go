@@ -250,9 +250,9 @@ const (
 )
 
 type Binop struct {
+	Operation BinOpKind
 	Lhs, Rhs  Expression
 	Type      TypeKind
-	Operation BinOpKind
 }
 
 func (b *Binop) Accept(v Visitor) {
@@ -262,10 +262,10 @@ func (b *Binop) Accept(v Visitor) {
 // NewBinop creates a new Binop node. Only Add is supported for now.
 func NewBinop(op BinOpKind, lhs, rhs Expression) *Binop {
 	return &Binop{
+		Operation: op,
 		Lhs:       lhs,
 		Rhs:       rhs,
 		Type:      TypeUnknown,
-		Operation: op,
 	}
 }
 

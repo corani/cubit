@@ -248,12 +248,18 @@ func (v *SsaGen) VisitCall(c *ir.Call) string {
 	return fmt.Sprintf("%scall %s(%s)", lhs, v.VisitVal(c.Val), strings.Join(args, ", "))
 }
 
-func (v *SsaGen) VisitAdd(a *ir.Add) string {
-	return fmt.Sprintf("%s =w add %s, %s", v.VisitVal(a.Ret), v.VisitVal(a.Lhs), v.VisitVal(a.Rhs))
-}
-
-func (v *SsaGen) VisitSub(s *ir.Sub) string {
-	return fmt.Sprintf("%s =w sub %s, %s", v.VisitVal(s.Ret), v.VisitVal(s.Lhs), v.VisitVal(s.Rhs))
+func (v *SsaGen) VisitBinop(b *ir.Binop) string {
+	var op string
+	switch b.Op {
+	case ir.BinOpAdd:
+		op = "add"
+	case ir.BinOpSub:
+		op = "sub"
+	default:
+		panic("unknown binop: " + string(b.Op))
+	}
+	// For now, always use =w (word) for the result type
+	return fmt.Sprintf("%s =w %s %s, %s", v.VisitVal(b.Ret), op, v.VisitVal(b.Lhs), v.VisitVal(b.Rhs))
 }
 
 func (v *SsaGen) VisitVal(val *ir.Val) string {

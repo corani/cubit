@@ -8,8 +8,7 @@ type Visitor interface {
 	VisitFuncDef(*FuncDef) string
 	VisitRet(*Ret) string
 	VisitCall(*Call) string
-	VisitAdd(*Add) string
-	VisitSub(*Sub) string
+	VisitBinop(*Binop) string
 }
 
 type CompilationUnit struct {
@@ -499,36 +498,30 @@ func (c *Call) WithRet(lhs Ident, retTy AbiTy) *Call {
 	return c
 }
 
-// Add represents an SSA add instruction.
-type Add struct {
+// BinOpKind represents the kind of binary operation.
+type BinOpKind string
+
+const (
+	BinOpAdd BinOpKind = "add"
+	BinOpSub BinOpKind = "sub"
+	// Extend with more ops as needed (mul, div, etc)
+)
+
+// Binop represents an SSA binary operation instruction (add, sub, etc).
+type Binop struct {
+	Op       BinOpKind
 	Lhs, Rhs *Val
 	Ret      *Val
 }
 
-func (a *Add) isInstruction() {}
+func (b *Binop) isInstruction() {}
 
-func (a *Add) Accept(visitor Visitor) string {
-	return visitor.VisitAdd(a)
+func (b *Binop) Accept(visitor Visitor) string {
+	return visitor.VisitBinop(b)
 }
 
-func NewAdd(Ret, Lhs, Rhs *Val) *Add {
-	return &Add{Lhs: Lhs, Rhs: Rhs, Ret: Ret}
-}
-
-// Sub represents an SSA sub instruction.
-type Sub struct {
-	Lhs, Rhs *Val
-	Ret      *Val
-}
-
-func (s *Sub) isInstruction() {}
-
-func (s *Sub) Accept(visitor Visitor) string {
-	return visitor.VisitSub(s)
-}
-
-func NewSub(Ret, Lhs, Rhs *Val) *Sub {
-	return &Sub{Lhs: Lhs, Rhs: Rhs, Ret: Ret}
+func NewBinop(op BinOpKind, ret, lhs, rhs *Val) *Binop {
+	return &Binop{Op: op, Lhs: lhs, Rhs: rhs, Ret: ret}
 }
 
 type Arg struct {

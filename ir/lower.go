@@ -116,11 +116,10 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 	lhsIdent := Ident(a.Ident)
 	lhsVal := NewValIdent(lhsIdent)
 
-	// For assignment, use Add(lhs, rhs, 0) as a stand-in for move
+	// For assignment, use Binop with add as a stand-in for move
 	zero := NewValInteger(0)
-	addInstr := NewAdd(lhsVal, val, zero)
-
-	v.lastInstructions = append(v.lastInstructions, addInstr)
+	binopInstr := NewBinop(BinOpAdd, lhsVal, val, zero)
+	v.lastInstructions = append(v.lastInstructions, binopInstr)
 }
 
 func (v *visitor) VisitCall(c *ast.Call) {
@@ -188,15 +187,19 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 	// Create a new temporary for the result
 	result := NewValIdent(v.nextIdent("tmp"))
 
+	// Map ast.BinOpKind to ir.BinOpKind
+	var irOp BinOpKind
+
 	switch b.Operation {
 	case ast.BinOpAdd:
-		v.lastInstructions = append(v.lastInstructions, NewAdd(result, left, right))
+		irOp = BinOpAdd
 	case ast.BinOpSub:
-		v.lastInstructions = append(v.lastInstructions, NewSub(result, left, right))
+		irOp = BinOpSub
 	default:
 		panic("unsupported binary operation: " + b.Operation)
 	}
 
+	v.lastInstructions = append(v.lastInstructions, NewBinop(irOp, result, left, right))
 	v.lastVal = result
 }
 
