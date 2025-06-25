@@ -198,6 +198,8 @@ func (t *Tokenizer) next() (Token, error) {
 					}
 				}
 			default:
+				t.Scan.Unread(1)
+
 				return Token{Type: TypeSlash, StringVal: "/", Location: start}, nil
 			}
 		case c == '-':
@@ -217,6 +219,8 @@ func (t *Tokenizer) next() (Token, error) {
 
 				continue
 			default:
+				t.Scan.Unread(1)
+
 				return Token{Type: TypeMinus, StringVal: "-", Location: start}, nil
 			}
 		case isWhitespace(c):
