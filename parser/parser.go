@@ -469,7 +469,67 @@ func (p *Parser) parseCall(first lexer.Token) (*ast.Call, error) {
 	return ast.NewCall(first.StringVal, args...), nil
 }
 
+// Pratt parser operator info
+type opInfo struct {
+	precedence int
+	rightAssoc bool
+	kind       ast.BinOpKind
+}
+
+var opPrecedence = map[lexer.TokenType]opInfo{
+	lexer.TypePlus:  {precedence: 10, rightAssoc: false, kind: ast.BinOpAdd},
+	lexer.TypeMinus: {precedence: 10, rightAssoc: false, kind: ast.BinOpSub},
+	lexer.TypeStar:  {precedence: 20, rightAssoc: false, kind: ast.BinOpMul},
+	lexer.TypeSlash: {precedence: 20, rightAssoc: false, kind: ast.BinOpDiv},
+}
+
 func (p *Parser) parseExpression(optional bool) (ast.Expression, error) {
+	return p.parseExpressionPratt(optional, 0)
+}
+
+func (p *Parser) parseExpressionPratt(optional bool, minPrec int) (ast.Expression, error) {
+	lhs, err := p.parsePrimary(optional)
+	if err != nil || lhs == nil {
+		return lhs, err
+	}
+
+	for {
+		// Only consider known binary operators
+		peek, err := p.peekType(lexer.TypePlus, lexer.TypeMinus, lexer.TypeStar, lexer.TypeSlash)
+		if err != nil {
+			// If we hit EOF or a non-operator, just return lhs
+			return lhs, nil
+		}
+
+		info, ok := opPrecedence[peek.Type]
+
+		if !ok || info.precedence < minPrec {
+			// If we *did* find a valid operator but it has lower precedence than the minimum
+			// required, we roll back the index to re-parse this token higher up the stack.
+			if ok {
+				p.index--
+			}
+
+			// Not a valid operator or lower precedence, stop
+			return lhs, nil
+		}
+
+		// Determine precedence for right-hand side
+		nextMinPrec := info.precedence
+		if !info.rightAssoc {
+			nextMinPrec++
+		}
+
+		rhs, err := p.parseExpressionPratt(false, nextMinPrec)
+		if err != nil {
+			return nil, err
+		}
+
+		lhs = ast.NewBinop(info.kind, lhs, rhs)
+	}
+}
+
+func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 	starters := []lexer.TokenType{lexer.TypeNumber, lexer.TypeString, lexer.TypeIdent}
 
 	start, err := p.peekType(starters...)
@@ -515,46 +575,7 @@ func (p *Parser) parseExpression(optional bool) (ast.Expression, error) {
 		panic("unreachable")
 	}
 
-	// TODO(daniel): We currently only support addition as a binary operator. This needs to be
-	// refactored into a proper recursive expression parser, taking precedence and associativity
-	// into account.
-	peek, err := p.peekType(lexer.TypePlus, lexer.TypeMinus, lexer.TypeStar, lexer.TypeSlash)
-	if err != nil {
-		return nil, err
-	}
-
-	switch peek.Type {
-	case lexer.TypePlus:
-		rhs, err := p.parseExpression(false)
-		if err != nil {
-			return nil, err
-		}
-
-		return ast.NewBinop(ast.BinOpAdd, expr, rhs), nil
-	case lexer.TypeMinus:
-		rhs, err := p.parseExpression(false)
-		if err != nil {
-			return nil, err
-		}
-
-		return ast.NewBinop(ast.BinOpSub, expr, rhs), nil
-	case lexer.TypeStar:
-		rhs, err := p.parseExpression(false)
-		if err != nil {
-			return nil, err
-		}
-
-		return ast.NewBinop(ast.BinOpMul, expr, rhs), nil
-	case lexer.TypeSlash:
-		rhs, err := p.parseExpression(false)
-		if err != nil {
-			return nil, err
-		}
-
-		return ast.NewBinop(ast.BinOpDiv, expr, rhs), nil
-	default:
-		return expr, nil
-	}
+	return expr, nil
 }
 
 func (p *Parser) expectKeyword(kws ...lexer.Keyword) (lexer.Token, error) {
