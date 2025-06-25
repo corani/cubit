@@ -530,7 +530,7 @@ func (p *Parser) parseExpressionPratt(optional bool, minPrec int) (ast.Expressio
 }
 
 func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
-	starters := []lexer.TokenType{lexer.TypeNumber, lexer.TypeString, lexer.TypeIdent}
+	starters := []lexer.TokenType{lexer.TypeNumber, lexer.TypeString, lexer.TypeIdent, lexer.TypeLparen}
 
 	start, err := p.peekType(starters...)
 	if err != nil {
@@ -570,6 +570,17 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 			}
 		} else {
 			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown)
+		}
+	case lexer.TypeLparen:
+		// Parenthesized sub-expression
+		expr, err = p.parseExpression(false)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = p.expectType(lexer.TypeRparen)
+		if err != nil {
+			return nil, err
 		}
 	default:
 		panic("unreachable")
