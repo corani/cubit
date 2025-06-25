@@ -129,12 +129,12 @@ func (p *Parser) parseAttributes(start lexer.Token) error {
 
 		var value ast.AttrValue
 
-		next, err := p.expectType(lexer.TypeEquals, lexer.TypeComma, lexer.TypeRparen)
+		next, err := p.expectType(lexer.TypeAssign, lexer.TypeComma, lexer.TypeRparen)
 		if err != nil {
 			return err
 		}
 
-		if next.Type == lexer.TypeEquals {
+		if next.Type == lexer.TypeAssign {
 			valTok, err := p.expectType(lexer.TypeString, lexer.TypeNumber)
 			if err != nil {
 				return err
@@ -260,20 +260,20 @@ func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
 		return nil, err
 	}
 
-	equal, err := p.peekType(lexer.TypeEquals)
+	equal, err := p.peekType(lexer.TypeAssign)
 	if err != nil {
 		return nil, err
 	}
 
 	argType := lexer.Token{}
 
-	if equal.Type != lexer.TypeEquals {
+	if equal.Type != lexer.TypeAssign {
 		argType, err = p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
 		if err != nil {
 			return nil, err
 		}
 
-		equal, err = p.peekType(lexer.TypeEquals)
+		equal, err = p.peekType(lexer.TypeAssign)
 		if err != nil {
 			return nil, err
 		}
@@ -281,7 +281,7 @@ func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
 
 	var value ast.Expression
 
-	if equal.Type == lexer.TypeEquals {
+	if equal.Type == lexer.TypeAssign {
 		// If we have an equals sign, we expect a default value
 		value, err = p.parseExpression(false)
 		if err != nil {
@@ -397,7 +397,7 @@ func (p *Parser) parseFuncBody(start, retType lexer.Token) ([]ast.Instruction, e
 }
 
 func (p *Parser) parseAssign(name lexer.Token) (ast.Instruction, error) {
-	next, err := p.peekType(lexer.TypeEquals, lexer.TypeKeyword)
+	next, err := p.peekType(lexer.TypeAssign, lexer.TypeKeyword)
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +405,7 @@ func (p *Parser) parseAssign(name lexer.Token) (ast.Instruction, error) {
 	returnType := ast.TypeUnknown
 
 	// type
-	if next.Type != lexer.TypeEquals {
+	if next.Type != lexer.TypeAssign {
 		p.index--
 
 		ty, err := p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
@@ -413,7 +413,7 @@ func (p *Parser) parseAssign(name lexer.Token) (ast.Instruction, error) {
 			return nil, err
 		}
 
-		if _, err := p.expectType(lexer.TypeEquals); err != nil {
+		if _, err := p.expectType(lexer.TypeAssign); err != nil {
 			return nil, err
 		}
 
@@ -481,6 +481,7 @@ var opPrecedence = map[lexer.TokenType]opInfo{
 	lexer.TypeMinus: {precedence: 10, rightAssoc: false, kind: ast.BinOpSub},
 	lexer.TypeStar:  {precedence: 20, rightAssoc: false, kind: ast.BinOpMul},
 	lexer.TypeSlash: {precedence: 20, rightAssoc: false, kind: ast.BinOpDiv},
+	lexer.TypeEq:    {precedence: 5, rightAssoc: false, kind: ast.BinOpEq},
 }
 
 func (p *Parser) parseExpression(optional bool) (ast.Expression, error) {
@@ -495,7 +496,13 @@ func (p *Parser) parseExpressionPratt(optional bool, minPrec int) (ast.Expressio
 
 	for {
 		// Only consider known binary operators
-		peek, err := p.peekType(lexer.TypePlus, lexer.TypeMinus, lexer.TypeStar, lexer.TypeSlash)
+		peek, err := p.peekType(
+			lexer.TypePlus,
+			lexer.TypeMinus,
+			lexer.TypeStar,
+			lexer.TypeSlash,
+			lexer.TypeEq,
+		)
 		if err != nil {
 			// If we hit EOF or a non-operator, just return lhs
 			return lhs, nil
@@ -530,7 +537,13 @@ func (p *Parser) parseExpressionPratt(optional bool, minPrec int) (ast.Expressio
 }
 
 func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
-	starters := []lexer.TokenType{lexer.TypeNumber, lexer.TypeString, lexer.TypeIdent, lexer.TypeLparen}
+	starters := []lexer.TokenType{
+		lexer.TypeNumber,
+		lexer.TypeBool,
+		lexer.TypeString,
+		lexer.TypeIdent,
+		lexer.TypeLparen,
+	}
 
 	start, err := p.peekType(starters...)
 	if err != nil {
@@ -553,6 +566,15 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 	switch start.Type {
 	case lexer.TypeNumber:
 		expr = ast.NewIntLiteral(start.NumberVal)
+	case lexer.TypeBool:
+		if start.Keyword == lexer.KeywordTrue {
+			expr = ast.NewBoolLiteral(true)
+		} else if start.Keyword == lexer.KeywordFalse {
+			expr = ast.NewBoolLiteral(false)
+		} else {
+			panic(fmt.Sprintf("unexpected boolean keyword %s at %s",
+				start.Keyword, start.Location))
+		}
 	case lexer.TypeString:
 		expr = ast.NewStringLiteral(start.StringVal)
 	case lexer.TypeIdent:

@@ -9,6 +9,8 @@ func (t TypeKind) String() string {
 	switch t {
 	case TypeInt:
 		return "int"
+	case TypeBool:
+		return "bool"
 	case TypeString:
 		return "string"
 	case TypeVoid:
@@ -124,6 +126,8 @@ func (l *Literal) String() string {
 		return fmt.Sprintf("(lit %d %v)", l.IntValue, l.Type)
 	case TypeString:
 		return fmt.Sprintf("(lit %q %v)", l.StringValue, l.Type)
+	case TypeBool:
+		return fmt.Sprintf("(lit %t %v)", l.BoolValue, l.Type)
 	default:
 		return "(lit unknown unknown)"
 	}

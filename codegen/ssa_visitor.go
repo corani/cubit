@@ -250,6 +250,8 @@ func (v *SsaGen) VisitCall(c *ir.Call) string {
 
 func (v *SsaGen) VisitBinop(b *ir.Binop) string {
 	var op string
+
+	// TODO(daniel): Generate correct instructions based on the types.
 	switch b.Op {
 	case ir.BinOpAdd:
 		op = "add"
@@ -259,9 +261,13 @@ func (v *SsaGen) VisitBinop(b *ir.Binop) string {
 		op = "mul"
 	case ir.BinOpDiv:
 		op = "div"
+	case ir.BinOpEq:
+		// For now always assume type w (word)
+		op = "ceqw"
 	default:
 		panic("unknown binop: " + string(b.Op))
 	}
+
 	// For now, always use =w (word) for the result type
 	return fmt.Sprintf("%s =w %s %s, %s", v.VisitVal(b.Ret), op, v.VisitVal(b.Lhs), v.VisitVal(b.Rhs))
 }

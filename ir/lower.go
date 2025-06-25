@@ -165,13 +165,19 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 	switch l.Type {
 	case ast.TypeInt:
 		v.lastVal = NewValInteger(int64(l.IntValue))
+	case ast.TypeBool:
+		if l.BoolValue {
+			v.lastVal = NewValInteger(1)
+		} else {
+			v.lastVal = NewValInteger(0)
+		}
 	case ast.TypeString:
 		// TODO(daniel): This does not deduplicate identical string literals. Consider interning/deduplicating.
 		ident := v.nextIdent("str")
 		v.unit.DataDefs = append(v.unit.DataDefs, NewDataDefStringZ(ident, l.StringValue))
 		v.lastVal = NewValGlobal(ident)
 	default:
-		v.lastVal = nil
+		panic("unsupported literal type: " + l.Type.String())
 	}
 }
 
@@ -199,6 +205,8 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 		irOp = BinOpMul
 	case ast.BinOpDiv:
 		irOp = BinOpDiv
+	case ast.BinOpEq:
+		irOp = BinOpEq
 	default:
 		panic("unsupported binary operation: " + b.Operation)
 	}

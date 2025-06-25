@@ -221,12 +221,22 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 	lhsType := tc.visitNode(binop.Lhs)
 	rhsType := tc.visitNode(binop.Rhs)
 
-	if lhsType == rhsType {
-		binop.Type = lhsType
-	} else {
-		binop.Type = ast.TypeUnknown
-
-		tc.errorf("type mismatch in binary operation: %s vs %s", lhsType, rhsType)
+	switch binop.Operation {
+	case ast.BinOpEq:
+		// Equality always returns int (boolean-like)
+		if lhsType == rhsType {
+			binop.Type = ast.TypeBool
+		} else {
+			binop.Type = ast.TypeUnknown
+			tc.errorf("type mismatch in equality operation: %s vs %s", lhsType, rhsType)
+		}
+	default:
+		if lhsType == rhsType {
+			binop.Type = lhsType
+		} else {
+			binop.Type = ast.TypeUnknown
+			tc.errorf("type mismatch in binary operation: %s vs %s", lhsType, rhsType)
+		}
 	}
 
 	tc.lastType = binop.Type

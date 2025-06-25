@@ -24,6 +24,7 @@ type TypeKind int
 const (
 	TypeUnknown TypeKind = iota
 	TypeInt
+	TypeBool
 	TypeString
 	TypeVoid
 )
@@ -219,6 +220,7 @@ type Literal struct {
 	Type        TypeKind
 	IntValue    int
 	StringValue string
+	BoolValue   bool
 }
 
 func (l *Literal) Accept(v Visitor) {
@@ -229,6 +231,13 @@ func NewIntLiteral(val int) *Literal {
 	return &Literal{
 		Type:     TypeInt,
 		IntValue: val,
+	}
+}
+
+func NewBoolLiteral(val bool) *Literal {
+	return &Literal{
+		Type:      TypeBool,
+		BoolValue: val,
 	}
 }
 
@@ -249,6 +258,7 @@ const (
 	BinOpSub BinOpKind = "-"
 	BinOpMul BinOpKind = "*"
 	BinOpDiv BinOpKind = "/"
+	BinOpEq  BinOpKind = "=="
 )
 
 type Binop struct {

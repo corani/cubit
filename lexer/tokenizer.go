@@ -13,6 +13,7 @@ const (
 	TypeIdent   TokenType = "Identifier"
 	TypeKeyword TokenType = "Keyword"
 	TypeNumber  TokenType = "Number"
+	TypeBool    TokenType = "Bool"
 	TypeString  TokenType = "String"
 	TypeLparen  TokenType = "LeftParen"
 	TypeRparen  TokenType = "RightParen"
@@ -22,11 +23,12 @@ const (
 	TypeArrow   TokenType = "Arrow"
 	TypeColon   TokenType = "Colon"
 	TypeAt      TokenType = "At"
-	TypeEquals  TokenType = "Equals"
+	TypeAssign  TokenType = "Assign"
 	TypePlus    TokenType = "Plus"
 	TypeMinus   TokenType = "Minus"
 	TypeStar    TokenType = "Star"
 	TypeSlash   TokenType = "Slash"
+	TypeEq      TokenType = "Eq"
 )
 
 type Keyword string
@@ -38,6 +40,8 @@ const (
 	KeywordString  Keyword = "string"
 	KeywordVoid    Keyword = "void"
 	KeywordPackage Keyword = "package"
+	KeywordFalse   Keyword = "false"
+	KeywordTrue    Keyword = "true"
 )
 
 type Token struct {
@@ -59,6 +63,8 @@ func (t Token) String() string {
 		return "Keyword(" + string(t.Keyword) + ") @ " + t.Location.String()
 	case TypeNumber:
 		return "Number(" + strconv.Itoa(t.NumberVal) + ") @ " + t.Location.String()
+	case TypeBool:
+		return "Bool(" + string(t.Keyword) + ") @ " + t.Location.String()
 	case TypeString:
 		return "String(\"" + t.StringVal + "\") @ " + t.Location.String()
 	case TypeLparen:
@@ -77,8 +83,8 @@ func (t Token) String() string {
 		return "Colon @ " + t.Location.String()
 	case TypeAt:
 		return "At @ " + t.Location.String()
-	case TypeEquals:
-		return "Equals @ " + t.Location.String()
+	case TypeAssign:
+		return "Assign @ " + t.Location.String()
 	case TypePlus:
 		return "Plus @ " + t.Location.String()
 	case TypeMinus:
@@ -87,6 +93,8 @@ func (t Token) String() string {
 		return "Star @ " + t.Location.String()
 	case TypeSlash:
 		return "Slash @ " + t.Location.String()
+	case TypeEq:
+		return "Eq @ " + t.Location.String()
 	default:
 		return "Unknown @ " + t.Location.String()
 	}
@@ -106,6 +114,10 @@ func checkKeyword(ident string) (Keyword, bool) {
 		return KeywordVoid, true
 	case "package":
 		return KeywordPackage, true
+	case "false":
+		return KeywordFalse, true
+	case "true":
+		return KeywordTrue, true
 	default:
 		return "", false
 	}
@@ -151,7 +163,6 @@ func (t *Tokenizer) next() (Token, error) {
 	// Define a map to translate single-character tokens to TokenType. This contains only
 	// tokens that can be mapped unambiguously (e.g., '=', '(', ')', but not '-', '/').
 	translate := map[byte]TokenType{
-		'=': TypeEquals,
 		'(': TypeLparen,
 		')': TypeRparen,
 		'{': TypeLbrace,
@@ -179,6 +190,21 @@ func (t *Tokenizer) next() (Token, error) {
 		}
 
 		switch {
+		case c == '=':
+			c, err := t.Scan.Next()
+			if err != nil {
+				return Token{}, err
+			}
+
+			switch {
+			case c == '=':
+				return Token{Type: TypeEq, StringVal: "==", Location: start}, nil
+			default:
+				// Unread whatever we read after the equals sign
+				t.Scan.Unread(1)
+
+				return Token{Type: TypeAssign, StringVal: "=", Location: start}, nil
+			}
 		case c == '/':
 			c, err := t.Scan.Next()
 			if err != nil {
@@ -198,6 +224,7 @@ func (t *Tokenizer) next() (Token, error) {
 					}
 				}
 			default:
+				// Unread whatever we read after the slash
 				t.Scan.Unread(1)
 
 				return Token{Type: TypeSlash, StringVal: "/", Location: start}, nil
@@ -219,6 +246,7 @@ func (t *Tokenizer) next() (Token, error) {
 
 				continue
 			default:
+				// Unread whatever we read after the minus sign
 				t.Scan.Unread(1)
 
 				return Token{Type: TypeMinus, StringVal: "-", Location: start}, nil
@@ -290,11 +318,17 @@ func (t *Tokenizer) next() (Token, error) {
 				}
 			}
 
-			if kw, ok := checkKeyword(string(buf)); ok {
-				return Token{Type: TypeKeyword, Keyword: kw, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
+			kw, ok := checkKeyword(string(buf))
+			if !ok {
+				return Token{Type: TypeIdent, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
 			}
 
-			return Token{Type: TypeIdent, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
+			switch kw {
+			case KeywordFalse, KeywordTrue:
+				return Token{Type: TypeBool, Keyword: kw, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
+			default:
+				return Token{Type: TypeKeyword, Keyword: kw, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
+			}
 		}
 	}
 }
