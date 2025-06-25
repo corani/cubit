@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/corani/refactored-giggle/ast"
@@ -282,19 +283,7 @@ func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
 
 	if equal.Type == lexer.TypeEquals {
 		// If we have an equals sign, we expect a default value
-		defaultValue, err := p.expectType(lexer.TypeNumber, lexer.TypeString)
-		if err != nil {
-			return nil, err
-		}
-
-		switch defaultValue.Type {
-		case lexer.TypeNumber:
-			value = ast.NewIntLiteral(defaultValue.NumberVal)
-		case lexer.TypeString:
-			value = ast.NewStringLiteral(defaultValue.StringVal)
-		}
-
-		value, err = p.parseExpression(value)
+		value, err = p.parseExpression(false)
 		if err != nil {
 			return nil, err
 		}
@@ -368,29 +357,14 @@ func (p *Parser) parseFuncBody(start, retType lexer.Token) ([]ast.Instruction, e
 			switch first.Keyword {
 			case lexer.KeywordReturn:
 				if retType.Keyword == lexer.KeywordVoid {
-					instructions = append(instructions,
-						ast.NewReturn())
+					instructions = append(instructions, ast.NewReturn())
 				} else {
-					// Accept arbitrary expressions for return value
-					firstTok, err := p.expectType(lexer.TypeString, lexer.TypeNumber, lexer.TypeIdent)
+					expr, err := p.parseExpression(false)
 					if err != nil {
 						return nil, err
 					}
-					var expr ast.Expression
-					switch firstTok.Type {
-					case lexer.TypeNumber:
-						expr = ast.NewIntLiteral(firstTok.NumberVal)
-					case lexer.TypeString:
-						expr = ast.NewStringLiteral(firstTok.StringVal)
-					case lexer.TypeIdent:
-						expr = ast.NewVariableRef(firstTok.StringVal, ast.TypeUnknown)
-					}
-					expr, err = p.parseExpression(expr)
-					if err != nil {
-						return nil, err
-					}
-					instructions = append(instructions,
-						ast.NewReturn(expr))
+
+					instructions = append(instructions, ast.NewReturn(expr))
 				}
 			}
 		case lexer.TypeIdent:
@@ -447,35 +421,7 @@ func (p *Parser) parseAssign(name lexer.Token) (ast.Instruction, error) {
 	}
 
 	// value
-	lhs, err := p.expectType(lexer.TypeNumber, lexer.TypeIdent)
-	if err != nil {
-		return nil, err
-	}
-
-	var val ast.Expression
-
-	switch lhs.Type {
-	case lexer.TypeNumber:
-		val = ast.NewIntLiteral(lhs.NumberVal)
-	case lexer.TypeIdent:
-		// Peek to see if this is a function call (ident followed by Lparen)
-		lparen, err := p.peekType(lexer.TypeLparen)
-		if err != nil && !errors.Is(err, io.EOF) {
-			return nil, err
-		}
-
-		if lparen.Type == lexer.TypeLparen {
-			// It's a function call
-			val, err = p.parseCall(lhs)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			val = ast.NewVariableRef(lhs.StringVal, ast.TypeUnknown)
-		}
-	}
-
-	val, err = p.parseExpression(val)
+	expr, err := p.parseExpression(false)
 	if err != nil {
 		return nil, err
 	}
@@ -483,53 +429,37 @@ func (p *Parser) parseAssign(name lexer.Token) (ast.Instruction, error) {
 	return &ast.Assign{
 		Ident: name.StringVal,
 		Type:  returnType,
-		Value: val,
+		Value: expr,
 	}, nil
 }
 
+// parseCall parses the argument list of a function call. It expects `first` to be the identifier
+// of the function being called. The left-parenthesis `(` should have already been consumed. It
+// parses a comma-separated list of expressions until it encounters a right-parenthesis `)`.
 func (p *Parser) parseCall(first lexer.Token) (*ast.Call, error) {
-	arg, err := p.nextToken()
-	if err != nil {
-		return nil, err
-	}
+	var (
+		args []ast.Arg
+		next lexer.Token
+	)
 
-	var args []ast.Arg
-
-	for arg.Type != lexer.TypeRparen {
-		switch arg.Type {
-		case lexer.TypeString:
-			expr, err := p.parseExpression(ast.NewStringLiteral(arg.StringVal))
-			if err != nil {
-				return nil, fmt.Errorf("error parsing expression at %s: %w", arg.Location, err)
-			}
-
-			args = append(args, ast.Arg{Value: expr})
-		case lexer.TypeNumber:
-			expr, err := p.parseExpression(ast.NewIntLiteral(arg.NumberVal))
-			if err != nil {
-				return nil, fmt.Errorf("error parsing expression at %s: %w", arg.Location, err)
-			}
-
-			args = append(args, ast.Arg{Value: expr})
-		case lexer.TypeIdent:
-			expr, err := p.parseExpression(ast.NewVariableRef(arg.StringVal, ast.TypeUnknown))
-			if err != nil {
-				return nil, fmt.Errorf("error parsing expression at %s: %w", arg.Location, err)
-			}
-
-			args = append(args, ast.Arg{Value: expr})
-		default:
-			return nil, fmt.Errorf("unexpected argument type %s at %s, expected string or number",
-				arg.Type, arg.Location)
-		}
-
-		arg, err = p.expectType(lexer.TypeRparen, lexer.TypeComma)
+	for next.Type != lexer.TypeRparen {
+		expr, err := p.parseExpression(true)
 		if err != nil {
 			return nil, err
 		}
 
-		if arg.Type == lexer.TypeComma {
-			arg, err = p.nextToken()
+		if expr != nil {
+			// We successfully parsed an expression, this should be followed by either
+			// a comma or a right parenthesis.
+			args = append(args, ast.Arg{Value: expr})
+
+			next, err = p.expectType(lexer.TypeRparen, lexer.TypeComma)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// We didn't parse an expression, so we expect a right parenthesis to form `()`.
+			next, err = p.expectType(lexer.TypeRparen)
 			if err != nil {
 				return nil, err
 			}
@@ -539,7 +469,54 @@ func (p *Parser) parseCall(first lexer.Token) (*ast.Call, error) {
 	return ast.NewCall(first.StringVal, args...), nil
 }
 
-func (p *Parser) parseExpression(start ast.Expression) (ast.Expression, error) {
+func (p *Parser) parseExpression(optional bool) (ast.Expression, error) {
+	starters := []lexer.TokenType{lexer.TypeNumber, lexer.TypeString, lexer.TypeIdent}
+
+	start, err := p.peekType(starters...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !slices.Contains(starters, start.Type) {
+		// If the expression was optional and we didn't find a valid start token,
+		// this is not an error, so we return `nil, nil`.
+		if optional {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("expected start of expression at %s, got %s",
+			start.Location, start.StringVal)
+	}
+
+	var expr ast.Expression
+
+	switch start.Type {
+	case lexer.TypeNumber:
+		expr = ast.NewIntLiteral(start.NumberVal)
+	case lexer.TypeString:
+		expr = ast.NewStringLiteral(start.StringVal)
+	case lexer.TypeIdent:
+		// Peek to see if this is a function call (ident followed by Lparen)
+		lparen, err := p.peekType(lexer.TypeLparen)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, err
+		}
+
+		if lparen.Type == lexer.TypeLparen {
+			// It's a function call
+			expr, err = p.parseCall(start)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown)
+		}
+	default:
+		panic("unreachable")
+	}
+
+	// We currently only support addition as a binary operator. This needs to be refactored into
+	// a proper recursive expression parser.
 	peek, err := p.peekType(lexer.TypePlus)
 	if err != nil {
 		return nil, err
@@ -547,21 +524,14 @@ func (p *Parser) parseExpression(start ast.Expression) (ast.Expression, error) {
 
 	switch peek.Type {
 	case lexer.TypePlus:
-		rhs, err := p.expectType(lexer.TypeNumber, lexer.TypeIdent)
+		rhs, err := p.parseExpression(false)
 		if err != nil {
 			return nil, err
 		}
 
-		switch rhs.Type {
-		case lexer.TypeNumber:
-			return ast.NewBinop("+", start, ast.NewIntLiteral(rhs.NumberVal)), nil
-		case lexer.TypeIdent:
-			return ast.NewBinop("+", start, ast.NewVariableRef(rhs.StringVal, ast.TypeUnknown)), nil
-		default:
-			panic("unreachable")
-		}
+		return ast.NewBinop("+", expr, rhs), nil
 	default:
-		return start, nil
+		return expr, nil
 	}
 }
 
