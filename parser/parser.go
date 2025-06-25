@@ -515,9 +515,10 @@ func (p *Parser) parseExpression(optional bool) (ast.Expression, error) {
 		panic("unreachable")
 	}
 
-	// We currently only support addition as a binary operator. This needs to be refactored into
-	// a proper recursive expression parser.
-	peek, err := p.peekType(lexer.TypePlus)
+	// TODO(daniel): We currently only support addition as a binary operator. This needs to be
+	// refactored into a proper recursive expression parser, taking precedence and associativity
+	// into account.
+	peek, err := p.peekType(lexer.TypePlus, lexer.TypeMinus)
 	if err != nil {
 		return nil, err
 	}
@@ -530,6 +531,13 @@ func (p *Parser) parseExpression(optional bool) (ast.Expression, error) {
 		}
 
 		return ast.NewBinop("+", expr, rhs), nil
+	case lexer.TypeMinus:
+		rhs, err := p.parseExpression(false)
+		if err != nil {
+			return nil, err
+		}
+
+		return ast.NewBinop("-", expr, rhs), nil
 	default:
 		return expr, nil
 	}

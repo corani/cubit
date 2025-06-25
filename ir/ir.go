@@ -9,6 +9,7 @@ type Visitor interface {
 	VisitRet(*Ret) string
 	VisitCall(*Call) string
 	VisitAdd(*Add) string
+	VisitSub(*Sub) string
 }
 
 type CompilationUnit struct {
@@ -512,6 +513,22 @@ func (a *Add) Accept(visitor Visitor) string {
 
 func NewAdd(Ret, Lhs, Rhs *Val) *Add {
 	return &Add{Lhs: Lhs, Rhs: Rhs, Ret: Ret}
+}
+
+// Sub represents an SSA sub instruction.
+type Sub struct {
+	Lhs, Rhs *Val
+	Ret      *Val
+}
+
+func (s *Sub) isInstruction() {}
+
+func (s *Sub) Accept(visitor Visitor) string {
+	return visitor.VisitSub(s)
+}
+
+func NewSub(Ret, Lhs, Rhs *Val) *Sub {
+	return &Sub{Lhs: Lhs, Rhs: Rhs, Ret: Ret}
 }
 
 type Arg struct {

@@ -177,13 +177,6 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 }
 
 func (v *visitor) VisitBinop(b *ast.Binop) {
-	// Only plus is supported
-	if b.Operation != ast.BinOpAdd {
-		v.lastVal = nil
-
-		return
-	}
-
 	// Lower left and right operands
 	v.lastVal = nil
 	b.Lhs.Accept(v)
@@ -195,10 +188,15 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 	// Create a new temporary for the result
 	result := NewValIdent(v.nextIdent("tmp"))
 
-	// Emit the Add instruction
-	addInstr := NewAdd(result, left, right)
+	switch b.Operation {
+	case ast.BinOpAdd:
+		v.lastInstructions = append(v.lastInstructions, NewAdd(result, left, right))
+	case ast.BinOpSub:
+		v.lastInstructions = append(v.lastInstructions, NewSub(result, left, right))
+	default:
+		panic("unsupported binary operation: " + b.Operation)
+	}
 
-	v.lastInstructions = append(v.lastInstructions, addInstr)
 	v.lastVal = result
 }
 

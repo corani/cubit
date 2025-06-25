@@ -252,6 +252,10 @@ func (v *SsaGen) VisitAdd(a *ir.Add) string {
 	return fmt.Sprintf("%s =w add %s, %s", v.VisitVal(a.Ret), v.VisitVal(a.Lhs), v.VisitVal(a.Rhs))
 }
 
+func (v *SsaGen) VisitSub(s *ir.Sub) string {
+	return fmt.Sprintf("%s =w sub %s, %s", v.VisitVal(s.Ret), v.VisitVal(s.Lhs), v.VisitVal(s.Rhs))
+}
+
 func (v *SsaGen) VisitVal(val *ir.Val) string {
 	switch val.Type {
 	case ir.ValDynConst:

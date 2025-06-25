@@ -24,6 +24,9 @@ const (
 	TypeAt      TokenType = "At"
 	TypeEquals  TokenType = "Equals"
 	TypePlus    TokenType = "Plus"
+	TypeMinus   TokenType = "Minus"
+	TypeStar    TokenType = "Star"
+	TypeSlash   TokenType = "Slash"
 )
 
 type Keyword string
@@ -78,6 +81,12 @@ func (t Token) String() string {
 		return "Equals @ " + t.Location.String()
 	case TypePlus:
 		return "Plus @ " + t.Location.String()
+	case TypeMinus:
+		return "Minus @ " + t.Location.String()
+	case TypeStar:
+		return "Star @ " + t.Location.String()
+	case TypeSlash:
+		return "Slash @ " + t.Location.String()
 	default:
 		return "Unknown @ " + t.Location.String()
 	}
@@ -139,6 +148,21 @@ func (t *Tokenizer) next() (Token, error) {
 		return token, nil
 	}
 
+	// Define a map to translate single-character tokens to TokenType. This contains only
+	// tokens that can be mapped unambiguously (e.g., '=', '(', ')', but not '-', '/').
+	translate := map[byte]TokenType{
+		'=': TypeEquals,
+		'(': TypeLparen,
+		')': TypeRparen,
+		'{': TypeLbrace,
+		'}': TypeRbrace,
+		',': TypeComma,
+		':': TypeColon,
+		'@': TypeAt,
+		'+': TypePlus,
+		'*': TypeStar,
+	}
+
 	var buf []byte
 
 	for {
@@ -149,25 +173,12 @@ func (t *Tokenizer) next() (Token, error) {
 
 		start := t.Scan.Location()
 
+		if t, ok := translate[c]; ok {
+			// If we have a single-character token, return it immediately
+			return Token{Type: t, StringVal: string(c), Location: start}, nil
+		}
+
 		switch {
-		case c == '=':
-			return Token{Type: TypeEquals, StringVal: "=", Location: start}, nil
-		case c == '(':
-			return Token{Type: TypeLparen, StringVal: "(", Location: start}, nil
-		case c == ')':
-			return Token{Type: TypeRparen, StringVal: ")", Location: start}, nil
-		case c == '{':
-			return Token{Type: TypeLbrace, StringVal: "{", Location: start}, nil
-		case c == '}':
-			return Token{Type: TypeRbrace, StringVal: "}", Location: start}, nil
-		case c == ',':
-			return Token{Type: TypeComma, StringVal: ",", Location: start}, nil
-		case c == ':':
-			return Token{Type: TypeColon, StringVal: ":", Location: start}, nil
-		case c == '@':
-			return Token{Type: TypeAt, StringVal: "@", Location: start}, nil
-		case c == '+':
-			return Token{Type: TypePlus, StringVal: "+", Location: start}, nil
 		case c == '/':
 			c, err := t.Scan.Next()
 			if err != nil {
@@ -187,7 +198,7 @@ func (t *Tokenizer) next() (Token, error) {
 					}
 				}
 			default:
-				t.Scan.Unread(1)
+				return Token{Type: TypeSlash, StringVal: "/", Location: start}, nil
 			}
 		case c == '-':
 			c, err := t.Scan.Next()
@@ -206,7 +217,7 @@ func (t *Tokenizer) next() (Token, error) {
 
 				continue
 			default:
-				t.Scan.Unread(1)
+				return Token{Type: TypeMinus, StringVal: "-", Location: start}, nil
 			}
 		case isWhitespace(c):
 			continue
