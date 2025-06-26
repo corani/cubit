@@ -54,11 +54,6 @@ func (v *visitor) VisitTypeDef(td *ast.TypeDef) {}
 func (v *visitor) VisitDataDef(dd *ast.DataDef) {}
 
 func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
-	// Skip functions with the extern attribute
-	if _, ok := fd.Attributes[ast.AttrKeyExtern]; ok {
-		return
-	}
-
 	// Lower parameters using VisitFuncParam
 	var params []*Param
 
@@ -71,6 +66,14 @@ func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
 	}
 
 	irFunc := NewFuncDef(Ident(fd.Ident), params...)
+
+	if v, ok := fd.Attributes[ast.AttrKeyLinkname]; ok {
+		if v.Type() != ast.AttrStringType {
+			panic("link_name attribute must be a string")
+		}
+
+		irFunc.LinkName = Ident(string(v.(ast.AttrString)))
+	}
 
 	if fd.ReturnType != ast.TypeVoid {
 		irFunc = irFunc.WithRetTy(v.mapTypeToAbiTy(fd.ReturnType))
@@ -124,7 +127,17 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 
 func (v *visitor) VisitCall(c *ast.Call) {
 	// Lower the callee (function name)
-	calleeVal := NewValGlobal(Ident(c.Ident))
+	ident := Ident(c.Ident)
+
+	for _, fd := range v.unit.FuncDefs {
+		if fd.Ident == ident && fd.LinkName != "" {
+			// If the function has a link name, use that instead
+			ident = fd.LinkName
+			break
+		}
+	}
+
+	calleeVal := NewValGlobal(ident)
 
 	// Lower arguments
 	var args []Arg

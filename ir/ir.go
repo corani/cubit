@@ -347,11 +347,12 @@ const (
 )
 
 type FuncDef struct {
-	Linkage *Linkage
-	RetTy   *AbiTy
-	Ident   Ident
-	Params  []*Param
-	Blocks  []Block
+	Linkage  *Linkage
+	RetTy    *AbiTy
+	Ident    Ident
+	LinkName Ident
+	Params   []*Param
+	Blocks   []Block
 }
 
 func (fd *FuncDef) Accept(visitor Visitor) string {

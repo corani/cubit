@@ -22,6 +22,12 @@ func (v *SsaGen) VisitCompilationUnit(cu *ir.CompilationUnit) string {
 		sb.WriteString("\n")
 	}
 	for i := range cu.FuncDefs {
+		// TODO(daniel): Skip functions with the extern attribute. There's probably a better way
+		// to handle this, other than assuming that if a function has no blocks, it is extern.
+		if cu.FuncDefs[i].Blocks == nil {
+			continue
+		}
+
 		sb.WriteString(cu.FuncDefs[i].Accept(v))
 		sb.WriteString("\n")
 	}

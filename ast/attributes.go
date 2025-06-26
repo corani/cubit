@@ -2,6 +2,7 @@ package ast
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -9,26 +10,30 @@ import (
 type AttrKey string
 
 const (
-	AttrKeyExport  AttrKey = "export"
-	AttrKeyExtern  AttrKey = "extern"
-	AttrKeyPrivate AttrKey = "private"
-	AttrKeyPure    AttrKey = "pure"
+	AttrKeyExport   AttrKey = "export"
+	AttrKeyExtern   AttrKey = "extern"
+	AttrKeyPrivate  AttrKey = "private"
+	AttrKeyPure     AttrKey = "pure"
+	AttrKeyLinkname AttrKey = "link_name"
+	AttrKeyNoMangle AttrKey = "no_mangle"
 )
 
 // ParseAttrKey validates and returns an AttrKey or an error if invalid.
 func ParseAttrKey(s string) (AttrKey, error) {
-	switch s {
-	case string(AttrKeyExport):
-		return AttrKeyExport, nil
-	case string(AttrKeyExtern):
-		return AttrKeyExtern, nil
-	case string(AttrKeyPrivate):
-		return AttrKeyPrivate, nil
-	case string(AttrKeyPure):
-		return AttrKeyPure, nil
-	default:
-		return "", fmt.Errorf("invalid attribute key: %s", s)
+	attrs := []AttrKey{
+		AttrKeyExport,
+		AttrKeyExtern,
+		AttrKeyPrivate,
+		AttrKeyPure,
+		AttrKeyLinkname,
+		AttrKeyNoMangle,
 	}
+
+	if slices.Contains(attrs, AttrKey(s)) {
+		return AttrKey(s), nil
+	}
+
+	return "", fmt.Errorf("invalid attribute key: %s", s)
 }
 
 // AttrValue is a union type for attribute values (string or int).
