@@ -173,12 +173,153 @@ x := math.sqrt(2)
 y := utils.do_something()
 ```
 
+
 ```odin
 import utils
 import mylib/utils as mu
 
 x := utils.do_something()
 y := mu.do_something_else()
+```
+
+---
+
+## 11. If Statements
+
+Conditional statements don't require parenthesis, but do require braces. They support an optional short variable declarations in the condition.
+
+```odin
+if x != 0 {
+    // non-zero
+}
+
+if x := foo(); x == 0 {
+    // zero
+} else if x > 0 {
+    // positive
+} else {
+    // negative
+}
+```
+
+Notes:
+- The `if` statement may include an optional initializer before the condition, separated by a semicolon.
+- `else if` chains are supported for multiple branches.
+
+---
+
+
+## 12. Loops and Iterators
+
+The language supports several forms of the `for` loop:
+
+```odin
+for {
+    // infinite loop
+}
+
+for cond {
+    // loop with condition
+}
+
+for x in my_iterable {
+    // loop over iterable
+}
+```
+
+Use `break` to exit a loop early, and `continue` to skip to the next iteration.
+
+The `loop` context object is available inside all loop bodies, providing per-iteration state:
+  - `loop.index` (current index, 0-based)
+  - `loop.at_first` (true on first iteration)
+  - Note: `loop.at_last` and `loop.at_new` are only available in `for x in ...` loops, not in infinite or conditional loops.
+
+This approach keeps the loop header clean and avoids extra variables.
+
+Any type can be made iterable by providing an `iter()` method that returns an iterator object with a `next()` method.
+
+#### Example: Loop Context
+
+```odin
+for val in my_iterator {
+    if loop.at_first {
+        print("first iteration")
+    }
+
+    if loop.at_new(val.item) {
+        print("item changed")
+    }
+
+    print("at: %d", loop.index)
+
+    if loop.at_last {
+        print("last iteration")
+    }
+}
+```
+
+- The `loop` context object is available inside the loop body, providing per-iteration state:
+    - `loop.index` (current index, 0-based)
+    - `loop.at_first` (true on first iteration)
+    - `loop.at_last` (true on last iteration)
+    - `loop.at_new(field)` (true if the given field changed compared to the previous iteration)
+- This approach keeps the loop header clean and avoids extra variables.
+- Any type can be made iterable by providing an `iter()` method that returns an iterator object.
+
+### Iterator Protocol with Enum State
+
+To support features like `at_last` without lookahead, the iterator protocol uses a generic enum to indicate the state and carry the value:
+
+```odin
+IteratorResult :: enum($T) {
+    Item(T),   // regular item, more may follow
+    Last(T),   // this is the last item
+    Done,      // no more items
+}
+
+next :: func(self: ^Iterator) -> IteratorResult(T)
+```
+
+The loop machinery uses this enum to set `loop.at_last` and related fields, so users do not need to match on the enum directly in typical code.
+
+### Example: Range Iterator
+
+```odin
+Range :: struct {
+    start: int,
+    end: int,
+    curr: int,
+}
+
+Range.iter :: func(self: Range) -> RangeIterator {
+    return RangeIterator(self.start, self.end, self.start)
+}
+
+RangeIterator :: struct {
+    start: int,
+    end: int,
+    curr: int,
+}
+
+RangeIterator.next :: func(self: ^RangeIterator) -> IteratorResult(int) {
+    if self.curr < self.end - 1 {
+        val := self.curr
+        self.curr += 1
+
+        return IteratorResult.Item(val)
+    } else if self.curr == self.end - 1 {
+        val := self.curr
+        self.curr += 1
+
+        return IteratorResult.Last(val)
+    }
+
+    return IteratorResult.Done
+}
+
+range :: func(start: int, end: int) -> Range {
+    return Range(start, end, start)
+}
 ```
 
 ---
