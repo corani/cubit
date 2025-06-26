@@ -3,46 +3,87 @@ package lexer
 import (
 	"errors"
 	"io"
+	"slices"
 	"strconv"
 )
 
 type TokenType string
 
 const (
-	TypeEOF     TokenType = "EOF"
-	TypeIdent   TokenType = "Identifier"
-	TypeKeyword TokenType = "Keyword"
-	TypeNumber  TokenType = "Number"
-	TypeBool    TokenType = "Bool"
-	TypeString  TokenType = "String"
-	TypeLparen  TokenType = "LeftParen"
-	TypeRparen  TokenType = "RightParen"
-	TypeLbrace  TokenType = "LeftBrace"
-	TypeRbrace  TokenType = "RightBrace"
-	TypeComma   TokenType = "Comma"
-	TypeArrow   TokenType = "Arrow"
-	TypeColon   TokenType = "Colon"
-	TypeAt      TokenType = "At"
-	TypeAssign  TokenType = "Assign"
-	TypePlus    TokenType = "Plus"
-	TypeMinus   TokenType = "Minus"
-	TypeStar    TokenType = "Star"
-	TypeSlash   TokenType = "Slash"
-	TypeEq      TokenType = "Eq"
+	TypeEOF      TokenType = "EOF"
+	TypeIdent    TokenType = "Identifier"
+	TypeKeyword  TokenType = "Keyword"
+	TypeNumber   TokenType = "Number"
+	TypeBool     TokenType = "Bool"
+	TypeString   TokenType = "String"
+	TypeLparen   TokenType = "LeftParen"
+	TypeRparen   TokenType = "RightParen"
+	TypeLbrace   TokenType = "LeftBrace"
+	TypeRbrace   TokenType = "RightBrace"
+	TypeLBracket TokenType = "LeftBracket"
+	TypeRBracket TokenType = "RightBracket"
+	TypeDot      TokenType = "Dot"
+	TypeComma    TokenType = "Comma"
+	TypeArrow    TokenType = "Arrow"
+	TypeColon    TokenType = "Colon"
+	TypeAt       TokenType = "At"
+	TypeAssign   TokenType = "Assign"
+	TypePlus     TokenType = "Plus"
+	TypeMinus    TokenType = "Minus"
+	TypeStar     TokenType = "Star"
+	TypeSlash    TokenType = "Slash"
+	TypeEq       TokenType = "Eq"
+	TypeDollar   TokenType = "Dollar"
+	TypeCaret    TokenType = "Caret"
 )
 
 type Keyword string
 
 const (
-	KeywordFunc    Keyword = "func"
-	KeywordReturn  Keyword = "return"
-	KeywordInt     Keyword = "int"
-	KeywordString  Keyword = "string"
-	KeywordVoid    Keyword = "void"
-	KeywordPackage Keyword = "package"
-	KeywordFalse   Keyword = "false"
-	KeywordTrue    Keyword = "true"
+	KeywordFunc     Keyword = "func"
+	KeywordReturn   Keyword = "return"
+	KeywordInt      Keyword = "int"
+	KeywordString   Keyword = "string"
+	KeywordVoid     Keyword = "void"
+	KeywordPackage  Keyword = "package"
+	KeywordFalse    Keyword = "false"
+	KeywordTrue     Keyword = "true"
+	KeywordFor      Keyword = "for"
+	KeywordIf       Keyword = "if"
+	KeywordElse     Keyword = "else"
+	KeywordBreak    Keyword = "break"
+	KeywordContinue Keyword = "continue"
+	KeywordIn       Keyword = "in"
+	KeywordStruct   Keyword = "struct"
+	KeywordEnum     Keyword = "enum"
+	KeywordImport   Keyword = "import"
+	KeywordSwitch   Keyword = "switch"
+	KeywordCase     Keyword = "case"
+	KeywordDefault  Keyword = "default"
 )
+
+var keywords = []Keyword{
+	KeywordFunc,
+	KeywordReturn,
+	KeywordInt,
+	KeywordString,
+	KeywordVoid,
+	KeywordPackage,
+	KeywordFalse,
+	KeywordTrue,
+	KeywordFor,
+	KeywordIf,
+	KeywordElse,
+	KeywordBreak,
+	KeywordContinue,
+	KeywordIn,
+	KeywordStruct,
+	KeywordEnum,
+	KeywordImport,
+	KeywordSwitch,
+	KeywordCase,
+	KeywordDefault,
+}
 
 type Token struct {
 	Type       TokenType
@@ -75,6 +116,12 @@ func (t Token) String() string {
 		return "LeftBrace @ " + t.Location.String()
 	case TypeRbrace:
 		return "RightBrace @ " + t.Location.String()
+	case TypeLBracket:
+		return "LeftBracket @ " + t.Location.String()
+	case TypeRBracket:
+		return "RightBracket @ " + t.Location.String()
+	case TypeDot:
+		return "Dot @ " + t.Location.String()
 	case TypeComma:
 		return "Comma @ " + t.Location.String()
 	case TypeArrow:
@@ -95,32 +142,21 @@ func (t Token) String() string {
 		return "Slash @ " + t.Location.String()
 	case TypeEq:
 		return "Eq @ " + t.Location.String()
+	case TypeDollar:
+		return "Dollar @ " + t.Location.String()
+	case TypeCaret:
+		return "Caret @ " + t.Location.String()
 	default:
 		return "Unknown @ " + t.Location.String()
 	}
 }
 
 func checkKeyword(ident string) (Keyword, bool) {
-	switch ident {
-	case "func":
-		return KeywordFunc, true
-	case "return":
-		return KeywordReturn, true
-	case "int":
-		return KeywordInt, true
-	case "string":
-		return KeywordString, true
-	case "void":
-		return KeywordVoid, true
-	case "package":
-		return KeywordPackage, true
-	case "false":
-		return KeywordFalse, true
-	case "true":
-		return KeywordTrue, true
-	default:
-		return "", false
+	if slices.Contains(keywords, Keyword(ident)) {
+		return Keyword(ident), true
 	}
+
+	return "", false
 }
 
 type Tokenizer struct {
@@ -167,11 +203,16 @@ func (t *Tokenizer) next() (Token, error) {
 		')': TypeRparen,
 		'{': TypeLbrace,
 		'}': TypeRbrace,
+		'[': TypeLBracket,
+		']': TypeRBracket,
+		'.': TypeDot,
 		',': TypeComma,
 		':': TypeColon,
 		'@': TypeAt,
 		'+': TypePlus,
 		'*': TypeStar,
+		'$': TypeDollar,
+		'^': TypeCaret,
 	}
 
 	var buf []byte
