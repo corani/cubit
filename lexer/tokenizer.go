@@ -10,31 +10,32 @@ import (
 type TokenType string
 
 const (
-	TypeEOF      TokenType = "EOF"
-	TypeIdent    TokenType = "Identifier"
-	TypeKeyword  TokenType = "Keyword"
-	TypeNumber   TokenType = "Number"
-	TypeBool     TokenType = "Bool"
-	TypeString   TokenType = "String"
-	TypeLparen   TokenType = "LeftParen"
-	TypeRparen   TokenType = "RightParen"
-	TypeLbrace   TokenType = "LeftBrace"
-	TypeRbrace   TokenType = "RightBrace"
-	TypeLBracket TokenType = "LeftBracket"
-	TypeRBracket TokenType = "RightBracket"
-	TypeDot      TokenType = "Dot"
-	TypeComma    TokenType = "Comma"
-	TypeArrow    TokenType = "Arrow"
-	TypeColon    TokenType = "Colon"
-	TypeAt       TokenType = "At"
-	TypeAssign   TokenType = "Assign"
-	TypePlus     TokenType = "Plus"
-	TypeMinus    TokenType = "Minus"
-	TypeStar     TokenType = "Star"
-	TypeSlash    TokenType = "Slash"
-	TypeEq       TokenType = "Eq"
-	TypeDollar   TokenType = "Dollar"
-	TypeCaret    TokenType = "Caret"
+	TypeEOF       TokenType = "EOF"
+	TypeIdent     TokenType = "Identifier"
+	TypeKeyword   TokenType = "Keyword"
+	TypeNumber    TokenType = "Number"
+	TypeBool      TokenType = "Bool"
+	TypeString    TokenType = "String"
+	TypeLparen    TokenType = "LeftParen"
+	TypeRparen    TokenType = "RightParen"
+	TypeLbrace    TokenType = "LeftBrace"
+	TypeRbrace    TokenType = "RightBrace"
+	TypeLBracket  TokenType = "LeftBracket"
+	TypeRBracket  TokenType = "RightBracket"
+	TypeDot       TokenType = "Dot"
+	TypeComma     TokenType = "Comma"
+	TypeArrow     TokenType = "Arrow"
+	TypeColon     TokenType = "Colon"
+	TypeSemicolon TokenType = "Semicolon"
+	TypeAt        TokenType = "At"
+	TypeAssign    TokenType = "Assign"
+	TypePlus      TokenType = "Plus"
+	TypeMinus     TokenType = "Minus"
+	TypeStar      TokenType = "Star"
+	TypeSlash     TokenType = "Slash"
+	TypeEq        TokenType = "Eq"
+	TypeDollar    TokenType = "Dollar"
+	TypeCaret     TokenType = "Caret"
 )
 
 type Keyword string
@@ -128,6 +129,8 @@ func (t Token) String() string {
 		return "Arrow @ " + t.Location.String()
 	case TypeColon:
 		return "Colon @ " + t.Location.String()
+	case TypeSemicolon:
+		return "Semicolon @ " + t.Location.String()
 	case TypeAt:
 		return "At @ " + t.Location.String()
 	case TypeAssign:
@@ -208,6 +211,7 @@ func (t *Tokenizer) next() (Token, error) {
 		'.': TypeDot,
 		',': TypeComma,
 		':': TypeColon,
+		';': TypeSemicolon,
 		'@': TypeAt,
 		'+': TypePlus,
 		'*': TypeStar,

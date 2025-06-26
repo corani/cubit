@@ -1,4 +1,3 @@
-// nextIdent generates a unique identifier with the given prefix (e.g., "tmp" or "str").
 package ir
 
 import (
@@ -125,6 +124,22 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 	v.lastInstructions = append(v.lastInstructions, binopInstr)
 }
 
+func (v *visitor) VisitSet(s *ast.Set) {
+	// Lower the right-hand side expression
+	v.lastVal = nil
+	s.Value.Accept(v)
+	val := v.lastVal
+
+	// Left-hand side variable
+	lhsIdent := Ident(s.Ident)
+	lhsVal := NewValIdent(lhsIdent)
+
+	// For assignment, use Binop with add as a stand-in for move
+	zero := NewValInteger(0)
+	binopInstr := NewBinop(BinOpAdd, lhsVal, val, zero)
+	v.lastInstructions = append(v.lastInstructions, binopInstr)
+}
+
 func (v *visitor) VisitCall(c *ast.Call) {
 	// Lower the callee (function name)
 	ident := Ident(c.Ident)
@@ -226,6 +241,19 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 
 	v.lastInstructions = append(v.lastInstructions, NewBinop(irOp, result, left, right))
 	v.lastVal = result
+}
+
+func (v *visitor) VisitIf(iff *ast.If) {
+	// TODO(daniel): Implement lowering for If statements.
+	// Shape of an If statement when lowered:
+	// 		%tmp = <cond>
+	// 		jnz %tmp, @true, @false
+	// @true:
+	// 		<then block instructions>
+	// 		jmp @end
+	// @false:
+	// 		<else block instructions>
+	// @end:
 }
 
 func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {

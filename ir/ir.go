@@ -9,6 +9,8 @@ type Visitor interface {
 	VisitRet(*Ret) string
 	VisitCall(*Call) string
 	VisitBinop(*Binop) string
+	VisitJmp(*Jmp) string
+	VisitJnz(*Jnz) string
 }
 
 type CompilationUnit struct {
@@ -552,3 +554,33 @@ const (
 	ArgEnv      ArgType = "env"
 	ArgVariadic ArgType = "variadic"
 )
+
+type Jmp struct {
+	Label string
+}
+
+func NewJmp(label string) *Jmp {
+	return &Jmp{Label: label}
+}
+
+func (j *Jmp) isInstruction() {}
+
+func (j *Jmp) Accept(visitor Visitor) string {
+	return visitor.VisitJmp(j)
+}
+
+type Jnz struct {
+	Cond  *Val
+	True  string
+	False string
+}
+
+func NewJnz(cond *Val, trueLabel, falseLabel string) *Jnz {
+	return &Jnz{Cond: cond, True: trueLabel, False: falseLabel}
+}
+
+func (j *Jnz) isInstruction() {}
+
+func (j *Jnz) Accept(visitor Visitor) string {
+	return visitor.VisitJnz(j)
+}

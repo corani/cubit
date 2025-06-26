@@ -312,3 +312,15 @@ func (v *SsaGen) VisitArg(a ir.Arg) string {
 		panic("unknown argument type: " + string(a.Type))
 	}
 }
+
+func (v *SsaGen) VisitJmp(j *ir.Jmp) string {
+	if j.Label == "" {
+		return "jmp"
+	}
+
+	return fmt.Sprintf("jmp @%s", j.Label)
+}
+
+func (v *SsaGen) VisitJnz(j *ir.Jnz) string {
+	return fmt.Sprintf("jnz %s, @%s, @%s", v.VisitVal(j.Cond), j.True, j.False)
+}

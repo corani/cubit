@@ -87,6 +87,20 @@ func (b *Body) String() string {
 	return "\n\t\t" + strings.Join(instructions, "\n\t\t")
 }
 
+func (iff *If) String() string {
+	var initStr string
+	if iff.Init != nil {
+		initStr = " " + iff.Init.String()
+	}
+
+	var elseBranch string
+	if iff.Else != nil {
+		elseBranch = " " + iff.Else.String()
+	}
+
+	return fmt.Sprintf("(if (init%s) %s (then %s) (else%s))", initStr, iff.Cond, iff.Then, elseBranch)
+}
+
 func (c *Call) String() string {
 	var args []string
 
@@ -107,6 +121,10 @@ func (a Arg) String() string {
 
 func (a *Assign) String() string {
 	return fmt.Sprintf("(assign %s %s %s)", a.Ident, a.Type, a.Value)
+}
+
+func (s *Set) String() string {
+	return fmt.Sprintf("(set %q %s %s)", s.Ident, s.Type, s.Value)
 }
 
 func (r *Return) String() string {

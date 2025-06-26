@@ -2,12 +2,16 @@
 package main
 
 // Declare an external function
-@(extern)
-printf :: func(msg: string, arg: int)
+@(extern, link_name="printf")
+print :: func(msg: string, arg: int)
 
-// Define a function that calls printf
+// Define a function that calls print
 hello :: func(arg: int) {
-  printf("Hello from compiler-%d!\n", arg)
+  if x := 1; arg == 32 {
+    arg = arg + x
+  }
+
+  print("Hello from compiler-%d!\n", arg)
 }
 
 @(pure)
@@ -21,8 +25,9 @@ main :: func() -> int {
   // Type of count is inferred as int
   count := sum(11, 12)
 
-  hello(count + 10)
+  hello(count + 9)
 
   // Return 0 to indicate success
   return 0
 }
+

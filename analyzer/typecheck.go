@@ -154,6 +154,38 @@ func (tc *TypeChecker) VisitAssign(assign *ast.Assign) {
 	tc.lastType = assign.Type
 }
 
+func (tc *TypeChecker) VisitSet(set *ast.Set) {
+	// Look up the variable in the current scope
+	sym, ok := tc.lookupSymbol(set.Ident)
+	if !ok {
+		tc.errorf("undefined variable '%s'", set.Ident)
+
+		set.Type = ast.TypeUnknown
+		tc.lastType = ast.TypeUnknown
+
+		return
+	} else if sym.IsFunc {
+		tc.errorf("cannot assign to function '%s'", set.Ident)
+
+		set.Type = ast.TypeUnknown
+		tc.lastType = ast.TypeUnknown
+
+		return
+	}
+
+	// Type check the value being assigned
+	valueType := tc.visitNode(set.Value)
+
+	// If the variable has a declared type, check it matches the value
+	if sym.Type != valueType {
+		tc.errorf("type error: variable '%s' declared as %s but assigned %s",
+			set.Ident, sym.Type, valueType)
+	}
+
+	set.Type = valueType // Set the type of the set operation
+	tc.lastType = set.Type
+}
+
 func (tc *TypeChecker) VisitCall(call *ast.Call) {
 	// Look up the function definition
 	sym, ok := tc.lookupSymbol(call.Ident)
@@ -240,6 +272,33 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 	}
 
 	tc.lastType = binop.Type
+}
+
+func (tc *TypeChecker) VisitIf(iff *ast.If) {
+	// If statements introduce a new scope for variables (e.g. initializer)
+	tc.pushScope()
+
+	// Type check the initializer, if present
+	if iff.Init != nil {
+		iff.Init.Accept(tc)
+	}
+
+	// Type check the condition
+	condType := tc.visitNode(iff.Cond)
+	if condType != ast.TypeBool {
+		tc.errorf("if condition must be bool, got %s", condType)
+	}
+
+	// Type check the 'then' branch
+	iff.Then.Accept(tc)
+
+	// Type check the 'else' branch, if present
+	if iff.Else != nil {
+		iff.Else.Accept(tc)
+	}
+
+	tc.popScope()
+	tc.lastType = ast.TypeVoid // if is a statement, not an expression
 }
 
 // visitNode is a helper method to visit a node and return the lastType.

@@ -12,10 +12,12 @@ type Visitor interface {
 	VisitBody(*Body)
 	VisitCall(*Call)
 	VisitAssign(*Assign)
+	VisitSet(*Set)
 	VisitReturn(*Return)
 	VisitLiteral(*Literal)
 	VisitBinop(*Binop)
 	VisitVariableRef(*VariableRef)
+	VisitIf(*If)
 }
 
 // TypeKind represents the basic types in the language for type checking.
@@ -115,6 +117,8 @@ func (b *Body) Accept(v Visitor) {
 	v.VisitBody(b)
 }
 
+func (*Body) isInstruction() {}
+
 type Instruction interface {
 	isInstruction()
 	String() string
@@ -124,8 +128,38 @@ type Instruction interface {
 var _ []Instruction = []Instruction{
 	(*Call)(nil),
 	(*Assign)(nil),
+	(*Set)(nil),
 	(*Return)(nil),
+	(*If)(nil),
+	(*Body)(nil),
 }
+
+// Set represents assignment to an existing variable (e.g., x = 1)
+type Set struct {
+	Ident string
+	Type  TypeKind // type of the variable being set
+	Value Expression
+}
+
+func (s *Set) Accept(v Visitor) {
+	v.VisitSet(s)
+}
+
+func (*Set) isInstruction() {}
+
+// If represents an if/else if/else statement.
+type If struct {
+	Init *Assign     // optional initializer (assignment); can be nil
+	Cond Expression  // condition expression
+	Then *Body       // body for the 'if' branch
+	Else Instruction // *If, *Body, or nil
+}
+
+func (iff *If) Accept(v Visitor) {
+	v.VisitIf(iff)
+}
+
+func (*If) isInstruction() {}
 
 type Call struct {
 	Ident string   // function name
