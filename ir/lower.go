@@ -225,21 +225,22 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 	// Create a new temporary for the result
 	result := NewValIdent(v.nextIdent("tmp"))
 
-	// Map ast.BinOpKind to ir.BinOpKind
-	var irOp BinOpKind
+	// Map ast.BinOpKind to ir.BinOpKind using a map for maintainability
+	binOpMap := map[ast.BinOpKind]BinOpKind{
+		ast.BinOpAdd: BinOpAdd,
+		ast.BinOpSub: BinOpSub,
+		ast.BinOpMul: BinOpMul,
+		ast.BinOpDiv: BinOpDiv,
+		ast.BinOpEq:  BinOpEq,
+		ast.BinOpNe:  BinOpNe,
+		ast.BinOpLt:  BinOpLt,
+		ast.BinOpLe:  BinOpLe,
+		ast.BinOpGt:  BinOpGt,
+		ast.BinOpGe:  BinOpGe,
+	}
 
-	switch b.Operation {
-	case ast.BinOpAdd:
-		irOp = BinOpAdd
-	case ast.BinOpSub:
-		irOp = BinOpSub
-	case ast.BinOpMul:
-		irOp = BinOpMul
-	case ast.BinOpDiv:
-		irOp = BinOpDiv
-	case ast.BinOpEq:
-		irOp = BinOpEq
-	default:
+	irOp, ok := binOpMap[b.Operation]
+	if !ok {
 		panic("unsupported binary operation: " + b.Operation)
 	}
 

@@ -34,6 +34,11 @@ const (
 	TypeStar      TokenType = "Star"
 	TypeSlash     TokenType = "Slash"
 	TypeEq        TokenType = "Eq"
+	TypeNe        TokenType = "Ne"
+	TypeLt        TokenType = "Lt"
+	TypeLe        TokenType = "Le"
+	TypeGt        TokenType = "Gt"
+	TypeGe        TokenType = "Ge"
 	TypeDollar    TokenType = "Dollar"
 	TypeCaret     TokenType = "Caret"
 )
@@ -145,6 +150,16 @@ func (t Token) String() string {
 		return "Slash @ " + t.Location.String()
 	case TypeEq:
 		return "Eq @ " + t.Location.String()
+	case TypeNe:
+		return "Ne @ " + t.Location.String()
+	case TypeLt:
+		return "Lt @ " + t.Location.String()
+	case TypeLe:
+		return "Le @ " + t.Location.String()
+	case TypeGt:
+		return "Gt @ " + t.Location.String()
+	case TypeGe:
+		return "Ge @ " + t.Location.String()
 	case TypeDollar:
 		return "Dollar @ " + t.Location.String()
 	case TypeCaret:
@@ -250,6 +265,37 @@ func (t *Tokenizer) next() (Token, error) {
 
 				return Token{Type: TypeAssign, StringVal: "=", Location: start}, nil
 			}
+		case c == '!':
+			c, err := t.Scan.Next()
+			if err != nil {
+				return Token{}, err
+			}
+			if c == '=' {
+				return Token{Type: TypeNe, StringVal: "!=", Location: start}, nil
+			}
+			t.Scan.Unread(1)
+			// Could add support for '!' as a single token if needed
+			return Token{}, errors.New("unexpected '!' without '='")
+		case c == '<':
+			c, err := t.Scan.Next()
+			if err != nil {
+				return Token{}, err
+			}
+			if c == '=' {
+				return Token{Type: TypeLe, StringVal: "<=", Location: start}, nil
+			}
+			t.Scan.Unread(1)
+			return Token{Type: TypeLt, StringVal: "<", Location: start}, nil
+		case c == '>':
+			c, err := t.Scan.Next()
+			if err != nil {
+				return Token{}, err
+			}
+			if c == '=' {
+				return Token{Type: TypeGe, StringVal: ">=", Location: start}, nil
+			}
+			t.Scan.Unread(1)
+			return Token{Type: TypeGt, StringVal: ">", Location: start}, nil
 		case c == '/':
 			c, err := t.Scan.Next()
 			if err != nil {

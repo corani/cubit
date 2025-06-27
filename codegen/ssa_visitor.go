@@ -268,22 +268,23 @@ func (v *SsaGen) VisitCall(c *ir.Call) string {
 }
 
 func (v *SsaGen) VisitBinop(b *ir.Binop) string {
-	var op string
+	// TODO(daniel): handle different types than 'word', handle signed/unsigned.
+	// Map ir.BinOpKind to SSA op string
+	opMap := map[ir.BinOpKind]string{
+		ir.BinOpAdd: "add",
+		ir.BinOpSub: "sub",
+		ir.BinOpMul: "mul",
+		ir.BinOpDiv: "div",
+		ir.BinOpEq:  "ceqw",
+		ir.BinOpNe:  "cnew",
+		ir.BinOpLt:  "csltw",
+		ir.BinOpLe:  "cslew",
+		ir.BinOpGt:  "csgtw",
+		ir.BinOpGe:  "csgew",
+	}
 
-	// TODO(daniel): Generate correct instructions based on the types.
-	switch b.Op {
-	case ir.BinOpAdd:
-		op = "add"
-	case ir.BinOpSub:
-		op = "sub"
-	case ir.BinOpMul:
-		op = "mul"
-	case ir.BinOpDiv:
-		op = "div"
-	case ir.BinOpEq:
-		// For now always assume type w (word)
-		op = "ceqw"
-	default:
+	op, ok := opMap[b.Op]
+	if !ok {
 		panic("unknown binop: " + string(b.Op))
 	}
 

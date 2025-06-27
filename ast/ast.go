@@ -306,6 +306,11 @@ const (
 	BinOpMul BinOpKind = "*"
 	BinOpDiv BinOpKind = "/"
 	BinOpEq  BinOpKind = "=="
+	BinOpNe  BinOpKind = "!="
+	BinOpLt  BinOpKind = "<"
+	BinOpLe  BinOpKind = "<="
+	BinOpGt  BinOpKind = ">"
+	BinOpGe  BinOpKind = ">="
 )
 
 type Binop struct {

@@ -525,6 +525,11 @@ const (
 	BinOpMul BinOpKind = "mul"
 	BinOpDiv BinOpKind = "div"
 	BinOpEq  BinOpKind = "eq"
+	BinOpNe  BinOpKind = "ne"
+	BinOpLt  BinOpKind = "lt"
+	BinOpLe  BinOpKind = "le"
+	BinOpGt  BinOpKind = "gt"
+	BinOpGe  BinOpKind = "ge"
 )
 
 // Binop represents an SSA binary operation instruction (add, sub, etc).

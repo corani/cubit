@@ -514,6 +514,11 @@ var opPrecedence = map[lexer.TokenType]opInfo{
 	lexer.TypeStar:  {precedence: 20, rightAssoc: false, kind: ast.BinOpMul},
 	lexer.TypeSlash: {precedence: 20, rightAssoc: false, kind: ast.BinOpDiv},
 	lexer.TypeEq:    {precedence: 5, rightAssoc: false, kind: ast.BinOpEq},
+	lexer.TypeNe:    {precedence: 5, rightAssoc: false, kind: ast.BinOpNe},
+	lexer.TypeLt:    {precedence: 7, rightAssoc: false, kind: ast.BinOpLt},
+	lexer.TypeLe:    {precedence: 7, rightAssoc: false, kind: ast.BinOpLe},
+	lexer.TypeGt:    {precedence: 7, rightAssoc: false, kind: ast.BinOpGt},
+	lexer.TypeGe:    {precedence: 7, rightAssoc: false, kind: ast.BinOpGe},
 }
 
 func (p *Parser) parseExpression(optional bool) (ast.Expression, error) {
@@ -534,6 +539,11 @@ func (p *Parser) parseExpressionPratt(optional bool, minPrec int) (ast.Expressio
 			lexer.TypeStar,
 			lexer.TypeSlash,
 			lexer.TypeEq,
+			lexer.TypeNe,
+			lexer.TypeLt,
+			lexer.TypeLe,
+			lexer.TypeGt,
+			lexer.TypeGe,
 		)
 		if err != nil {
 			// If we hit EOF or a non-operator, just return lhs
