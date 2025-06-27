@@ -45,7 +45,7 @@ func main() {
 		return
 	}
 
-	srcFile := "example.in"
+	srcFile := "examples/example.in"
 	if flag.NArg() > 0 {
 		srcFile = flag.Arg(0)
 	}
