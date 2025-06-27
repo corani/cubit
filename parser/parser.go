@@ -13,22 +13,24 @@ import (
 )
 
 type Parser struct {
-	tok        []lexer.Token
-	index      int
-	unit       *ast.CompilationUnit
-	attributes ast.Attributes
-	localID    int
+	tok            []lexer.Token
+	index          int
+	unit           *ast.CompilationUnit
+	attributes     ast.Attributes
+	localID        int
+	currentRetType lexer.Keyword
 }
 
 func New(tok []lexer.Token) *Parser {
 	// TODO(daniel): instead of accepting all tokens, maybe we should accept a
 	// lexer and pull in the tokens on demand.
 	return &Parser{
-		tok:        tok,
-		index:      0,
-		unit:       ast.NewCompilationUnit(),
-		attributes: ast.Attributes{},
-		localID:    0,
+		tok:            tok,
+		index:          0,
+		unit:           ast.NewCompilationUnit(),
+		attributes:     ast.Attributes{},
+		localID:        0,
+		currentRetType: lexer.KeywordVoid,
 	}
 }
 
@@ -198,6 +200,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 		return fmt.Errorf("error parsing return type at %s: %w", name.Location, err)
 	}
 
+	p.currentRetType = retType.Keyword
 	def.ReturnType = p.mapKeywordToType(retType.Keyword)
 
 	// If the function is not `extern`, we expect a body.
@@ -207,7 +210,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			return err
 		}
 
-		instructions, err := p.parseBlock(lbrace, *retType)
+		instructions, err := p.parseBlock(lbrace)
 		if err != nil {
 			return err
 		}
@@ -334,7 +337,7 @@ func (p *Parser) parseFuncReturnType() (*lexer.Token, error) {
 	return &retType, nil
 }
 
-func (p *Parser) parseBlock(start, retType lexer.Token) ([]ast.Instruction, error) {
+func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 	if start.Type != lexer.TypeLbrace {
 		return nil, fmt.Errorf("expected { at %s, got %s",
 			start.Location, start.StringVal)
@@ -355,7 +358,7 @@ func (p *Parser) parseBlock(start, retType lexer.Token) ([]ast.Instruction, erro
 		case lexer.TypeKeyword:
 			switch first.Keyword {
 			case lexer.KeywordReturn:
-				if retType.Keyword == lexer.KeywordVoid {
+				if p.currentRetType == lexer.KeywordVoid {
 					instructions = append(instructions, ast.NewReturn())
 				} else {
 					expr, err := p.parseExpression(false)
@@ -774,7 +777,7 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 		return nil, err
 	}
 
-	thenInstrs, err := p.parseBlock(lbrace, lexer.Token{Keyword: lexer.KeywordVoid})
+	thenInstrs, err := p.parseBlock(lbrace)
 	if err != nil {
 		return nil, err
 	}
@@ -789,7 +792,11 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 	elseInstr := ast.Instruction(nil)
 
 	nextElse, err := p.peekType(lexer.TypeKeyword)
-	if err == nil && nextElse.Keyword == lexer.KeywordElse {
+	if err != nil {
+		return nil, err
+	}
+
+	if nextElse.Keyword == lexer.KeywordElse {
 		afterElse, err := p.peekType(lexer.TypeKeyword, lexer.TypeLbrace)
 		if err != nil {
 			return nil, err
@@ -803,7 +810,7 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 			}
 		} else if afterElse.Type == lexer.TypeLbrace {
 			// else: parse block
-			elseInstrs, err := p.parseBlock(lbrace, lexer.Token{Keyword: lexer.KeywordVoid})
+			elseInstrs, err := p.parseBlock(lbrace)
 			if err != nil {
 				return nil, err
 			}
@@ -816,6 +823,9 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 		} else {
 			return nil, fmt.Errorf("expected 'if' or '{' after 'else'")
 		}
+	} else {
+		// Rollback whatever other keyword we got
+		p.index--
 	}
 
 	return &ast.If{
@@ -839,7 +849,7 @@ func (p *Parser) parseFor() (ast.Instruction, error) {
 		return nil, err
 	}
 
-	bodyInstrs, err := p.parseBlock(lbrace, lexer.Token{Keyword: lexer.KeywordVoid})
+	bodyInstrs, err := p.parseBlock(lbrace)
 	if err != nil {
 		return nil, err
 	}

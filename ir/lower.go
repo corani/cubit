@@ -125,7 +125,7 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 	// For assignment, use Binop with add as a stand-in for move
 	zero := NewValInteger(0)
 	binopInstr := NewBinop(BinOpAdd, lhsVal, val, zero)
-	v.lastInstructions = append(v.lastInstructions, binopInstr)
+	v.appendInstruction(binopInstr)
 }
 
 func (v *visitor) VisitSet(s *ast.Set) {
@@ -141,7 +141,7 @@ func (v *visitor) VisitSet(s *ast.Set) {
 	// For assignment, use Binop with add as a stand-in for move
 	zero := NewValInteger(0)
 	binopInstr := NewBinop(BinOpAdd, lhsVal, val, zero)
-	v.lastInstructions = append(v.lastInstructions, binopInstr)
+	v.appendInstruction(binopInstr)
 }
 
 func (v *visitor) VisitCall(c *ast.Call) {
@@ -177,19 +177,19 @@ func (v *visitor) VisitCall(c *ast.Call) {
 		call.WithRet(retVal.Ident, v.mapTypeToAbiTy(c.Type))
 	}
 
-	v.lastInstructions = append(v.lastInstructions, call)
+	v.appendInstruction(call)
 	v.lastVal = retVal
 }
 
 func (v *visitor) VisitReturn(r *ast.Return) {
 	if r.Value == nil {
-		v.lastInstructions = append(v.lastInstructions, NewRet())
+		v.appendInstruction(NewRet())
 	} else {
 		v.lastVal = nil
 		r.Value.Accept(v)
 		val := v.lastVal
 
-		v.lastInstructions = append(v.lastInstructions, NewRet(val))
+		v.appendInstruction(NewRet(val))
 	}
 }
 
@@ -244,7 +244,7 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 		panic("unsupported binary operation: " + b.Operation)
 	}
 
-	v.lastInstructions = append(v.lastInstructions, NewBinop(irOp, result, left, right))
+	v.appendInstruction(NewBinop(irOp, result, left, right))
 	v.lastVal = result
 }
 
@@ -270,21 +270,21 @@ func (v *visitor) VisitIf(iff *ast.If) {
 	// Lower the condition
 	iff.Cond.Accept(v)
 	condVal := v.lastVal
-	v.lastInstructions = append(v.lastInstructions, NewJnz(condVal, trueLabel, falseLabel))
+	v.appendInstruction(NewJnz(condVal, trueLabel, falseLabel))
 
 	// Lower the 'then' block
-	v.lastInstructions = append(v.lastInstructions, NewLabel(trueLabel))
+	v.appendInstruction(NewLabel(trueLabel))
 	iff.Then.Accept(v)
-	v.lastInstructions = append(v.lastInstructions, NewJmp(endLabel))
+	v.appendInstruction(NewJmp(endLabel))
 
 	// Lower the 'else' block if present
-	v.lastInstructions = append(v.lastInstructions, NewLabel(falseLabel))
+	v.appendInstruction(NewLabel(falseLabel))
 	if iff.Else != nil {
 		iff.Else.Accept(v)
 	}
 
 	// End label for the If statement
-	v.lastInstructions = append(v.lastInstructions, NewLabel(endLabel))
+	v.appendInstruction(NewLabel(endLabel))
 }
 
 func (v *visitor) VisitFor(f *ast.For) {
@@ -301,25 +301,45 @@ func (v *visitor) VisitFor(f *ast.For) {
 	bodyLabel := v.nextLabel("body")
 	endLabel := v.nextLabel("end")
 
-	v.lastInstructions = append(v.lastInstructions, NewLabel(startLabel))
+	v.appendInstruction(NewLabel(startLabel))
 
 	// Lower the condition
 	f.Cond.Accept(v)
 	condVal := v.lastVal
-	v.lastInstructions = append(v.lastInstructions, NewJnz(condVal, bodyLabel, endLabel))
+	v.appendInstruction(NewJnz(condVal, bodyLabel, endLabel))
 
 	// Lower the loop body
-	v.lastInstructions = append(v.lastInstructions, NewLabel(bodyLabel))
+	v.appendInstruction(NewLabel(bodyLabel))
 	f.Body.Accept(v)
-	v.lastInstructions = append(v.lastInstructions, NewJmp(startLabel))
+	v.appendInstruction(NewJmp(startLabel))
 
 	// End label for the For loop
-	v.lastInstructions = append(v.lastInstructions, NewLabel(endLabel))
+	v.appendInstruction(NewLabel(endLabel))
 }
 
 func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {
 	// Lower a variable reference to an identifier value
 	v.lastVal = NewValIdent(Ident(vr.Ident))
+}
+
+func (v *visitor) appendInstruction(instr Instruction) {
+	if _, ok := instr.(*Label); ok {
+		v.lastInstructions = append(v.lastInstructions, instr)
+
+		return
+	}
+
+	// If the previous instruction was a Ret, we need to add a label for the new block
+	if len(v.lastInstructions) > 0 {
+		if _, ok := v.lastInstructions[len(v.lastInstructions)-1].(*Ret); ok {
+			// Append a label to separate instructions
+			label := v.nextLabel("block")
+			v.lastInstructions = append(v.lastInstructions, NewLabel(label))
+		}
+	}
+
+	// Append an instruction to the last instructions
+	v.lastInstructions = append(v.lastInstructions, instr)
 }
 
 func (v *visitor) nextLabel(tag string) string {
