@@ -6,6 +6,7 @@ type Visitor interface {
 	VisitTypeDef(*TypeDef) string
 	VisitDataDef(*DataDef) string
 	VisitFuncDef(*FuncDef) string
+	VisitLabel(*Label) string
 	VisitRet(*Ret) string
 	VisitCall(*Call) string
 	VisitBinop(*Binop) string
@@ -347,6 +348,20 @@ const (
 	DataItemString DataItemType = "string"
 	DataItemConst  DataItemType = "const"
 )
+
+type Label string
+
+func NewLabel(name string) *Label {
+	l := Label(name)
+
+	return &l
+}
+
+func (l *Label) isInstruction() {}
+
+func (l *Label) Accept(visitor Visitor) string {
+	return visitor.VisitLabel(l)
+}
 
 type FuncDef struct {
 	Linkage  *Linkage

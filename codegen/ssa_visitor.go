@@ -224,10 +224,23 @@ func (v *SsaGen) VisitBlock(b ir.Block) string {
 	instructions := make([]string, len(b.Instructions))
 
 	for i, instr := range b.Instructions {
-		instructions[i] = "\t" + instr.Accept(v)
+		// TODO(daniel): we need something better for indentation...
+		if _, ok := instr.(*ir.Label); ok {
+			instructions[i] = instr.Accept(v)
+		} else {
+			instructions[i] = "\t" + instr.Accept(v)
+		}
 	}
 
 	return fmt.Sprintf("\n%s%s\n", label, strings.Join(instructions, "\n"))
+}
+
+func (v *SsaGen) VisitLabel(l *ir.Label) string {
+	if *l == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("@%s", *l)
 }
 
 func (v *SsaGen) VisitRet(r *ir.Ret) string {

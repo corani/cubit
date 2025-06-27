@@ -21,6 +21,7 @@ type visitor struct {
 	lastParam        *Param        // holds the result of lowering the last parameter
 	lastInstructions []Instruction // holds the result of lowering a body
 	tmpCounter       int           // for unique temp and string literal names
+	labelCounter     int
 }
 
 func newVisitor() *visitor {
@@ -53,6 +54,11 @@ func (v *visitor) VisitTypeDef(td *ast.TypeDef) {}
 func (v *visitor) VisitDataDef(dd *ast.DataDef) {}
 
 func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
+	// TODO(daniel): This will fail for nested functions like lambdas!
+	// Labels are function-local, so we can reset the counter for each function
+	v.labelCounter = 0
+	v.lastInstructions = nil
+
 	// Lower parameters using VisitFuncParam
 	var params []*Param
 
@@ -101,8 +107,6 @@ func (v *visitor) VisitFuncParam(fp *ast.FuncParam) {
 }
 
 func (v *visitor) VisitBody(b *ast.Body) {
-	v.lastInstructions = nil
-
 	for _, instr := range b.Instructions {
 		instr.Accept(v)
 	}
@@ -244,7 +248,33 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 }
 
 func (v *visitor) VisitIf(iff *ast.If) {
-	// TODO(daniel): Implement lowering for If statements.
+	trueLabel := v.nextLabel("then")
+	falseLabel := v.nextLabel("else")
+	endLabel := v.nextLabel("end")
+
+	if iff.Init != nil {
+		iff.Init.Accept(v)
+	}
+
+	// Lower the condition
+	iff.Cond.Accept(v)
+	condVal := v.lastVal
+	v.lastInstructions = append(v.lastInstructions, NewJnz(condVal, trueLabel, falseLabel))
+
+	// Lower the 'then' block
+	v.lastInstructions = append(v.lastInstructions, NewLabel(trueLabel))
+	iff.Then.Accept(v)
+	v.lastInstructions = append(v.lastInstructions, NewJmp(endLabel))
+
+	// Lower the 'else' block if present
+	v.lastInstructions = append(v.lastInstructions, NewLabel(falseLabel))
+	if iff.Else != nil {
+		iff.Else.Accept(v)
+	}
+
+	// End label for the If statement
+	v.lastInstructions = append(v.lastInstructions, NewLabel(endLabel))
+
 	// Shape of an If statement when lowered:
 	// 		%tmp = <cond>
 	// 		jnz %tmp, @true, @false
@@ -259,6 +289,12 @@ func (v *visitor) VisitIf(iff *ast.If) {
 func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {
 	// Lower a variable reference to an identifier value
 	v.lastVal = NewValIdent(Ident(vr.Ident))
+}
+
+func (v *visitor) nextLabel(tag string) string {
+	// Generate a unique label identifier
+	v.labelCounter++
+	return fmt.Sprintf("L%04d_%s", v.labelCounter, tag)
 }
 
 // nextIdent generates a unique identifier with the given prefix (e.g., "tmp" or "str").
