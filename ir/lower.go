@@ -248,6 +248,16 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 }
 
 func (v *visitor) VisitIf(iff *ast.If) {
+	// Shape of an If statement when lowered:
+	// 		%tmp = <cond>
+	// 		jnz %tmp, @true, @false
+	// @true:
+	// 		<then block instructions>
+	// 		jmp @end
+	// @false:
+	// 		<else block instructions>
+	// @end:
+
 	trueLabel := v.nextLabel("then")
 	falseLabel := v.nextLabel("else")
 	endLabel := v.nextLabel("end")
@@ -274,16 +284,36 @@ func (v *visitor) VisitIf(iff *ast.If) {
 
 	// End label for the If statement
 	v.lastInstructions = append(v.lastInstructions, NewLabel(endLabel))
+}
 
-	// Shape of an If statement when lowered:
-	// 		%tmp = <cond>
-	// 		jnz %tmp, @true, @false
-	// @true:
-	// 		<then block instructions>
-	// 		jmp @end
-	// @false:
-	// 		<else block instructions>
+func (v *visitor) VisitFor(f *ast.For) {
+	// Shape of a For loop when lowered:
+	// @start:
+	// 		<condition>
+	// 		jnz %tmp, @body, @end
+	// @body:
+	// 		<loop body instructions>
+	// 		jmp @start
 	// @end:
+
+	startLabel := v.nextLabel("for")
+	bodyLabel := v.nextLabel("body")
+	endLabel := v.nextLabel("end")
+
+	v.lastInstructions = append(v.lastInstructions, NewLabel(startLabel))
+
+	// Lower the condition
+	f.Cond.Accept(v)
+	condVal := v.lastVal
+	v.lastInstructions = append(v.lastInstructions, NewJnz(condVal, bodyLabel, endLabel))
+
+	// Lower the loop body
+	v.lastInstructions = append(v.lastInstructions, NewLabel(bodyLabel))
+	f.Body.Accept(v)
+	v.lastInstructions = append(v.lastInstructions, NewJmp(startLabel))
+
+	// End label for the For loop
+	v.lastInstructions = append(v.lastInstructions, NewLabel(endLabel))
 }
 
 func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {

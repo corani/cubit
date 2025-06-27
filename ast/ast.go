@@ -18,6 +18,7 @@ type Visitor interface {
 	VisitBinop(*Binop)
 	VisitVariableRef(*VariableRef)
 	VisitIf(*If)
+	VisitFor(*For)
 }
 
 // TypeKind represents the basic types in the language for type checking.
@@ -131,6 +132,7 @@ var _ []Instruction = []Instruction{
 	(*Set)(nil),
 	(*Return)(nil),
 	(*If)(nil),
+	(*For)(nil),
 	(*Body)(nil),
 }
 
@@ -160,6 +162,17 @@ func (iff *If) Accept(v Visitor) {
 }
 
 func (*If) isInstruction() {}
+
+type For struct {
+	Cond Expression
+	Body *Body
+}
+
+func (f *For) Accept(v Visitor) {
+	v.VisitFor(f)
+}
+
+func (*For) isInstruction() {}
 
 type Call struct {
 	Ident string   // function name

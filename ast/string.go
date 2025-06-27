@@ -101,6 +101,10 @@ func (iff *If) String() string {
 	return fmt.Sprintf("(if (init%s) %s (then %s) (else%s))", initStr, iff.Cond, iff.Then, elseBranch)
 }
 
+func (f *For) String() string {
+	return fmt.Sprintf("(for %s %s)", f.Cond, f.Body)
+}
+
 func (c *Call) String() string {
 	var args []string
 

@@ -371,6 +371,12 @@ func (p *Parser) parseBlock(start, retType lexer.Token) ([]ast.Instruction, erro
 					return nil, err
 				}
 				instructions = append(instructions, inst)
+			case lexer.KeywordFor:
+				inst, err := p.parseFor()
+				if err != nil {
+					return nil, err
+				}
+				instructions = append(instructions, inst)
 			}
 		case lexer.TypeIdent:
 			token, err := p.nextToken()
@@ -804,5 +810,33 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 		Cond: cond,
 		Then: thenBody,
 		Else: elseInstr,
+	}, nil
+}
+
+// parseFor parses a for loop of the form: for <cond> { ... }
+func (p *Parser) parseFor() (ast.Instruction, error) {
+	// 'for' keyword already consumed
+	cond, err := p.parseExpression(false)
+	if err != nil {
+		return nil, err
+	}
+
+	lbrace, err := p.expectType(lexer.TypeLbrace)
+	if err != nil {
+		return nil, err
+	}
+
+	bodyInstrs, err := p.parseBlock(lbrace, lexer.Token{Keyword: lexer.KeywordVoid})
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := p.expectType(lexer.TypeRbrace); err != nil {
+		return nil, err
+	}
+
+	return &ast.For{
+		Cond: cond,
+		Body: &ast.Body{Instructions: bodyInstrs},
 	}, nil
 }

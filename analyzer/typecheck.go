@@ -301,6 +301,25 @@ func (tc *TypeChecker) VisitIf(iff *ast.If) {
 	tc.lastType = ast.TypeVoid // if is a statement, not an expression
 }
 
+func (tc *TypeChecker) VisitFor(f *ast.For) {
+	// For statements introduce a new scope for variables
+	tc.pushScope()
+
+	// Type check the condition
+	condType := tc.visitNode(f.Cond)
+	if condType != ast.TypeBool {
+		tc.errorf("for condition must be bool, got %s", condType)
+	}
+
+	// Type check the body
+	if f.Body != nil {
+		f.Body.Accept(tc)
+	}
+
+	tc.popScope()
+	tc.lastType = ast.TypeVoid // for is a statement, not an expression
+}
+
 // visitNode is a helper method to visit a node and return the lastType.
 func (tc *TypeChecker) visitNode(node interface{ Accept(visitor ast.Visitor) }) ast.TypeKind {
 	if node != nil {
