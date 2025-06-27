@@ -112,10 +112,9 @@ p := pair(1, "foo") // $A=int, $B=string
 ## 6. Arrays and Slices
 
 ```odin
-nums :: [4]int         // Fixed-size array
-names :: []string      // Slice (dynamic array)
-
-matrix :: [3][3]float  // Multi-dimensional array
+nums   : [4]int       // Fixed-size array
+names  : []string     // Slice (dynamic array)
+matrix : [3][3]float  // Multi-dimensional array
 ```
 
 ---
@@ -130,6 +129,39 @@ foo :: func(x: int)
 foo :: func(x: string)
 foo(42)      // calls int version
 foo("bar")   // calls string version
+```
+
+### Overloading Rules
+
+- **User-defined functions:**
+  - Overloads must be defined in the same package as the original function symbol.
+  - Each package has its own namespace; functions with the same name in different packages are unrelated.
+  - Overloads for a function cannot be defined in a different package than where the function symbol is declared.
+
+- **Built-in functions (e.g., `len`):**
+  - Built-ins exist in a special global namespace (not in any package).
+  - You may provide overloads for built-in functions (such as `len`) only in the package where the custom type is defined.
+  - This allows custom types to integrate with built-in operations in a controlled, unambiguous way.
+
+- **General restriction:**
+  - You may only define an overload for a function `f(x: T, ...)` in a package if that package defines either the function symbol `f` or the type `T`.
+  - This prevents accidental or conflicting overloads across package boundaries and keeps resolution predictable.
+
+#### Example: Overloading `len`
+
+```odin
+MyType :: struct { data: []int }
+
+// In the same package as MyType:
+len :: func(x: MyType) -> int {
+    return len(x.data)
+}
+
+x := MyType(data: [1,2,3])
+n := len(x) // calls user-defined len(MyType)
+```
+
+This approach ensures extensibility, avoids ambiguity, and keeps overloads local to the type or function's defining package.
 ```
 
 ---
