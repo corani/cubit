@@ -313,6 +313,11 @@ func (tc *TypeChecker) VisitFor(f *ast.For) {
 	// For statements introduce a new scope for variables
 	tc.pushScope()
 
+	// Type check the initializer, if present
+	if f.Init != nil {
+		f.Init.Accept(tc)
+	}
+
 	// Type check the condition
 	condType := tc.visitNode(f.Cond)
 	if condType != ast.TypeBool {
@@ -322,6 +327,11 @@ func (tc *TypeChecker) VisitFor(f *ast.For) {
 	// Type check the body
 	if f.Body != nil {
 		f.Body.Accept(tc)
+	}
+
+	// Type check the post-condition, if present
+	if f.Post != nil {
+		f.Post.Accept(tc)
 	}
 
 	tc.popScope()

@@ -289,11 +289,13 @@ func (v *visitor) VisitIf(iff *ast.If) {
 
 func (v *visitor) VisitFor(f *ast.For) {
 	// Shape of a For loop when lowered:
+	// 		<optional initializer>
 	// @start:
 	// 		<condition>
 	// 		jnz %tmp, @body, @end
 	// @body:
 	// 		<loop body instructions>
+	// 		<optional post-condition>
 	// 		jmp @start
 	// @end:
 
@@ -301,17 +303,31 @@ func (v *visitor) VisitFor(f *ast.For) {
 	bodyLabel := v.nextLabel("body")
 	endLabel := v.nextLabel("end")
 
-	v.appendInstruction(NewLabel(startLabel))
+	// Lower the initializer if present
+	if f.Init != nil {
+		f.Init.Accept(v)
+	}
 
 	// Lower the condition
-	f.Cond.Accept(v)
-	condVal := v.lastVal
-	v.appendInstruction(NewJnz(condVal, bodyLabel, endLabel))
+	{
+		v.appendInstruction(NewLabel(startLabel))
+		f.Cond.Accept(v)
+		condVal := v.lastVal
+		v.appendInstruction(NewJnz(condVal, bodyLabel, endLabel))
+	}
 
 	// Lower the loop body
-	v.appendInstruction(NewLabel(bodyLabel))
-	f.Body.Accept(v)
-	v.appendInstruction(NewJmp(startLabel))
+	{
+		v.appendInstruction(NewLabel(bodyLabel))
+		f.Body.Accept(v)
+
+		// Lower the post-condition if present
+		if f.Post != nil {
+			f.Post.Accept(v)
+		}
+
+		v.appendInstruction(NewJmp(startLabel))
+	}
 
 	// End label for the For loop
 	v.appendInstruction(NewLabel(endLabel))

@@ -102,7 +102,17 @@ func (iff *If) String() string {
 }
 
 func (f *For) String() string {
-	return fmt.Sprintf("(for %s %s)", f.Cond, f.Body)
+	var initStr string
+	if f.Init != nil {
+		initStr = " " + f.Init.String()
+	}
+
+	var postStr string
+	if f.Post != nil {
+		postStr = " " + f.Post.String()
+	}
+
+	return fmt.Sprintf("(for (init%s) (cond %s) (post%s) %s)", initStr, f.Cond, postStr, f.Body)
 }
 
 func (c *Call) String() string {

@@ -734,8 +734,10 @@ func (p *Parser) mapKeywordToType(kw lexer.Keyword) ast.TypeKind {
 // parseIf parses an if/else if/else statement.
 func (p *Parser) parseIf() (ast.Instruction, error) {
 	// Expect 'if' keyword already consumed
-	var init *ast.Assign
-	var err error
+	var (
+		init ast.Instruction
+		err  error
+	)
 
 	// Check for optional initializer: ident : type = expr or ident = expr
 	next, err := p.expectType(lexer.TypeIdent)
@@ -744,12 +746,13 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 	}
 
 	// Look ahead for colon or assign
-	after, err := p.peekType(lexer.TypeColon)
+	after, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
 	if err != nil {
 		return nil, err
 	}
 
-	if after.Type == lexer.TypeColon {
+	switch after.Type {
+	case lexer.TypeColon:
 		// It's an assignment
 		init, err = p.parseAssign(next)
 		if err != nil {
@@ -760,7 +763,18 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 		if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
 			return nil, err
 		}
-	} else {
+	case lexer.TypeAssign:
+		// It's a set operation
+		init, err = p.parseSet(next)
+		if err != nil {
+			return nil, err
+		}
+
+		// Expect semicolon
+		if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
+			return nil, err
+		}
+	default:
 		// Rollback the identifier
 		p.index--
 	}
@@ -839,9 +853,70 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 // parseFor parses a for loop of the form: for <cond> { ... }
 func (p *Parser) parseFor() (ast.Instruction, error) {
 	// 'for' keyword already consumed
-	cond, err := p.parseExpression(false)
+	index := p.index
+
+	var (
+		init, post ast.Instruction
+		cond       ast.Expression
+	)
+
+	// Try to parse an initializer (for now only assignment or set)
+	start, err := p.expectType(lexer.TypeIdent)
 	if err != nil {
 		return nil, err
+	}
+
+	next, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
+	if err == nil {
+		switch next.Type {
+		case lexer.TypeColon:
+			init, err = p.parseAssign(start)
+		case lexer.TypeAssign:
+			init, err = p.parseSet(start)
+		}
+	}
+
+	if err == nil {
+		// If we successfully parsed an initializer, expect a semicolon
+		_, err := p.expectType(lexer.TypeSemicolon)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// If we didn't parse an initializer, roll back the index and try
+		// to parse it as a condition.
+		p.index = index
+	}
+
+	cond, err = p.parseExpression(false)
+	if err != nil {
+		return nil, err
+	}
+
+	semi, err := p.peekType(lexer.TypeSemicolon)
+	if err != nil {
+		return nil, err
+	}
+
+	if semi.Type == lexer.TypeSemicolon {
+		// If we found a semicolon, we expect another assignment
+		start, err := p.expectType(lexer.TypeIdent)
+		if err != nil {
+			return nil, err
+		}
+
+		next, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
+		if err == nil {
+			switch next.Type {
+			case lexer.TypeColon:
+				post, err = p.parseAssign(start)
+			case lexer.TypeAssign:
+				post, err = p.parseSet(start)
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	lbrace, err := p.expectType(lexer.TypeLbrace)
@@ -859,7 +934,9 @@ func (p *Parser) parseFor() (ast.Instruction, error) {
 	}
 
 	return &ast.For{
+		Init: init,
 		Cond: cond,
+		Post: post,
 		Body: &ast.Body{Instructions: bodyInstrs},
 	}, nil
 }

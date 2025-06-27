@@ -151,7 +151,7 @@ func (*Set) isInstruction() {}
 
 // If represents an if/else if/else statement.
 type If struct {
-	Init *Assign     // optional initializer (assignment); can be nil
+	Init Instruction // optional initializer (assignment/set); can be nil
 	Cond Expression  // condition expression
 	Then *Body       // body for the 'if' branch
 	Else Instruction // *If, *Body, or nil
@@ -164,7 +164,9 @@ func (iff *If) Accept(v Visitor) {
 func (*If) isInstruction() {}
 
 type For struct {
+	Init Instruction // optional initializer (assignment/set); can be nil
 	Cond Expression
+	Post Instruction // optional post-condition expression (e.g., increment)
 	Body *Body
 }
 
