@@ -763,42 +763,45 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	thenInstrs, err := p.parseBlock(lbrace, lexer.Token{Keyword: lexer.KeywordVoid})
 	if err != nil {
 		return nil, err
 	}
+
 	if _, err := p.expectType(lexer.TypeRbrace); err != nil {
 		return nil, err
 	}
+
 	thenBody := &ast.Body{Instructions: thenInstrs}
 
 	// Check for else or else if
 	elseInstr := ast.Instruction(nil)
+
 	nextElse, err := p.peekType(lexer.TypeKeyword)
 	if err == nil && nextElse.Keyword == lexer.KeywordElse {
-		// Consume 'else'
-		_, _ = p.expectKeyword(lexer.KeywordElse)
 		afterElse, err := p.peekType(lexer.TypeKeyword, lexer.TypeLbrace)
 		if err != nil {
 			return nil, err
 		}
+
 		if afterElse.Type == lexer.TypeKeyword && afterElse.Keyword == lexer.KeywordIf {
 			// else if: recursively parse another if
-			_, _ = p.expectKeyword(lexer.KeywordIf)
 			elseInstr, err = p.parseIf()
 			if err != nil {
 				return nil, err
 			}
 		} else if afterElse.Type == lexer.TypeLbrace {
 			// else: parse block
-			lbrace, _ := p.expectType(lexer.TypeLbrace)
 			elseInstrs, err := p.parseBlock(lbrace, lexer.Token{Keyword: lexer.KeywordVoid})
 			if err != nil {
 				return nil, err
 			}
+
 			if _, err := p.expectType(lexer.TypeRbrace); err != nil {
 				return nil, err
 			}
+
 			elseInstr = &ast.Body{Instructions: elseInstrs}
 		} else {
 			return nil, fmt.Errorf("expected 'if' or '{' after 'else'")
