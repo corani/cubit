@@ -281,6 +281,10 @@ func (v *SsaGen) VisitBinop(b *ir.Binop) string {
 		ir.BinOpLe:  "cslew",
 		ir.BinOpGt:  "csgtw",
 		ir.BinOpGe:  "csgew",
+		ir.BinOpShl: "shl",
+		ir.BinOpShr: "shr",
+		ir.BinOpAnd: "and",
+		ir.BinOpOr:  "or",
 	}
 
 	op, ok := opMap[b.Op]

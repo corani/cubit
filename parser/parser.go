@@ -512,16 +512,22 @@ type opInfo struct {
 }
 
 var opPrecedence = map[lexer.TokenType]opInfo{
-	lexer.TypePlus:  {precedence: 10, rightAssoc: false, kind: ast.BinOpAdd},
-	lexer.TypeMinus: {precedence: 10, rightAssoc: false, kind: ast.BinOpSub},
-	lexer.TypeStar:  {precedence: 20, rightAssoc: false, kind: ast.BinOpMul},
-	lexer.TypeSlash: {precedence: 20, rightAssoc: false, kind: ast.BinOpDiv},
-	lexer.TypeEq:    {precedence: 5, rightAssoc: false, kind: ast.BinOpEq},
-	lexer.TypeNe:    {precedence: 5, rightAssoc: false, kind: ast.BinOpNe},
-	lexer.TypeLt:    {precedence: 7, rightAssoc: false, kind: ast.BinOpLt},
-	lexer.TypeLe:    {precedence: 7, rightAssoc: false, kind: ast.BinOpLe},
-	lexer.TypeGt:    {precedence: 7, rightAssoc: false, kind: ast.BinOpGt},
-	lexer.TypeGe:    {precedence: 7, rightAssoc: false, kind: ast.BinOpGe},
+	lexer.TypePlus:   {precedence: 10, rightAssoc: false, kind: ast.BinOpAdd},
+	lexer.TypeMinus:  {precedence: 10, rightAssoc: false, kind: ast.BinOpSub},
+	lexer.TypeStar:   {precedence: 20, rightAssoc: false, kind: ast.BinOpMul},
+	lexer.TypeSlash:  {precedence: 20, rightAssoc: false, kind: ast.BinOpDiv},
+	lexer.TypeShl:    {precedence: 15, rightAssoc: false, kind: ast.BinOpShl},
+	lexer.TypeShr:    {precedence: 15, rightAssoc: false, kind: ast.BinOpShr},
+	lexer.TypeBinAnd: {precedence: 8, rightAssoc: false, kind: ast.BinOpAnd},
+	lexer.TypeBinOr:  {precedence: 6, rightAssoc: false, kind: ast.BinOpOr},
+	lexer.TypeLogAnd: {precedence: 4, rightAssoc: false, kind: ast.BinOpLogAnd},
+	lexer.TypeLogOr:  {precedence: 3, rightAssoc: false, kind: ast.BinOpLogOr},
+	lexer.TypeEq:     {precedence: 5, rightAssoc: false, kind: ast.BinOpEq},
+	lexer.TypeNe:     {precedence: 5, rightAssoc: false, kind: ast.BinOpNe},
+	lexer.TypeLt:     {precedence: 7, rightAssoc: false, kind: ast.BinOpLt},
+	lexer.TypeLe:     {precedence: 7, rightAssoc: false, kind: ast.BinOpLe},
+	lexer.TypeGt:     {precedence: 7, rightAssoc: false, kind: ast.BinOpGt},
+	lexer.TypeGe:     {precedence: 7, rightAssoc: false, kind: ast.BinOpGe},
 }
 
 func (p *Parser) parseExpression(optional bool) (ast.Expression, error) {
@@ -534,20 +540,14 @@ func (p *Parser) parseExpressionPratt(optional bool, minPrec int) (ast.Expressio
 		return lhs, err
 	}
 
+	// create a list containing all the binops in opPrecedence
+	binops := make([]lexer.TokenType, 0, len(opPrecedence))
+	for op := range opPrecedence {
+		binops = append(binops, op)
+	}
+
 	for {
-		// Only consider known binary operators
-		peek, err := p.peekType(
-			lexer.TypePlus,
-			lexer.TypeMinus,
-			lexer.TypeStar,
-			lexer.TypeSlash,
-			lexer.TypeEq,
-			lexer.TypeNe,
-			lexer.TypeLt,
-			lexer.TypeLe,
-			lexer.TypeGt,
-			lexer.TypeGe,
-		)
+		peek, err := p.peekType(binops...)
 		if err != nil {
 			// If we hit EOF or a non-operator, just return lhs
 			return lhs, nil

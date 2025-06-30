@@ -270,6 +270,30 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 			binop.Type = ast.TypeUnknown
 			tc.errorf("type mismatch or invalid types in comparison operation: %s vs %s", lhsType, rhsType)
 		}
+	case ast.BinOpShl, ast.BinOpShr:
+		// Shift ops: both sides must be int, result is int
+		if lhsType == ast.TypeInt && rhsType == ast.TypeInt {
+			binop.Type = ast.TypeInt
+		} else {
+			binop.Type = ast.TypeUnknown
+			tc.errorf("shift operation requires int operands, got %s << %s", lhsType, rhsType)
+		}
+	case ast.BinOpAnd, ast.BinOpOr:
+		// Bitwise ops: both sides must be int, result is int
+		if lhsType == ast.TypeInt && rhsType == ast.TypeInt {
+			binop.Type = ast.TypeInt
+		} else {
+			binop.Type = ast.TypeUnknown
+			tc.errorf("bitwise operation requires int operands, got %s & %s", lhsType, rhsType)
+		}
+	case ast.BinOpLogAnd, ast.BinOpLogOr:
+		// Logical ops: both sides must be bool, result is bool
+		if lhsType == ast.TypeBool && rhsType == ast.TypeBool {
+			binop.Type = ast.TypeBool
+		} else {
+			binop.Type = ast.TypeUnknown
+			tc.errorf("logical operation requires bool operands, got %s && %s", lhsType, rhsType)
+		}
 	default:
 		if lhsType == rhsType {
 			binop.Type = lhsType

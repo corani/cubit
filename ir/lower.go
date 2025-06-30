@@ -237,6 +237,10 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 		ast.BinOpLe:  BinOpLe,
 		ast.BinOpGt:  BinOpGt,
 		ast.BinOpGe:  BinOpGe,
+		ast.BinOpShl: BinOpShl,
+		ast.BinOpShr: BinOpShr,
+		ast.BinOpAnd: BinOpAnd,
+		ast.BinOpOr:  BinOpOr,
 	}
 
 	irOp, ok := binOpMap[b.Operation]

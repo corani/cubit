@@ -303,16 +303,22 @@ func (*Literal) isExpression() {}
 type BinOpKind string
 
 const (
-	BinOpAdd BinOpKind = "+"
-	BinOpSub BinOpKind = "-"
-	BinOpMul BinOpKind = "*"
-	BinOpDiv BinOpKind = "/"
-	BinOpEq  BinOpKind = "=="
-	BinOpNe  BinOpKind = "!="
-	BinOpLt  BinOpKind = "<"
-	BinOpLe  BinOpKind = "<="
-	BinOpGt  BinOpKind = ">"
-	BinOpGe  BinOpKind = ">="
+	BinOpAdd    BinOpKind = "+"
+	BinOpSub    BinOpKind = "-"
+	BinOpMul    BinOpKind = "*"
+	BinOpDiv    BinOpKind = "/"
+	BinOpEq     BinOpKind = "=="
+	BinOpNe     BinOpKind = "!="
+	BinOpLt     BinOpKind = "<"
+	BinOpLe     BinOpKind = "<="
+	BinOpGt     BinOpKind = ">"
+	BinOpGe     BinOpKind = ">="
+	BinOpShl    BinOpKind = "<<"
+	BinOpShr    BinOpKind = ">>"
+	BinOpAnd    BinOpKind = "&"
+	BinOpOr     BinOpKind = "|"
+	BinOpLogAnd BinOpKind = "&&"
+	BinOpLogOr  BinOpKind = "||"
 )
 
 type Binop struct {

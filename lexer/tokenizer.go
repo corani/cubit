@@ -41,6 +41,12 @@ const (
 	TypeGe        TokenType = "Ge"
 	TypeDollar    TokenType = "Dollar"
 	TypeCaret     TokenType = "Caret"
+	TypeShl       TokenType = "ShiftLeft"  // <<
+	TypeShr       TokenType = "ShiftRight" // >>
+	TypeBinAnd    TokenType = "BinaryAnd"  // &
+	TypeBinOr     TokenType = "BinaryOr"   // |
+	TypeLogAnd    TokenType = "LogicalAnd" // &&
+	TypeLogOr     TokenType = "LogicalOr"  // ||
 )
 
 type Keyword string
@@ -281,21 +287,49 @@ func (t *Tokenizer) next() (Token, error) {
 			if err != nil {
 				return Token{}, err
 			}
-			if c == '=' {
+			switch c {
+			case '=':
 				return Token{Type: TypeLe, StringVal: "<=", Location: start}, nil
+			case '<':
+				return Token{Type: TypeShl, StringVal: "<<", Location: start}, nil
+			default:
+				t.Scan.Unread(1)
+				return Token{Type: TypeLt, StringVal: "<", Location: start}, nil
 			}
-			t.Scan.Unread(1)
-			return Token{Type: TypeLt, StringVal: "<", Location: start}, nil
 		case c == '>':
 			c, err := t.Scan.Next()
 			if err != nil {
 				return Token{}, err
 			}
-			if c == '=' {
+			switch c {
+			case '=':
 				return Token{Type: TypeGe, StringVal: ">=", Location: start}, nil
+			case '>':
+				return Token{Type: TypeShr, StringVal: ">>", Location: start}, nil
+			default:
+				t.Scan.Unread(1)
+				return Token{Type: TypeGt, StringVal: ">", Location: start}, nil
+			}
+		case c == '&':
+			c2, err := t.Scan.Next()
+			if err != nil {
+				return Token{}, err
+			}
+			if c2 == '&' {
+				return Token{Type: TypeLogAnd, StringVal: "&&", Location: start}, nil
 			}
 			t.Scan.Unread(1)
-			return Token{Type: TypeGt, StringVal: ">", Location: start}, nil
+			return Token{Type: TypeBinAnd, StringVal: "&", Location: start}, nil
+		case c == '|':
+			c2, err := t.Scan.Next()
+			if err != nil {
+				return Token{}, err
+			}
+			if c2 == '|' {
+				return Token{Type: TypeLogOr, StringVal: "||", Location: start}, nil
+			}
+			t.Scan.Unread(1)
+			return Token{Type: TypeBinOr, StringVal: "|", Location: start}, nil
 		case c == '/':
 			c, err := t.Scan.Next()
 			if err != nil {
