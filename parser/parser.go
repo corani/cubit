@@ -588,6 +588,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		lexer.TypeString,
 		lexer.TypeIdent,
 		lexer.TypeLparen,
+		lexer.TypeKeyword,
 	}
 
 	start, err := p.peekType(starters...)
@@ -609,6 +610,16 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 	var expr ast.Expression
 
 	switch start.Type {
+	case lexer.TypeKeyword:
+		switch start.Keyword {
+		case lexer.KeywordTrue:
+			expr = ast.NewBoolLiteral(true)
+		case lexer.KeywordFalse:
+			expr = ast.NewBoolLiteral(false)
+		default:
+			return nil, fmt.Errorf("unexpected keyword %s at %s",
+				start.Keyword, start.Location)
+		}
 	case lexer.TypeNumber:
 		expr = ast.NewIntLiteral(start.NumberVal)
 	case lexer.TypeBool:
@@ -741,41 +752,42 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 
 	// Check for optional initializer: ident : type = expr or ident = expr
 	next, err := p.expectType(lexer.TypeIdent)
-	if err != nil {
-		return nil, err
-	}
-
-	// Look ahead for colon or assign
-	after, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
-	if err != nil {
-		return nil, err
-	}
-
-	switch after.Type {
-	case lexer.TypeColon:
-		// It's an assignment
-		init, err = p.parseAssign(next)
+	if err == nil {
+		// Look ahead for colon or assign
+		after, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
 		if err != nil {
 			return nil, err
 		}
 
-		// Expect semicolon
-		if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
-			return nil, err
-		}
-	case lexer.TypeAssign:
-		// It's a set operation
-		init, err = p.parseSet(next)
-		if err != nil {
-			return nil, err
-		}
+		switch after.Type {
+		case lexer.TypeColon:
+			// It's an assignment
+			init, err = p.parseAssign(next)
+			if err != nil {
+				return nil, err
+			}
 
-		// Expect semicolon
-		if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
-			return nil, err
+			// Expect semicolon
+			if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
+				return nil, err
+			}
+		case lexer.TypeAssign:
+			// It's a set operation
+			init, err = p.parseSet(next)
+			if err != nil {
+				return nil, err
+			}
+
+			// Expect semicolon
+			if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
+				return nil, err
+			}
+		default:
+			// Rollback the identifier
+			p.index--
 		}
-	default:
-		// Rollback the identifier
+	} else {
+		// Rollback whatever token we got
 		p.index--
 	}
 
