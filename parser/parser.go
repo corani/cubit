@@ -548,7 +548,7 @@ func (p *Parser) parseExpressionPratt(optional bool, minPrec int) (ast.Expressio
 
 	for {
 		peek, err := p.peekType(binops...)
-		if err != nil {
+		if err != nil || !slices.Contains(binops, peek.Type) {
 			// If we hit EOF or a non-operator, just return lhs
 			return lhs, nil
 		}
@@ -822,7 +822,12 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 		return nil, err
 	}
 
-	if nextElse.Keyword == lexer.KeywordElse {
+	if nextElse.Type != lexer.TypeKeyword {
+		// Don't rollback, since peek didn't consume the token.
+	} else if nextElse.Keyword != lexer.KeywordElse {
+		// We expected an 'else' keyword, but got something else.
+		p.index--
+	} else {
 		afterElse, err := p.peekType(lexer.TypeKeyword, lexer.TypeLbrace)
 		if err != nil {
 			return nil, err
@@ -849,9 +854,6 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 		} else {
 			return nil, fmt.Errorf("expected 'if' or '{' after 'else'")
 		}
-	} else {
-		// Rollback whatever other keyword we got
-		p.index--
 	}
 
 	return &ast.If{
@@ -885,6 +887,8 @@ func (p *Parser) parseFor() (ast.Instruction, error) {
 			init, err = p.parseAssign(start)
 		case lexer.TypeAssign:
 			init, err = p.parseSet(start)
+		default:
+			err = fmt.Errorf("missing initializer")
 		}
 	}
 
