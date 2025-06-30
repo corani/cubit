@@ -218,12 +218,79 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 	v.lastVal = nil
 	b.Lhs.Accept(v)
 	left := v.lastVal
-	v.lastVal = nil
-	b.Rhs.Accept(v)
-	right := v.lastVal
 
 	// Create a new temporary for the result
 	result := NewValIdent(v.nextIdent("tmp"))
+
+	// Handle logical operations separately using compare and jump.
+	switch b.Operation {
+	case ast.BinOpLogAnd:
+		// Shape of a logical AND when lowered:
+		// 		%tmp = <left>
+		// 		jnz %tmp, @true, @false
+		//  @false:
+		// 		%result = %left
+		//		jp @end
+		// 	@true:
+		// 		%tmp = <right>
+		//		%result = %tmp
+		//  @end:
+		trueLabel := v.nextLabel("true")
+		falseLabel := v.nextLabel("false")
+		endLabel := v.nextLabel("end")
+
+		v.appendInstruction(NewJnz(left, trueLabel, falseLabel))
+		// @false:
+		v.appendInstruction(NewLabel(falseLabel))
+		v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0)))
+		v.appendInstruction(NewJmp(endLabel))
+		// @true:
+		v.appendInstruction(NewLabel(trueLabel))
+		b.Rhs.Accept(v)
+		right := v.lastVal
+		v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0)))
+		// @end:
+		v.appendInstruction(NewLabel(endLabel))
+
+		v.lastVal = result
+
+		return
+	case ast.BinOpLogOr:
+		// Shape of a logical OR when lowered:
+		// 		%tmp = <left>
+		// 		jnz %tmp, @true, @false
+		//  @true:
+		//		%result = %left
+		//		jp @end
+		// 	@false:
+		// 		%tmp = <right>
+		// 		%result = %tmp
+		//  @end:
+		trueLabel := v.nextLabel("true")
+		falseLabel := v.nextLabel("false")
+		endLabel := v.nextLabel("end")
+
+		v.appendInstruction(NewJnz(left, trueLabel, falseLabel))
+		// @true:
+		v.appendInstruction(NewLabel(trueLabel))
+		v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0)))
+		v.appendInstruction(NewJmp(endLabel))
+		// @false:
+		v.appendInstruction(NewLabel(falseLabel))
+		b.Rhs.Accept(v)
+		right := v.lastVal
+		v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0)))
+		// @end:
+		v.appendInstruction(NewLabel(endLabel))
+
+		v.lastVal = result
+
+		return
+	}
+
+	v.lastVal = nil
+	b.Rhs.Accept(v)
+	right := v.lastVal
 
 	// Map ast.BinOpKind to ir.BinOpKind using a map for maintainability
 	binOpMap := map[ast.BinOpKind]BinOpKind{
