@@ -27,8 +27,15 @@ func GenerateAssembly(srcfile string, unit *ir.CompilationUnit, asmfile string) 
 
 	var w bytes.Buffer
 
+	// TODO(daniel): make these flags, so you can generate assembly for different targets?
+	// That may not work with `Compile` below though.
+	goos := runtime.GOOS
+	if goos == "android" {
+		goos = "linux" // For Termux support on Android
+	}
+
 	if err := libqbe.Main(
-		libqbe.DefaultTarget(runtime.GOOS, runtime.GOARCH),
+		libqbe.DefaultTarget(goos, runtime.GOARCH),
 		srcfile, strings.NewReader(ssa), &w, nil,
 	); err != nil {
 		return err
