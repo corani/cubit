@@ -72,6 +72,7 @@ const (
 	KeywordSwitch   Keyword = "switch"
 	KeywordCase     Keyword = "case"
 	KeywordDefault  Keyword = "default"
+	KeywordNil      Keyword = "nil"
 )
 
 var keywords = []Keyword{
@@ -95,6 +96,7 @@ var keywords = []Keyword{
 	KeywordSwitch,
 	KeywordCase,
 	KeywordDefault,
+	KeywordNil,
 }
 
 type Token struct {
@@ -170,6 +172,18 @@ func (t Token) String() string {
 		return "Dollar @ " + t.Location.String()
 	case TypeCaret:
 		return "Caret @ " + t.Location.String()
+	case TypeShl:
+		return "ShiftLeft @ " + t.Location.String()
+	case TypeShr:
+		return "ShiftRight @ " + t.Location.String()
+	case TypeBinAnd:
+		return "BinaryAnd @ " + t.Location.String()
+	case TypeBinOr:
+		return "BinaryOr @ " + t.Location.String()
+	case TypeLogAnd:
+		return "LogicalAnd @ " + t.Location.String()
+	case TypeLogOr:
+		return "LogicalOr @ " + t.Location.String()
 	default:
 		return "Unknown @ " + t.Location.String()
 	}
@@ -220,24 +234,36 @@ func (t *Tokenizer) next() (Token, error) {
 		return token, nil
 	}
 
-	// Define a map to translate single-character tokens to TokenType. This contains only
-	// tokens that can be mapped unambiguously (e.g., '=', '(', ')', but not '-', '/').
-	translate := map[byte]TokenType{
-		'(': TypeLparen,
-		')': TypeRparen,
-		'{': TypeLbrace,
-		'}': TypeRbrace,
-		'[': TypeLBracket,
-		']': TypeRBracket,
-		'.': TypeDot,
-		',': TypeComma,
-		':': TypeColon,
-		';': TypeSemicolon,
-		'@': TypeAt,
-		'+': TypePlus,
-		'*': TypeStar,
-		'$': TypeDollar,
-		'^': TypeCaret,
+	// Maximum Munch Map of symbolic tokens
+	tokens := map[string]TokenType{
+		"(":  TypeLparen,
+		")":  TypeRparen,
+		"{":  TypeLbrace,
+		"}":  TypeRbrace,
+		"[":  TypeLBracket,
+		"]":  TypeRBracket,
+		".":  TypeDot,
+		",":  TypeComma,
+		":":  TypeColon,
+		";":  TypeSemicolon,
+		"@":  TypeAt,
+		"+":  TypePlus,
+		"*":  TypeStar,
+		"$":  TypeDollar,
+		"^":  TypeCaret,
+		"=":  TypeAssign,
+		"==": TypeEq,
+		"!=": TypeNe,
+		"<":  TypeLt,
+		"<=": TypeLe,
+		"<<": TypeShl,
+		">":  TypeGt,
+		">=": TypeGe,
+		">>": TypeShr,
+		"&":  TypeBinAnd,
+		"&&": TypeLogAnd,
+		"|":  TypeBinOr,
+		"||": TypeLogOr,
 	}
 
 	var buf []byte
@@ -250,94 +276,17 @@ func (t *Tokenizer) next() (Token, error) {
 
 		start := t.Scan.Location()
 
-		if t, ok := translate[c]; ok {
-			// If we have a single-character token, return it immediately
-			return Token{Type: t, StringVal: string(c), Location: start}, nil
-		}
-
+		// Special handling for comments, minus, slash, exclamation, string, whitespace, numbers, identifiers
 		switch {
-		case c == '=':
-			c, err := t.Scan.Next()
-			if err != nil {
-				return Token{}, err
-			}
-
-			switch {
-			case c == '=':
-				return Token{Type: TypeEq, StringVal: "==", Location: start}, nil
-			default:
-				// Unread whatever we read after the equals sign
-				t.Scan.Unread(1)
-
-				return Token{Type: TypeAssign, StringVal: "=", Location: start}, nil
-			}
-		case c == '!':
-			c, err := t.Scan.Next()
-			if err != nil {
-				return Token{}, err
-			}
-			if c == '=' {
-				return Token{Type: TypeNe, StringVal: "!=", Location: start}, nil
-			}
-			t.Scan.Unread(1)
-			// Could add support for '!' as a single token if needed
-			return Token{}, errors.New("unexpected '!' without '='")
-		case c == '<':
-			c, err := t.Scan.Next()
-			if err != nil {
-				return Token{}, err
-			}
-			switch c {
-			case '=':
-				return Token{Type: TypeLe, StringVal: "<=", Location: start}, nil
-			case '<':
-				return Token{Type: TypeShl, StringVal: "<<", Location: start}, nil
-			default:
-				t.Scan.Unread(1)
-				return Token{Type: TypeLt, StringVal: "<", Location: start}, nil
-			}
-		case c == '>':
-			c, err := t.Scan.Next()
-			if err != nil {
-				return Token{}, err
-			}
-			switch c {
-			case '=':
-				return Token{Type: TypeGe, StringVal: ">=", Location: start}, nil
-			case '>':
-				return Token{Type: TypeShr, StringVal: ">>", Location: start}, nil
-			default:
-				t.Scan.Unread(1)
-				return Token{Type: TypeGt, StringVal: ">", Location: start}, nil
-			}
-		case c == '&':
-			c2, err := t.Scan.Next()
-			if err != nil {
-				return Token{}, err
-			}
-			if c2 == '&' {
-				return Token{Type: TypeLogAnd, StringVal: "&&", Location: start}, nil
-			}
-			t.Scan.Unread(1)
-			return Token{Type: TypeBinAnd, StringVal: "&", Location: start}, nil
-		case c == '|':
-			c2, err := t.Scan.Next()
-			if err != nil {
-				return Token{}, err
-			}
-			if c2 == '|' {
-				return Token{Type: TypeLogOr, StringVal: "||", Location: start}, nil
-			}
-			t.Scan.Unread(1)
-			return Token{Type: TypeBinOr, StringVal: "|", Location: start}, nil
 		case c == '/':
-			c, err := t.Scan.Next()
+			c2, err := t.Scan.Next()
 			if err != nil {
 				return Token{}, err
 			}
 
 			switch {
-			case c == '/':
+			case c2 == '/':
+				// Skip comment
 				for {
 					c, err = t.Scan.Next()
 					if err != nil {
@@ -349,29 +298,26 @@ func (t *Tokenizer) next() (Token, error) {
 					}
 				}
 			default:
-				// Unread whatever we read after the slash
 				t.Scan.Unread(1)
 
 				return Token{Type: TypeSlash, StringVal: "/", Location: start}, nil
 			}
 		case c == '-':
-			c, err := t.Scan.Next()
+			c2, err := t.Scan.Next()
 			if err != nil {
 				return Token{}, err
 			}
 
 			switch {
-			case c == '>':
+			case c2 == '>':
 				return Token{Type: TypeArrow, StringVal: "->", Location: start}, nil
-			case c >= '0' && c <= '9':
+			case isNumeric(c2):
 				buf = append(buf, '-')
 
-				// Unread the number, so we'll fall into the numeric case on continue
+				// Unread the number and continue, we'll fall into the numeric literal case
+				// with a '-' already in the buffer.
 				t.Scan.Unread(1)
-
-				continue
 			default:
-				// Unread whatever we read after the minus sign
 				t.Scan.Unread(1)
 
 				return Token{Type: TypeMinus, StringVal: "-", Location: start}, nil
@@ -379,6 +325,7 @@ func (t *Tokenizer) next() (Token, error) {
 		case isWhitespace(c):
 			continue
 		case c == '"':
+			// Handle string literals
 			for {
 				c, err = t.Scan.Next()
 				if err != nil {
@@ -403,7 +350,10 @@ func (t *Tokenizer) next() (Token, error) {
 
 			return Token{Type: TypeString, StringVal: string(buf), Location: start}, nil
 		case isNumeric(c):
+			// Handle numeric literals
+			// TODO(daniel): Handle floating point numbers
 			buf = append(buf, c)
+
 			for {
 				c, err = t.Scan.Next()
 				if err != nil {
@@ -426,6 +376,7 @@ func (t *Tokenizer) next() (Token, error) {
 
 			return Token{Type: TypeNumber, NumberVal: num, StringVal: string(buf), Location: start}, nil
 		case isAlpha(c):
+			// Handle identifiers and keywords
 			buf = append(buf, c)
 
 			for {
@@ -448,11 +399,51 @@ func (t *Tokenizer) next() (Token, error) {
 				return Token{Type: TypeIdent, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
 			}
 
+			// Turn keywords `true` and `false` into boolean literal tokens.
 			switch kw {
 			case KeywordFalse, KeywordTrue:
 				return Token{Type: TypeBool, Keyword: kw, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
 			default:
 				return Token{Type: TypeKeyword, Keyword: kw, Identifier: string(buf), StringVal: string(buf), Location: start}, nil
+			}
+		default:
+			// Maximal munch for symbolic tokens
+			mmType := TypeEOF
+			mmToken := ""
+			prefix := []byte{c}
+
+			for {
+				foundPrefix := false
+				for k, v := range tokens {
+					if len(k) >= len(prefix) && k[:len(prefix)] == string(prefix) {
+						foundPrefix = true
+
+						if k == string(prefix) {
+							mmToken = k
+							mmType = v
+						}
+					}
+				}
+
+				if !foundPrefix {
+					break
+				}
+
+				c2, err := t.Scan.Next()
+				if err != nil {
+					break
+				}
+
+				prefix = append(prefix, c2)
+			}
+
+			if mmToken != "" {
+				// Unread any extra characters
+				if count := len(prefix) - len(mmToken); count > 0 {
+					t.Scan.Unread(count)
+				}
+
+				return Token{Type: mmType, StringVal: mmToken, Location: start}, nil
 			}
 		}
 	}
