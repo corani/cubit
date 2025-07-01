@@ -9,6 +9,7 @@ func (t *Type) String() string {
 	if t == nil {
 		return "<nil>"
 	}
+
 	switch t.Kind {
 	case TypeInt:
 		return "int"
@@ -19,7 +20,7 @@ func (t *Type) String() string {
 	case TypeVoid:
 		return "void"
 	case TypePointer:
-		return "^" + t.Elem.String()
+		return fmt.Sprintf("^%s", t.Elem)
 	default:
 		return "unknown"
 	}
@@ -133,6 +134,10 @@ func (a Arg) String() string {
 }
 
 func (a *Assign) String() string {
+	if a.Value == nil {
+		return fmt.Sprintf("(assign %s %s <nil>)", a.Ident, a.Type)
+	}
+
 	return fmt.Sprintf("(assign %s %s %s)", a.Ident, a.Type, a.Value)
 }
 

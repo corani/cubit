@@ -113,6 +113,12 @@ func (v *visitor) VisitBody(b *ast.Body) {
 }
 
 func (v *visitor) VisitAssign(a *ast.Assign) {
+	// If the assignment has no value, it was a declaration without initialization.
+	// We skip it in the IR lowering, there should be another assignment later on.
+	if a.Value == nil {
+		return
+	}
+
 	// Lower the right-hand side expression
 	v.lastVal = nil
 	a.Value.Accept(v)

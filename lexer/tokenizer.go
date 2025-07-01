@@ -73,6 +73,7 @@ const (
 	KeywordCase     Keyword = "case"
 	KeywordDefault  Keyword = "default"
 	KeywordNil      Keyword = "nil"
+	KeywordBool     Keyword = "bool"
 )
 
 var keywords = []Keyword{
@@ -97,6 +98,7 @@ var keywords = []Keyword{
 	KeywordCase,
 	KeywordDefault,
 	KeywordNil,
+	KeywordBool,
 }
 
 type Token struct {

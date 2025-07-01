@@ -116,7 +116,7 @@ func (tc *TypeChecker) VisitFuncParam(fn *ast.FuncParam) {
 			fn.Type = valueType
 		} else {
 			// Case 2: arg : int = 1 (check match)
-			if valueType != fn.Type {
+			if !typeEqual(valueType, fn.Type) {
 				tc.errorf("type error: parameter '%s' declared as %s but default value is %s",
 					fn.Ident, fn.Type, valueType)
 			}
@@ -135,12 +135,16 @@ func (tc *TypeChecker) VisitBody(body *ast.Body) {
 }
 
 func (tc *TypeChecker) VisitAssign(assign *ast.Assign) {
-	// Type check the right-hand side expression
-	rhsType := tc.visitNode(assign.Value)
+	rhsType := assign.Type
 
-	// If the assignment declares a type, check it matches the value
-	if assign.Type != nil && assign.Type.Kind != ast.TypeUnknown && assign.Type != rhsType {
-		tc.errorf("type error: variable '%s' declared as %s but assigned %s", assign.Ident, assign.Type, rhsType)
+	if assign.Value != nil {
+		// Type check the right-hand side expression
+		rhsType = tc.visitNode(assign.Value)
+
+		// If the assignment declares a type, check it matches the value
+		if assign.Type != nil && assign.Type.Kind != ast.TypeUnknown && !typeEqual(assign.Type, rhsType) {
+			tc.errorf("type error: variable '%s' declared as %s but assigned %s", assign.Ident, assign.Type, rhsType)
+		}
 	}
 
 	// Add or update the variable in the current scope
@@ -177,8 +181,8 @@ func (tc *TypeChecker) VisitSet(set *ast.Set) {
 	valueType := tc.visitNode(set.Value)
 
 	// If the variable has a declared type, check it matches the value
-	if sym.Type != valueType {
-		tc.errorf("type error: variable '%s' declared as %s but assigned %s",
+	if !typeEqual(sym.Type, valueType) {
+		tc.errorf("type error: variable '%s' declared as %s but set %s",
 			set.Ident, sym.Type, valueType)
 	}
 
@@ -211,7 +215,7 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 		argType := tc.visitNode(arg.Value)
 		paramType := fnDef.Params[i].Type
 
-		if paramType != nil && paramType.Kind != ast.TypeUnknown && argType.Kind != paramType.Kind {
+		if paramType != nil && paramType.Kind != ast.TypeUnknown && !typeEqual(argType, paramType) {
 			tc.errorf("call to '%s': argument %d type mismatch: expected %s, got %s", call.Ident, i+1, paramType, argType)
 		}
 	}
@@ -256,7 +260,7 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 	switch binop.Operation {
 	case ast.BinOpEq, ast.BinOpNe:
 		// Equality/inequality returns bool if types match
-		if lhsType != nil && rhsType != nil && lhsType.Kind == rhsType.Kind {
+		if lhsType != nil && rhsType != nil && typeEqual(lhsType, rhsType) {
 			binop.Type = &ast.Type{Kind: ast.TypeBool}
 		} else {
 			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
@@ -264,7 +268,7 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 		}
 	case ast.BinOpLt, ast.BinOpLe, ast.BinOpGt, ast.BinOpGe:
 		// Comparison operators: only valid for int or string, and types must match
-		if lhsType != nil && rhsType != nil && lhsType.Kind == rhsType.Kind && (lhsType.Kind == ast.TypeInt || lhsType.Kind == ast.TypeString) {
+		if lhsType != nil && rhsType != nil && typeEqual(lhsType, rhsType) && (lhsType.Kind == ast.TypeInt || lhsType.Kind == ast.TypeString) {
 			binop.Type = &ast.Type{Kind: ast.TypeBool}
 		} else {
 			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
@@ -295,7 +299,7 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 			tc.errorf("logical operation requires bool operands, got %s && %s", lhsType, rhsType)
 		}
 	default:
-		if lhsType != nil && rhsType != nil && lhsType.Kind == rhsType.Kind {
+		if lhsType != nil && rhsType != nil && typeEqual(lhsType, rhsType) {
 			binop.Type = lhsType
 		} else {
 			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
@@ -404,4 +408,18 @@ func (tc *TypeChecker) lookupSymbol(name string) (Symbol, bool) {
 func (tc *TypeChecker) errorf(format string, args ...any) {
 	err := fmt.Errorf(format, args...)
 	tc.errors = append(tc.errors, err)
+}
+
+// typeEqual returns true if two types are structurally equal (including pointer depth)
+func typeEqual(a, b *ast.Type) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.Kind != b.Kind {
+		return false
+	}
+	if a.Kind == ast.TypePointer {
+		return typeEqual(a.Elem, b.Elem)
+	}
+	return true
 }

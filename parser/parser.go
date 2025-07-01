@@ -423,7 +423,7 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 }
 
 func (p *Parser) parseAssign(name lexer.Token) (*ast.Assign, error) {
-	next, err := p.peekType(lexer.TypeAssign, lexer.TypeKeyword)
+	next, err := p.peekType(lexer.TypeAssign, lexer.TypeKeyword, lexer.TypeCaret)
 	if err != nil {
 		return nil, err
 	}
@@ -433,14 +433,26 @@ func (p *Parser) parseAssign(name lexer.Token) (*ast.Assign, error) {
 	// type
 	if next.Type != lexer.TypeAssign {
 		p.index--
+
 		ty, err := p.parseType()
 		if err != nil {
 			return nil, err
 		}
-		if _, err := p.expectType(lexer.TypeAssign); err != nil {
+
+		returnType = ty
+
+		next, err = p.peekType(lexer.TypeAssign)
+		if err != nil {
 			return nil, err
 		}
-		returnType = ty
+
+		if next.Type != lexer.TypeAssign {
+			return &ast.Assign{
+				Ident: name.StringVal,
+				Type:  returnType,
+				Value: nil,
+			}, nil
+		}
 	}
 
 	// value
@@ -731,22 +743,48 @@ func (p *Parser) nextToken() (lexer.Token, error) {
 	return token, nil
 }
 
+// parseType parses a type, supporting pointer types (e.g., ^int, ^^int)
 func (p *Parser) parseType() (*ast.Type, error) {
+	// Count leading carets (^) for pointer depth
+	pointerDepth := 0
+	for {
+		tok, err := p.peekType(lexer.TypeCaret)
+		if err != nil {
+			break
+		}
+
+		if tok.Type == lexer.TypeCaret {
+			pointerDepth++
+		} else {
+			break
+		}
+	}
+
 	tok, err := p.expectType(lexer.TypeKeyword)
 	if err != nil {
 		return nil, err
 	}
 
+	var base *ast.Type
 	switch tok.Keyword {
 	case lexer.KeywordInt:
-		return &ast.Type{Kind: ast.TypeInt}, nil
+		base = &ast.Type{Kind: ast.TypeInt}
 	case lexer.KeywordString:
-		return &ast.Type{Kind: ast.TypeString}, nil
+		base = &ast.Type{Kind: ast.TypeString}
+	case lexer.KeywordBool:
+		base = &ast.Type{Kind: ast.TypeBool}
 	case lexer.KeywordVoid:
-		return &ast.Type{Kind: ast.TypeVoid}, nil
+		base = &ast.Type{Kind: ast.TypeVoid}
 	default:
 		return nil, fmt.Errorf("unexpected type keyword %s at %s", tok.Keyword, tok.Location)
 	}
+
+	// Wrap in pointer types as needed
+	for range pointerDepth {
+		base = &ast.Type{Kind: ast.TypePointer, Elem: base}
+	}
+
+	return base, nil
 }
 
 // parseIf parses an if/else if/else statement.
