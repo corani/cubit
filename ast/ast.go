@@ -11,8 +11,8 @@ type Visitor interface {
 	VisitFuncParam(*FuncParam)
 	VisitBody(*Body)
 	VisitCall(*Call)
+	VisitDeclare(*Declare)
 	VisitAssign(*Assign)
-	VisitSet(*Set)
 	VisitReturn(*Return)
 	VisitLiteral(*Literal)
 	VisitBinop(*Binop)
@@ -136,33 +136,51 @@ type Instruction interface {
 
 var _ []Instruction = []Instruction{
 	(*Call)(nil),
+	(*Declare)(nil),
 	(*Assign)(nil),
-	(*Set)(nil),
 	(*Return)(nil),
 	(*If)(nil),
 	(*For)(nil),
 	(*Body)(nil),
 }
 
-// Set represents assignment to an existing variable (e.g., x = 1)
-type Set struct {
+// LValue represents an assignable location (left-hand side of assignment)
+type LValue interface {
+	isLValue()
+	Expression
+}
+
+// Declare represents a variable declaration (with or without type)
+type Declare struct {
 	Ident string
-	Type  *Type // type of the variable being set
+	Type  *Type // declared type, or TypeUnknown
+}
+
+func (d *Declare) Accept(v Visitor) {
+	v.VisitDeclare(d)
+}
+
+func (*Declare) isInstruction() {}
+
+// Assign represents assignment to an lvalue (e.g., x = 1, p^ = 2, a[0] = 3)
+type Assign struct {
+	LHS   LValue
+	Type  *Type
 	Value Expression
 }
 
-func (s *Set) Accept(v Visitor) {
-	v.VisitSet(s)
+func (a *Assign) Accept(v Visitor) {
+	v.VisitAssign(a)
 }
 
-func (*Set) isInstruction() {}
+func (*Assign) isInstruction() {}
 
 // If represents an if/else if/else statement.
 type If struct {
-	Init Instruction // optional initializer (assignment/set); can be nil
-	Cond Expression  // condition expression
-	Then *Body       // body for the 'if' branch
-	Else Instruction // *If, *Body, or nil
+	Init []Instruction // optional initializer(s); can be nil or empty
+	Cond Expression    // condition expression
+	Then *Body         // body for the 'if' branch
+	Else Instruction   // *If, *Body, or nil
 }
 
 func (iff *If) Accept(v Visitor) {
@@ -172,9 +190,9 @@ func (iff *If) Accept(v Visitor) {
 func (*If) isInstruction() {}
 
 type For struct {
-	Init Instruction // optional initializer (assignment/set); can be nil
+	Init []Instruction // optional initializer(s); can be nil or empty
 	Cond Expression
-	Post Instruction // optional post-condition expression (e.g., increment)
+	Post []Instruction // optional post-condition(s); can be nil or empty
 	Body *Body
 }
 
@@ -209,18 +227,6 @@ type Arg struct {
 	Value Expression // argument value
 	Type  *Type
 }
-
-type Assign struct {
-	Ident string     // variable name
-	Type  *Type      // variable type
-	Value Expression // right-hand side expression
-}
-
-func (a *Assign) Accept(v Visitor) {
-	v.VisitAssign(a)
-}
-
-func (*Assign) isInstruction() {}
 
 type Return struct {
 	Value Expression // optional return value
@@ -272,6 +278,7 @@ func NewVariableRef(ident string, ty TypeKind) *VariableRef {
 }
 
 func (*VariableRef) isExpression() {}
+func (*VariableRef) isLValue()     {}
 
 type Literal struct {
 	Type        *Type

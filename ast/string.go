@@ -90,8 +90,12 @@ func (b *Body) String() string {
 
 func (iff *If) String() string {
 	var initStr string
-	if iff.Init != nil {
-		initStr = " " + iff.Init.String()
+	if len(iff.Init) > 0 {
+		var parts []string
+		for _, instr := range iff.Init {
+			parts = append(parts, instr.String())
+		}
+		initStr = " " + strings.Join(parts, "; ")
 	}
 
 	var elseBranch string
@@ -104,13 +108,21 @@ func (iff *If) String() string {
 
 func (f *For) String() string {
 	var initStr string
-	if f.Init != nil {
-		initStr = " " + f.Init.String()
+	if len(f.Init) > 0 {
+		var parts []string
+		for _, instr := range f.Init {
+			parts = append(parts, instr.String())
+		}
+		initStr = " " + strings.Join(parts, "; ")
 	}
 
 	var postStr string
-	if f.Post != nil {
-		postStr = " " + f.Post.String()
+	if len(f.Post) > 0 {
+		var parts []string
+		for _, instr := range f.Post {
+			parts = append(parts, instr.String())
+		}
+		postStr = " " + strings.Join(parts, "; ")
 	}
 
 	return fmt.Sprintf("(for (init%s) (cond %s) (post%s) %s)", initStr, f.Cond, postStr, f.Body)
@@ -133,16 +145,21 @@ func (a Arg) String() string {
 	return a.Value.String()
 }
 
-func (a *Assign) String() string {
-	if a.Value == nil {
-		return fmt.Sprintf("(assign %s %s <nil>)", a.Ident, a.Type)
+func (d *Declare) String() string {
+	if d.Type == nil {
+		return fmt.Sprintf("(declare %s <nil>)", d.Ident)
 	}
-
-	return fmt.Sprintf("(assign %s %s %s)", a.Ident, a.Type, a.Value)
+	return fmt.Sprintf("(declare %s %s)", d.Ident, d.Type)
 }
 
-func (s *Set) String() string {
-	return fmt.Sprintf("(set %q %s %s)", s.Ident, s.Type, s.Value)
+func (a *Assign) String() string {
+	lhs := a.LHS.String()
+
+	if a.Value == nil {
+		return fmt.Sprintf("(assign %s %s <nil>)", lhs, a.Type)
+	}
+
+	return fmt.Sprintf("(assign %s %s %s)", lhs, a.Type, a.Value)
 }
 
 func (r *Return) String() string {

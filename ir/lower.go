@@ -112,37 +112,21 @@ func (v *visitor) VisitBody(b *ast.Body) {
 	}
 }
 
-func (v *visitor) VisitAssign(a *ast.Assign) {
-	// If the assignment has no value, it was a declaration without initialization.
-	// We skip it in the IR lowering, there should be another assignment later on.
-	if a.Value == nil {
-		return
-	}
+// VisitDeclare handles variable declarations (no IR emitted, but needed for IR lowering).
+func (v *visitor) VisitDeclare(d *ast.Declare) {
+	// No IR emitted for declarations alone (handled by Assign if initialized)
+}
 
+func (v *visitor) VisitAssign(a *ast.Assign) {
 	// Lower the right-hand side expression
 	v.lastVal = nil
 	a.Value.Accept(v)
 	val := v.lastVal
 
-	// Left-hand side variable
-	lhsIdent := Ident(a.Ident)
-	lhsVal := NewValIdent(lhsIdent)
-
-	// For assignment, use Binop with add as a stand-in for move
-	zero := NewValInteger(0)
-	binopInstr := NewBinop(BinOpAdd, lhsVal, val, zero)
-	v.appendInstruction(binopInstr)
-}
-
-func (v *visitor) VisitSet(s *ast.Set) {
-	// Lower the right-hand side expression
+	// Lower the left-hand side lvalue (result in v.lastVal)
 	v.lastVal = nil
-	s.Value.Accept(v)
-	val := v.lastVal
-
-	// Left-hand side variable
-	lhsIdent := Ident(s.Ident)
-	lhsVal := NewValIdent(lhsIdent)
+	a.LHS.Accept(v)
+	lhsVal := v.lastVal
 
 	// For assignment, use Binop with add as a stand-in for move
 	zero := NewValInteger(0)
@@ -343,8 +327,8 @@ func (v *visitor) VisitIf(iff *ast.If) {
 	falseLabel := v.nextLabel("else")
 	endLabel := v.nextLabel("end")
 
-	if iff.Init != nil {
-		iff.Init.Accept(v)
+	for _, init := range iff.Init {
+		init.Accept(v)
 	}
 
 	// Lower the condition
@@ -383,9 +367,9 @@ func (v *visitor) VisitFor(f *ast.For) {
 	bodyLabel := v.nextLabel("body")
 	endLabel := v.nextLabel("end")
 
-	// Lower the initializer if present
-	if f.Init != nil {
-		f.Init.Accept(v)
+	// Lower the initializers if present
+	for _, init := range f.Init {
+		init.Accept(v)
 	}
 
 	// Lower the condition
@@ -401,9 +385,9 @@ func (v *visitor) VisitFor(f *ast.For) {
 		v.appendInstruction(NewLabel(bodyLabel))
 		f.Body.Accept(v)
 
-		// Lower the post-condition if present
-		if f.Post != nil {
-			f.Post.Accept(v)
+		// Lower the post-conditions if present
+		for _, post := range f.Post {
+			post.Accept(v)
 		}
 
 		v.appendInstruction(NewJmp(startLabel))

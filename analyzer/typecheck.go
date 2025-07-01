@@ -16,9 +16,10 @@ type Symbol struct {
 
 // TypeChecker implements a visitor for type checking the AST.
 type TypeChecker struct {
-	scopes   []map[string]Symbol
-	errors   []error
-	lastType *ast.Type
+	scopes     []map[string]*Symbol
+	errors     []error
+	lastType   *ast.Type
+	lastSymbol *Symbol // set by VisitVariableRef for lvalue assignment
 }
 
 func NewTypeChecker() *TypeChecker {
@@ -52,7 +53,7 @@ func (tc *TypeChecker) VisitCompilationUnit(unit *ast.CompilationUnit) {
 
 	// Add all function definitions to the global scope first
 	for _, fn := range unit.Funcs {
-		tc.addSymbol(Symbol{
+		tc.addSymbol(&Symbol{
 			Name:    fn.Ident,
 			Type:    fn.ReturnType,
 			IsFunc:  true,
@@ -91,7 +92,7 @@ func (tc *TypeChecker) VisitFuncDef(fn *ast.FuncDef) {
 		// Visit first to allow type inference/checking
 		param.Accept(tc)
 
-		tc.addSymbol(Symbol{
+		tc.addSymbol(&Symbol{
 			Name:   param.Ident,
 			Type:   param.Type,
 			IsFunc: false,
@@ -134,60 +135,44 @@ func (tc *TypeChecker) VisitBody(body *ast.Body) {
 	}
 }
 
-func (tc *TypeChecker) VisitAssign(assign *ast.Assign) {
-	rhsType := assign.Type
-
-	if assign.Value != nil {
-		// Type check the right-hand side expression
-		rhsType = tc.visitNode(assign.Value)
-
-		// If the assignment declares a type, check it matches the value
-		if assign.Type != nil && assign.Type.Kind != ast.TypeUnknown && !typeEqual(assign.Type, rhsType) {
-			tc.errorf("type error: variable '%s' declared as %s but assigned %s", assign.Ident, assign.Type, rhsType)
-		}
-	}
-
-	// Add or update the variable in the current scope
-	tc.addSymbol(Symbol{
-		Name:   assign.Ident,
-		Type:   rhsType,
+// VisitDeclare handles variable declarations (no IR emitted, but needed for typechecking and lowering).
+func (tc *TypeChecker) VisitDeclare(d *ast.Declare) {
+	// Add the declared variable to the current scope with its type (may be TypeUnknown)
+	tc.addSymbol(&Symbol{
+		Name:   d.Ident,
+		Type:   d.Type,
 		IsFunc: false,
 	})
 
-	assign.Type = rhsType // Set the type of the assignment
-	tc.lastType = assign.Type
+	// No type to propagate
 }
 
-func (tc *TypeChecker) VisitSet(set *ast.Set) {
-	// Look up the variable in the current scope
-	sym, ok := tc.lookupSymbol(set.Ident)
-	if !ok {
-		tc.errorf("undefined variable '%s'", set.Ident)
+// VisitAssign handles assignment to lvalues.
+func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
+	// Typecheck the lvalue (sets tc.lastType and tc.lastSymbol)
+	tc.lastSymbol = nil
+	a.LHS.Accept(tc)
+	lvalType := tc.lastType
+	lvalSymbol := tc.lastSymbol
 
-		set.Type = &ast.Type{Kind: ast.TypeUnknown}
-		tc.lastType = set.Type
+	// Typecheck the value
+	valType := tc.visitNode(a.Value)
 
-		return
-	} else if sym.IsFunc {
-		tc.errorf("cannot assign to function '%s'", set.Ident)
-
-		set.Type = &ast.Type{Kind: ast.TypeUnknown}
-		tc.lastType = set.Type
-
-		return
+	// If the lvalue is a variable, lastSymbol will be set
+	if lvalSymbol != nil {
+		if lvalSymbol.Type.Kind == ast.TypeUnknown {
+			lvalSymbol.Type = valType
+		} else if !typeEqual(lvalSymbol.Type, valType) {
+			tc.errorf("type error: variable '%s' declared as %s but assigned %s", lvalSymbol.Name, lvalSymbol.Type, valType)
+		}
+	} else {
+		// TODO: handle pointer deref, array index, etc.
+		if lvalType != nil && lvalType.Kind != ast.TypeUnknown && !typeEqual(lvalType, valType) {
+			tc.errorf("type error: lvalue type %s but assigned %s", lvalType, valType)
+		}
 	}
 
-	// Type check the value being assigned
-	valueType := tc.visitNode(set.Value)
-
-	// If the variable has a declared type, check it matches the value
-	if !typeEqual(sym.Type, valueType) {
-		tc.errorf("type error: variable '%s' declared as %s but set %s",
-			set.Ident, sym.Type, valueType)
-	}
-
-	set.Type = valueType // Set the type of the set operation
-	tc.lastType = set.Type
+	tc.lastType = valType
 }
 
 func (tc *TypeChecker) VisitCall(call *ast.Call) {
@@ -246,10 +231,12 @@ func (tc *TypeChecker) VisitVariableRef(ref *ast.VariableRef) {
 	if sym, ok := tc.lookupSymbol(ref.Ident); ok && !sym.IsFunc {
 		ref.Type = sym.Type
 		tc.lastType = sym.Type
+		tc.lastSymbol = sym
 	} else {
 		tc.errorf("undefined variable '%s'", ref.Ident)
 		ref.Type = &ast.Type{Kind: ast.TypeUnknown}
 		tc.lastType = ref.Type
+		tc.lastSymbol = nil
 	}
 }
 
@@ -314,9 +301,9 @@ func (tc *TypeChecker) VisitIf(iff *ast.If) {
 	// If statements introduce a new scope for variables (e.g. initializer)
 	tc.pushScope()
 
-	// Type check the initializer, if present
-	if iff.Init != nil {
-		iff.Init.Accept(tc)
+	// Type check the initializers, if present
+	for _, init := range iff.Init {
+		init.Accept(tc)
 	}
 
 	// Type check the condition
@@ -341,9 +328,9 @@ func (tc *TypeChecker) VisitFor(f *ast.For) {
 	// For statements introduce a new scope for variables
 	tc.pushScope()
 
-	// Type check the initializer, if present
-	if f.Init != nil {
-		f.Init.Accept(tc)
+	// Type check the initializers, if present
+	for _, init := range f.Init {
+		init.Accept(tc)
 	}
 
 	// Type check the condition
@@ -357,9 +344,9 @@ func (tc *TypeChecker) VisitFor(f *ast.For) {
 		f.Body.Accept(tc)
 	}
 
-	// Type check the post-condition, if present
-	if f.Post != nil {
-		f.Post.Accept(tc)
+	// Type check the post-conditions, if present
+	for _, post := range f.Post {
+		post.Accept(tc)
 	}
 
 	tc.popScope()
@@ -379,7 +366,7 @@ func (tc *TypeChecker) visitNode(node interface{ Accept(visitor ast.Visitor) }) 
 
 // Scope management helpers
 func (tc *TypeChecker) pushScope() {
-	tc.scopes = append(tc.scopes, make(map[string]Symbol))
+	tc.scopes = append(tc.scopes, make(map[string]*Symbol))
 }
 
 func (tc *TypeChecker) popScope() {
@@ -388,20 +375,20 @@ func (tc *TypeChecker) popScope() {
 	}
 }
 
-func (tc *TypeChecker) addSymbol(sym Symbol) {
+func (tc *TypeChecker) addSymbol(sym *Symbol) {
 	if len(tc.scopes) == 0 {
 		tc.pushScope()
 	}
 	tc.scopes[len(tc.scopes)-1][sym.Name] = sym
 }
 
-func (tc *TypeChecker) lookupSymbol(name string) (Symbol, bool) {
+func (tc *TypeChecker) lookupSymbol(name string) (*Symbol, bool) {
 	for i := len(tc.scopes) - 1; i >= 0; i-- {
 		if sym, ok := tc.scopes[i][name]; ok {
 			return sym, true
 		}
 	}
-	return Symbol{}, false
+	return nil, false
 }
 
 // Helper to record errors
