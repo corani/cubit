@@ -200,8 +200,17 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 		return fmt.Errorf("error parsing return type at %s: %w", name.Location, err)
 	}
 
-	p.currentRetType = retType.Keyword
-	def.ReturnType = p.mapKeywordToType(retType.Keyword)
+	// For legacy: set currentRetType for void detection
+	if retType.Kind == ast.TypeVoid {
+		p.currentRetType = lexer.KeywordVoid
+	} else if retType.Kind == ast.TypeInt {
+		p.currentRetType = lexer.KeywordInt
+	} else if retType.Kind == ast.TypeString {
+		p.currentRetType = lexer.KeywordString
+	} else {
+		p.currentRetType = lexer.KeywordVoid // fallback
+	}
+	def.ReturnType = retType
 
 	// If the function is not `extern`, we expect a body.
 	if _, ok := def.Attributes["extern"]; !ok {
@@ -224,8 +233,8 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			addRet = !hasRet
 		}
 		if addRet {
-			switch retType.Keyword {
-			case lexer.KeywordVoid:
+			switch retType.Kind {
+			case ast.TypeVoid:
 				instructions = append(instructions, &ast.Return{})
 			default:
 				return fmt.Errorf("expected return statement at %s", name.Location)
@@ -279,28 +288,26 @@ func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
 	if _, err := p.expectType(lexer.TypeColon); err != nil {
 		return nil, err
 	}
-
 	equal, err := p.peekType(lexer.TypeAssign)
 	if err != nil {
 		return nil, err
 	}
 
-	argType := lexer.Token{}
-
+	var paramType *ast.Type
 	if equal.Type != lexer.TypeAssign {
-		argType, err = p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
+		paramType, err = p.parseType()
 		if err != nil {
 			return nil, err
 		}
-
 		equal, err = p.peekType(lexer.TypeAssign)
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		paramType = &ast.Type{Kind: ast.TypeUnknown}
 	}
 
 	var value ast.Expression
-
 	if equal.Type == lexer.TypeAssign {
 		// If we have an equals sign, we expect a default value
 		value, err = p.parseExpression(false)
@@ -311,30 +318,28 @@ func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
 
 	return &ast.FuncParam{
 		Ident:      nextTok.StringVal,
-		Type:       p.mapKeywordToType(argType.Keyword),
+		Type:       paramType,
 		Attributes: attrs,
 		Value:      value,
 	}, nil
 }
 
-func (p *Parser) parseFuncReturnType() (*lexer.Token, error) {
+func (p *Parser) parseFuncReturnType() (*ast.Type, error) {
 	arrow, err := p.peekType(lexer.TypeArrow)
 	if err != nil {
 		return nil, err
 	}
 
-	retType := lexer.Token{
-		Keyword: lexer.KeywordVoid,
-	}
-
 	if arrow.Type == lexer.TypeArrow {
-		retType, err = p.expectKeyword(lexer.KeywordInt, lexer.KeywordString, lexer.KeywordVoid)
+		retType, err := p.parseType()
 		if err != nil {
 			return nil, err
 		}
+		return retType, nil
 	}
 
-	return &retType, nil
+	// Default to void
+	return &ast.Type{Kind: ast.TypeVoid}, nil
 }
 
 func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
@@ -428,17 +433,14 @@ func (p *Parser) parseAssign(name lexer.Token) (*ast.Assign, error) {
 	// type
 	if next.Type != lexer.TypeAssign {
 		p.index--
-
-		ty, err := p.expectKeyword(lexer.KeywordInt, lexer.KeywordString)
+		ty, err := p.parseType()
 		if err != nil {
 			return nil, err
 		}
-
 		if _, err := p.expectType(lexer.TypeAssign); err != nil {
 			return nil, err
 		}
-
-		returnType = p.mapKeywordToType(ty.Keyword)
+		returnType = ty
 	}
 
 	// value
@@ -729,16 +731,21 @@ func (p *Parser) nextToken() (lexer.Token, error) {
 	return token, nil
 }
 
-func (p *Parser) mapKeywordToType(kw lexer.Keyword) *ast.Type {
-	switch kw {
+func (p *Parser) parseType() (*ast.Type, error) {
+	tok, err := p.expectType(lexer.TypeKeyword)
+	if err != nil {
+		return nil, err
+	}
+
+	switch tok.Keyword {
 	case lexer.KeywordInt:
-		return &ast.Type{Kind: ast.TypeInt}
+		return &ast.Type{Kind: ast.TypeInt}, nil
 	case lexer.KeywordString:
-		return &ast.Type{Kind: ast.TypeString}
+		return &ast.Type{Kind: ast.TypeString}, nil
 	case lexer.KeywordVoid:
-		return &ast.Type{Kind: ast.TypeVoid}
+		return &ast.Type{Kind: ast.TypeVoid}, nil
 	default:
-		return &ast.Type{Kind: ast.TypeUnknown}
+		return nil, fmt.Errorf("unexpected type keyword %s at %s", tok.Keyword, tok.Location)
 	}
 }
 
