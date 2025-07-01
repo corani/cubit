@@ -162,7 +162,6 @@ n := len(x) // calls user-defined len(MyType)
 ```
 
 This approach ensures extensibility, avoids ambiguity, and keeps overloads local to the type or function's defining package.
-```
 
 ---
 
@@ -380,8 +379,60 @@ main :: func() -> int {
 }
 ```
 
----
+## 14. Pointers
 
+Pointers provide low-level access to memory and are used for referencing, dereferencing, and pointer arithmetic.
+
+### Pointer Types
+
+- The type `^T` denotes a pointer to type `T`.
+  - Example: `p: ^int` declares `p` as a pointer to an integer.
+
+### Address-of Operator
+
+- Use `&` to take the address of a variable or value.
+  - Example: `p := &x` assigns `p` the address of `x`.
+
+### Dereferencing
+
+- Use postfix `^` to dereference a pointer.
+  - Example: `val := p^` assigns the value pointed to by `p` to `val`.
+
+### Pointer Arithmetic
+
+- Pointers support arithmetic for types with a defined size (e.g., arrays, structs, primitives).
+- You can add or subtract integers to/from pointers to move by element size:
+  - `p + n` yields a pointer offset by `n` elements of the pointed-to type.
+  - `p - n` yields a pointer offset by `-n` elements.
+  - Example: `q := p + 1` points to the next element after `p`.
+- Subtracting two pointers of the same type yields the number of elements between them:
+  - Example: `diff := q - p` (if `q` and `p` are both `^T`).
+
+### Nil Pointers
+
+- The literal `nil` represents a pointer that does not point to any value.
+  - Example: `p: ^int = nil`
+
+### Usage Example
+
+```odin
+x := 42
+p := &x        // p is ^int
+y := p^        // y is 42
+
+arr := [10]int{...}
+p := &arr[0]
+p2 := p + 3    // points to arr[3]
+val := p2^     // value at arr[3]
+```
+
+### Safety
+
+- Pointer arithmetic is only valid within the bounds of the same array or allocation.
+- Dereferencing a nil or invalid pointer is undefined behavior.
+
+
+---
 
 
 ## 12. Implicit Context

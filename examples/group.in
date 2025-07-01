@@ -1,0 +1,19 @@
+package main
+
+@(extern)
+printf :: func(msg: string, arg: int)
+
+@(export)
+main :: func() -> int {
+    a := 1
+    b := 2
+    c := (a + b) * 3
+
+    if c != 9 {
+        printf("The value of c is not 9, it is: %d\n", c)
+    } else {
+        printf("The value of c is %d\n", c)
+    }
+
+    return 0
+}

@@ -25,12 +25,8 @@ main :: func() -> int {
   // Type of count is inferred as int
   count := sum(11, 12)
 
-  a := 1
-
-  for a <= 5 {
+  for a := 1; a <= 5; a = a + 1 {
     hello(count + 4 + a)
-
-    a = a + 1
   }
 
   // Return 0 to indicate success
