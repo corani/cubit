@@ -22,6 +22,7 @@ type Visitor interface {
 }
 
 // TypeKind represents the basic types in the language for type checking.
+
 type TypeKind int
 
 const (
@@ -30,7 +31,14 @@ const (
 	TypeBool
 	TypeString
 	TypeVoid
+	TypePointer
 )
+
+// Type is a recursive type structure for basic and pointer types.
+type Type struct {
+	Kind TypeKind
+	Elem *Type // non-nil if Kind == TypePointer
+}
 
 type CompilationUnit struct {
 	Ident      string // package name
@@ -57,7 +65,7 @@ func (cu *CompilationUnit) Accept(v Visitor) {
 
 type TypeDef struct {
 	Ident      string // type name
-	Type       TypeKind
+	Type       *Type
 	Value      Expression // optional initial value
 	Attributes Attributes
 }
@@ -68,7 +76,7 @@ func (td *TypeDef) Accept(v Visitor) {
 
 type DataDef struct {
 	Ident      string // data name
-	Type       TypeKind
+	Type       *Type
 	Value      Expression // optional initial value
 	Attributes Attributes
 }
@@ -80,7 +88,7 @@ func (dd *DataDef) Accept(v Visitor) {
 type FuncDef struct {
 	Ident      string // function name
 	Params     []*FuncParam
-	ReturnType TypeKind
+	ReturnType *Type
 	Body       *Body
 	Attributes Attributes
 }
@@ -89,7 +97,7 @@ func NewFuncDef(ident string, attributes Attributes) *FuncDef {
 	return &FuncDef{
 		Ident:      ident,
 		Params:     nil,
-		ReturnType: TypeVoid,
+		ReturnType: &Type{Kind: TypeVoid},
 		Body:       nil,
 		Attributes: maps.Clone(attributes),
 	}
@@ -101,7 +109,7 @@ func (fd *FuncDef) Accept(v Visitor) {
 
 type FuncParam struct {
 	Ident      string // parameter name
-	Type       TypeKind
+	Type       *Type
 	Value      Expression // optional default value
 	Attributes Attributes
 }
@@ -139,7 +147,7 @@ var _ []Instruction = []Instruction{
 // Set represents assignment to an existing variable (e.g., x = 1)
 type Set struct {
 	Ident string
-	Type  TypeKind // type of the variable being set
+	Type  *Type // type of the variable being set
 	Value Expression
 }
 
@@ -177,8 +185,8 @@ func (f *For) Accept(v Visitor) {
 func (*For) isInstruction() {}
 
 type Call struct {
-	Ident string   // function name
-	Type  TypeKind // return type, if any
+	Ident string // function name
+	Type  *Type  // return type, if any
 	Args  []Arg
 }
 
@@ -199,12 +207,12 @@ func (*Call) isExpression()  {}
 type Arg struct {
 	Ident string     // (optional) argument name
 	Value Expression // argument value
-	Type  TypeKind
+	Type  *Type
 }
 
 type Assign struct {
 	Ident string     // variable name
-	Type  TypeKind   // variable type
+	Type  *Type      // variable type
 	Value Expression // right-hand side expression
 }
 
@@ -249,7 +257,7 @@ var _ []Expression = []Expression{
 
 type VariableRef struct {
 	Ident string
-	Type  TypeKind
+	Type  *Type
 }
 
 func (vref *VariableRef) Accept(v Visitor) {
@@ -259,14 +267,14 @@ func (vref *VariableRef) Accept(v Visitor) {
 func NewVariableRef(ident string, ty TypeKind) *VariableRef {
 	return &VariableRef{
 		Ident: ident,
-		Type:  ty,
+		Type:  &Type{Kind: ty},
 	}
 }
 
 func (*VariableRef) isExpression() {}
 
 type Literal struct {
-	Type        TypeKind
+	Type        *Type
 	IntValue    int
 	StringValue string
 	BoolValue   bool
@@ -278,21 +286,21 @@ func (l *Literal) Accept(v Visitor) {
 
 func NewIntLiteral(val int) *Literal {
 	return &Literal{
-		Type:     TypeInt,
+		Type:     &Type{Kind: TypeInt},
 		IntValue: val,
 	}
 }
 
 func NewBoolLiteral(val bool) *Literal {
 	return &Literal{
-		Type:      TypeBool,
+		Type:      &Type{Kind: TypeBool},
 		BoolValue: val,
 	}
 }
 
 func NewStringLiteral(val string) *Literal {
 	return &Literal{
-		Type:        TypeString,
+		Type:        &Type{Kind: TypeString},
 		StringValue: val,
 	}
 }
@@ -324,7 +332,7 @@ const (
 type Binop struct {
 	Operation BinOpKind
 	Lhs, Rhs  Expression
-	Type      TypeKind
+	Type      *Type
 }
 
 func (b *Binop) Accept(v Visitor) {
@@ -337,7 +345,7 @@ func NewBinop(op BinOpKind, lhs, rhs Expression) *Binop {
 		Operation: op,
 		Lhs:       lhs,
 		Rhs:       rhs,
-		Type:      TypeUnknown,
+		Type:      &Type{Kind: TypeUnknown},
 	}
 }
 

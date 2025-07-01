@@ -423,7 +423,7 @@ func (p *Parser) parseAssign(name lexer.Token) (*ast.Assign, error) {
 		return nil, err
 	}
 
-	returnType := ast.TypeUnknown
+	var returnType *ast.Type = &ast.Type{Kind: ast.TypeUnknown}
 
 	// type
 	if next.Type != lexer.TypeAssign {
@@ -463,7 +463,7 @@ func (p *Parser) parseSet(name lexer.Token) (*ast.Set, error) {
 
 	return &ast.Set{
 		Ident: name.StringVal,
-		Type:  ast.TypeUnknown,
+		Type:  &ast.Type{Kind: ast.TypeUnknown},
 		Value: expr,
 	}, nil
 }
@@ -729,16 +729,16 @@ func (p *Parser) nextToken() (lexer.Token, error) {
 	return token, nil
 }
 
-func (p *Parser) mapKeywordToType(kw lexer.Keyword) ast.TypeKind {
+func (p *Parser) mapKeywordToType(kw lexer.Keyword) *ast.Type {
 	switch kw {
 	case lexer.KeywordInt:
-		return ast.TypeInt
+		return &ast.Type{Kind: ast.TypeInt}
 	case lexer.KeywordString:
-		return ast.TypeString
+		return &ast.Type{Kind: ast.TypeString}
 	case lexer.KeywordVoid:
-		return ast.TypeVoid
+		return &ast.Type{Kind: ast.TypeVoid}
 	default:
-		return ast.TypeUnknown
+		return &ast.Type{Kind: ast.TypeUnknown}
 	}
 }
 

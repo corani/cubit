@@ -80,7 +80,7 @@ func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
 		irFunc.LinkName = Ident(string(v.(ast.AttrString)))
 	}
 
-	if fd.ReturnType != ast.TypeVoid {
+	if fd.ReturnType != nil && fd.ReturnType.Kind != ast.TypeVoid {
 		irFunc = irFunc.WithRetTy(v.mapTypeToAbiTy(fd.ReturnType))
 	}
 
@@ -173,7 +173,7 @@ func (v *visitor) VisitCall(c *ast.Call) {
 	// Emit the Call instruction
 	call := NewCall(calleeVal, args...)
 
-	if c.Type != ast.TypeVoid {
+	if c.Type != nil && c.Type.Kind != ast.TypeVoid {
 		call.WithRet(retVal.Ident, v.mapTypeToAbiTy(c.Type))
 	}
 
@@ -194,7 +194,10 @@ func (v *visitor) VisitReturn(r *ast.Return) {
 }
 
 func (v *visitor) VisitLiteral(l *ast.Literal) {
-	switch l.Type {
+	if l.Type == nil {
+		panic("literal has nil type")
+	}
+	switch l.Type.Kind {
 	case ast.TypeInt:
 		v.lastVal = NewValInteger(int64(l.IntValue))
 	case ast.TypeBool:
@@ -442,9 +445,12 @@ func (v *visitor) nextIdent(prefix string) Ident {
 	return Ident(fmt.Sprintf("_%s_%04d", prefix, v.tmpCounter))
 }
 
-// mapTypeToAbiTy maps an ast.TypeKind to the appropriate AbiTy for IR lowering.
-func (v *visitor) mapTypeToAbiTy(ty ast.TypeKind) AbiTy {
-	switch ty {
+// mapTypeToAbiTy maps an *ast.Type to the appropriate AbiTy for IR lowering.
+func (v *visitor) mapTypeToAbiTy(ty *ast.Type) AbiTy {
+	if ty == nil {
+		return NewAbiTyBase(BaseWord)
+	}
+	switch ty.Kind {
 	case ast.TypeInt:
 		return NewAbiTyBase(BaseWord)
 	case ast.TypeString:

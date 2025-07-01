@@ -5,8 +5,11 @@ import (
 	"strings"
 )
 
-func (t TypeKind) String() string {
-	switch t {
+func (t *Type) String() string {
+	if t == nil {
+		return "<nil>"
+	}
+	switch t.Kind {
 	case TypeInt:
 		return "int"
 	case TypeBool:
@@ -15,6 +18,8 @@ func (t TypeKind) String() string {
 		return "string"
 	case TypeVoid:
 		return "void"
+	case TypePointer:
+		return "^" + t.Elem.String()
 	default:
 		return "unknown"
 	}
@@ -53,17 +58,13 @@ func (dd DataDef) String() string {
 
 func (fd FuncDef) String() string {
 	var params []string
-
 	for _, param := range fd.Params {
 		params = append(params, param.String())
 	}
-
 	body := ""
-
 	if fd.Body != nil {
 		body = fd.Body.String()
 	}
-
 	return fmt.Sprintf("\n\t(func %q (%s) (%s) %s (%s))",
 		fd.Ident, strings.Join(params, " "), fd.ReturnType, fd.Attributes, body)
 }
@@ -73,7 +74,6 @@ func (fp FuncParam) String() string {
 	if fp.Value != nil {
 		value = fp.Value.String()
 	}
-
 	return fmt.Sprintf("(param %q %s %s %s)", fp.Ident, fp.Type, value, fp.Attributes)
 }
 
@@ -129,7 +129,6 @@ func (a Arg) String() string {
 	if a.Ident != "" {
 		return fmt.Sprintf("%s=%s", a.Ident, a.Value)
 	}
-
 	return a.Value.String()
 }
 
@@ -153,7 +152,10 @@ func (v *VariableRef) String() string {
 }
 
 func (l *Literal) String() string {
-	switch l.Type {
+	if l.Type == nil {
+		return "(lit <nil> <nil>)"
+	}
+	switch l.Type.Kind {
 	case TypeInt:
 		return fmt.Sprintf("(lit %d %v)", l.IntValue, l.Type)
 	case TypeString:
