@@ -192,3 +192,7 @@ func (l *Literal) String() string {
 func (b *Binop) String() string {
 	return fmt.Sprintf("(call %q %s %s %s)", b.Operation, b.Type, b.Lhs, b.Rhs)
 }
+
+func (d *Deref) String() string {
+	return fmt.Sprintf("(deref %s %s)", d.Expr, d.Type)
+}

@@ -405,6 +405,25 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 				}
 
 				instructions = append(instructions, instr...)
+			case lexer.TypeCaret:
+				lvalue := ast.NewDeref(ast.NewVariableRef(first.StringVal, ast.TypeUnknown))
+
+				next, err := p.peekType(lexer.TypeAssign)
+				if err != nil {
+					return nil, err
+				}
+
+				if next.Type == lexer.TypeAssign {
+					instr, err := p.parseAssign(lvalue)
+					if err != nil {
+						return nil, err
+					}
+
+					instructions = append(instructions, instr...)
+				} else {
+					return nil, fmt.Errorf("expected '=' after dereference at %s, got %s",
+						first.Location, next.StringVal)
+				}
 			case lexer.TypeAssign:
 				lvalue := ast.NewVariableRef(first.StringVal, ast.TypeUnknown)
 
@@ -428,7 +447,7 @@ func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 	var instructions []ast.Instruction
 
 	// Could be a declaration or declaration+assignment
-	next, err := p.peekType(lexer.TypeAssign, lexer.TypeKeyword)
+	next, err := p.peekType(lexer.TypeAssign, lexer.TypeKeyword, lexer.TypeCaret)
 	if err != nil {
 		return nil, err
 	}
@@ -669,14 +688,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 			}
 		case lexer.TypeCaret:
 			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown)
-
-			// Check for a dereference (caret) immediately after the variable
-			caret, err := p.peekType(lexer.TypeCaret)
-			if err == nil && caret.Type == lexer.TypeCaret {
-				// Consume the caret
-				_, _ = p.nextToken()
-				expr = ast.NewDeref(expr)
-			}
+			expr = ast.NewDeref(expr)
 		default:
 			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown)
 		}

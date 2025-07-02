@@ -402,6 +402,11 @@ func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {
 	v.lastVal = NewValIdent(Ident(vr.Ident))
 }
 
+// VisitDeref handles pointer dereference expressions (currently a no-op).
+func (v *visitor) VisitDeref(d *ast.Deref) {
+	// TODO: implement lowering for pointer dereference
+}
+
 func (v *visitor) appendInstruction(instr Instruction) {
 	if _, ok := instr.(*Label); ok {
 		v.lastInstructions = append(v.lastInstructions, instr)

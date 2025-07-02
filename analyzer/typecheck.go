@@ -353,6 +353,11 @@ func (tc *TypeChecker) VisitFor(f *ast.For) {
 	tc.lastType = &ast.Type{Kind: ast.TypeVoid} // for is a statement, not an expression
 }
 
+// VisitDeref handles pointer dereference expressions (currently a no-op).
+func (tc *TypeChecker) VisitDeref(d *ast.Deref) {
+	// TODO: implement type checking for pointer dereference
+}
+
 // visitNode is a helper method to visit a node and return the lastType.
 func (tc *TypeChecker) visitNode(node interface{ Accept(visitor ast.Visitor) }) *ast.Type {
 	if node != nil {

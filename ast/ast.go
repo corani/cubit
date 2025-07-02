@@ -17,6 +17,7 @@ type Visitor interface {
 	VisitLiteral(*Literal)
 	VisitBinop(*Binop)
 	VisitVariableRef(*VariableRef)
+	VisitDeref(*Deref)
 	VisitIf(*If)
 	VisitFor(*For)
 }
@@ -259,6 +260,27 @@ var _ []Expression = []Expression{
 	(*Literal)(nil),
 	(*Binop)(nil),
 	(*VariableRef)(nil),
+	(*Deref)(nil),
+}
+
+// Deref represents a pointer dereference expression (e.g., a^)
+type Deref struct {
+	Expr Expression // the pointer expression to dereference
+	Type *Type      // the type after dereferencing
+}
+
+func (d *Deref) Accept(v Visitor) {
+	v.VisitDeref(d)
+}
+
+func (*Deref) isExpression() {}
+func (*Deref) isLValue()     {}
+
+func NewDeref(expr Expression) *Deref {
+	return &Deref{
+		Expr: expr,
+		Type: &Type{Kind: TypeUnknown},
+	}
 }
 
 type VariableRef struct {
