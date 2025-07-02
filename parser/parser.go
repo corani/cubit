@@ -398,9 +398,14 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 					return nil, err
 				}
 				instructions = append(instructions, inst)
-			case lexer.TypeColon, lexer.TypeAssign:
-				p.index--
+			case lexer.TypeColon:
+				instr, err := p.parseDeclare(first)
+				if err != nil {
+					return nil, err
+				}
 
+				instructions = append(instructions, instr...)
+			case lexer.TypeAssign:
 				instr, err := p.parseAssign(first)
 				if err != nil {
 					return nil, err
@@ -415,67 +420,66 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 	}
 }
 
-func (p *Parser) parseAssign(ident lexer.Token) ([]ast.Instruction, error) {
+func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
+	// <indent> ':'
+	// have been consumed already.
 	var instructions []ast.Instruction
 
-	first, err := p.nextToken()
+	// Could be a declaration or declaration+assignment
+	next, err := p.peekType(lexer.TypeAssign, lexer.TypeKeyword)
 	if err != nil {
 		return nil, err
 	}
 
-	switch first.Type {
-	case lexer.TypeColon:
-		// Could be a declaration or declaration+assignment
-		next, err := p.peekType(lexer.TypeAssign, lexer.TypeKeyword, lexer.TypeCaret)
+	var declaredType *ast.Type = &ast.Type{Kind: ast.TypeUnknown}
+
+	// type
+	if next.Type != lexer.TypeAssign {
+		p.index--
+		ty, err := p.parseType()
 		if err != nil {
 			return nil, err
 		}
-
-		var declaredType *ast.Type = &ast.Type{Kind: ast.TypeUnknown}
-
-		// type
-		if next.Type != lexer.TypeAssign {
-			p.index--
-			ty, err := p.parseType()
-			if err != nil {
-				return nil, err
-			}
-			declaredType = ty
-			next, err = p.peekType(lexer.TypeAssign)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		// Always emit a Declare
-		instructions = append(instructions, &ast.Declare{
-			Ident: ident.StringVal,
-			Type:  declaredType,
-		})
-
-		if next.Type == lexer.TypeAssign {
-			// Declaration with initialization: a : int := 1 or a := 1
-			expr, err := p.parseExpression(false)
-			if err != nil {
-				return nil, err
-			}
-			instructions = append(instructions, &ast.Assign{
-				LHS:   ast.NewVariableRef(ident.StringVal, declaredType.Kind),
-				Value: expr,
-			})
-		}
-	case lexer.TypeAssign:
-		// Assignment to existing variable: a = 1
-		expr, err := p.parseExpression(false)
+		declaredType = ty
+		next, err = p.peekType(lexer.TypeAssign)
 		if err != nil {
 			return nil, err
 		}
-
-		instructions = append(instructions, &ast.Assign{
-			LHS:   ast.NewVariableRef(ident.StringVal, ast.TypeUnknown),
-			Value: expr,
-		})
 	}
+
+	instructions = append(instructions, &ast.Declare{
+		Ident: ident.StringVal,
+		Type:  declaredType,
+	})
+
+	// optional assignment
+	if next.Type == lexer.TypeAssign {
+		instr, err := p.parseAssign(ident)
+		if err != nil {
+			return nil, err
+		}
+
+		instructions = append(instructions, instr...)
+	}
+
+	return instructions, nil
+}
+
+func (p *Parser) parseAssign(ident lexer.Token) ([]ast.Instruction, error) {
+	// <ident> '=' or <ident> ':' <type> '=' or <ident> ':='
+	// have been consumed already.
+	var instructions []ast.Instruction
+
+	// Assignment to existing variable: a = 1
+	expr, err := p.parseExpression(false)
+	if err != nil {
+		return nil, err
+	}
+
+	instructions = append(instructions, &ast.Assign{
+		LHS:   ast.NewVariableRef(ident.StringVal, ast.TypeUnknown),
+		Value: expr,
+	})
 
 	return instructions, nil
 }
@@ -646,19 +650,30 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 	case lexer.TypeString:
 		expr = ast.NewStringLiteral(start.StringVal)
 	case lexer.TypeIdent:
-		// Peek to see if this is a function call (ident followed by Lparen)
-		lparen, err := p.peekType(lexer.TypeLparen)
+		// Peek to see if this is a function call or dereference
+		next, err := p.peekType(lexer.TypeLparen, lexer.TypeCaret)
 		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, err
 		}
 
-		if lparen.Type == lexer.TypeLparen {
+		switch next.Type {
+		case lexer.TypeLparen:
 			// It's a function call
 			expr, err = p.parseCall(start)
 			if err != nil {
 				return nil, err
 			}
-		} else {
+		case lexer.TypeCaret:
+			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown)
+
+			// Check for a dereference (caret) immediately after the variable
+			caret, err := p.peekType(lexer.TypeCaret)
+			if err == nil && caret.Type == lexer.TypeCaret {
+				// Consume the caret
+				_, _ = p.nextToken()
+				expr = ast.NewDeref(expr)
+			}
+		default:
 			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown)
 		}
 	case lexer.TypeLparen:
@@ -797,9 +812,17 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 		if tok, err := p.peekType(lexer.TypeColon, lexer.TypeAssign); err != nil {
 			// Not an initializer, roll back
 			p.index--
-		} else if tok.Type == lexer.TypeColon || tok.Type == lexer.TypeAssign {
-			p.index--
+		} else if tok.Type == lexer.TypeColon {
+			initInstrs, err = p.parseDeclare(next)
+			if err != nil {
+				return nil, err
+			}
 
+			// Expect semicolon
+			if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
+				return nil, err
+			}
+		} else if tok.Type == lexer.TypeAssign {
 			initInstrs, err = p.parseAssign(next)
 			if err != nil {
 				return nil, err
@@ -910,8 +933,18 @@ func (p *Parser) parseFor() (ast.Instruction, error) {
 			// If we didn't parse an initializer, roll back the index and try
 			// to parse it as a condition.
 			p.index = index
-		} else if next.Type == lexer.TypeColon || next.Type == lexer.TypeAssign {
-			p.index--
+		} else if next.Type == lexer.TypeColon {
+			initInstrs, err = p.parseDeclare(start)
+			if err != nil {
+				return nil, err
+			}
+
+			// If we successfully parsed an initializer, expect a semicolon
+			_, err := p.expectType(lexer.TypeSemicolon)
+			if err != nil {
+				return nil, err
+			}
+		} else if next.Type == lexer.TypeAssign {
 			initInstrs, err = p.parseAssign(start)
 			if err != nil {
 				return nil, err
@@ -953,9 +986,12 @@ func (p *Parser) parseFor() (ast.Instruction, error) {
 		next, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
 		if err != nil {
 			return nil, err
-		} else if next.Type == lexer.TypeColon || next.Type == lexer.TypeAssign {
-			p.index--
-
+		} else if next.Type == lexer.TypeColon {
+			postInstrs, err = p.parseDeclare(start)
+			if err != nil {
+				return nil, err
+			}
+		} else if next.Type == lexer.TypeAssign {
 			postInstrs, err = p.parseAssign(start)
 			if err != nil {
 				return nil, err
