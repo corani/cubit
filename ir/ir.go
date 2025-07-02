@@ -12,6 +12,8 @@ type Visitor interface {
 	VisitBinop(*Binop) string
 	VisitJmp(*Jmp) string
 	VisitJnz(*Jnz) string
+	VisitLoad(*Load) string
+	VisitStore(*Store) string
 }
 
 type CompilationUnit struct {
@@ -607,4 +609,36 @@ func (j *Jnz) isInstruction() {}
 
 func (j *Jnz) Accept(visitor Visitor) string {
 	return visitor.VisitJnz(j)
+}
+
+// Load represents a load from memory (e.g., x = p^)
+type Load struct {
+	Ret  *Val // destination (SSA temp)
+	Addr *Val // address to load from
+}
+
+func NewLoad(ret, addr *Val) *Load {
+	return &Load{Ret: ret, Addr: addr}
+}
+
+func (l *Load) isInstruction() {}
+
+func (l *Load) Accept(visitor Visitor) string {
+	return visitor.VisitLoad(l)
+}
+
+// Store represents a store to memory (e.g., p^ = x)
+type Store struct {
+	Addr *Val // address to store to
+	Val  *Val // value to store
+}
+
+func NewStore(addr, val *Val) *Store {
+	return &Store{Addr: addr, Val: val}
+}
+
+func (s *Store) isInstruction() {}
+
+func (s *Store) Accept(visitor Visitor) string {
+	return visitor.VisitStore(s)
 }

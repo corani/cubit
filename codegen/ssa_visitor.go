@@ -342,3 +342,17 @@ func (v *SsaGen) VisitJmp(j *ir.Jmp) string {
 func (v *SsaGen) VisitJnz(j *ir.Jnz) string {
 	return fmt.Sprintf("jnz %s, @%s, @%s", v.VisitVal(j.Cond), j.True, j.False)
 }
+
+// Implements QBE-style load: %ret =w loadw %addr
+func (v *SsaGen) VisitLoad(l *ir.Load) string {
+	// For now, always use 'w' (word) as the type suffix. Adjust as needed for other types.
+	// QBE: %ret =w loadw %addr
+	return fmt.Sprintf("%s =w loadw %s", v.VisitVal(l.Ret), v.VisitVal(l.Addr))
+}
+
+// Implements QBE-style store: storew %val, %addr
+func (v *SsaGen) VisitStore(s *ir.Store) string {
+	// For now, always use 'w' (word) as the type suffix. Adjust as needed for other types.
+	// QBE: storew %val, %addr
+	return fmt.Sprintf("storew %s, %s", v.VisitVal(s.Val), v.VisitVal(s.Addr))
+}
