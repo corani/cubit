@@ -406,7 +406,9 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 
 				instructions = append(instructions, instr...)
 			case lexer.TypeAssign:
-				instr, err := p.parseAssign(first)
+				lvalue := ast.NewVariableRef(first.StringVal, ast.TypeUnknown)
+
+				instr, err := p.parseAssign(lvalue)
 				if err != nil {
 					return nil, err
 				}
@@ -454,7 +456,9 @@ func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 
 	// optional assignment
 	if next.Type == lexer.TypeAssign {
-		instr, err := p.parseAssign(ident)
+		lvalue := ast.NewVariableRef(ident.StringVal, declaredType.Kind)
+
+		instr, err := p.parseAssign(lvalue)
 		if err != nil {
 			return nil, err
 		}
@@ -465,19 +469,19 @@ func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 	return instructions, nil
 }
 
-func (p *Parser) parseAssign(ident lexer.Token) ([]ast.Instruction, error) {
-	// <ident> '=' or <ident> ':' <type> '=' or <ident> ':='
+// parseAssign now accepts an LValue (e.g., variable ref, deref, etc.)
+func (p *Parser) parseAssign(lhs ast.LValue) ([]ast.Instruction, error) {
+	// <lvalue> '=' or <lvalue> ':' <type> '=' or <lvalue> ':='
 	// have been consumed already.
 	var instructions []ast.Instruction
 
-	// Assignment to existing variable: a = 1
 	expr, err := p.parseExpression(false)
 	if err != nil {
 		return nil, err
 	}
 
 	instructions = append(instructions, &ast.Assign{
-		LHS:   ast.NewVariableRef(ident.StringVal, ast.TypeUnknown),
+		LHS:   lhs,
 		Value: expr,
 	})
 
@@ -823,7 +827,9 @@ func (p *Parser) parseIf() (ast.Instruction, error) {
 				return nil, err
 			}
 		} else if tok.Type == lexer.TypeAssign {
-			initInstrs, err = p.parseAssign(next)
+			lvalue := ast.NewVariableRef(next.StringVal, ast.TypeUnknown)
+
+			initInstrs, err = p.parseAssign(lvalue)
 			if err != nil {
 				return nil, err
 			}
@@ -945,7 +951,9 @@ func (p *Parser) parseFor() (ast.Instruction, error) {
 				return nil, err
 			}
 		} else if next.Type == lexer.TypeAssign {
-			initInstrs, err = p.parseAssign(start)
+			lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown)
+
+			initInstrs, err = p.parseAssign(lvalue)
 			if err != nil {
 				return nil, err
 			}
@@ -992,7 +1000,9 @@ func (p *Parser) parseFor() (ast.Instruction, error) {
 				return nil, err
 			}
 		} else if next.Type == lexer.TypeAssign {
-			postInstrs, err = p.parseAssign(start)
+			lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown)
+
+			postInstrs, err = p.parseAssign(lvalue)
 			if err != nil {
 				return nil, err
 			}
