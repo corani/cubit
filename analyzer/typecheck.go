@@ -162,7 +162,7 @@ func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
 	if lvalSymbol != nil {
 		if lvalSymbol.Type.Kind == ast.TypeUnknown {
 			lvalSymbol.Type = valType
-		} else if !typeEqual(lvalSymbol.Type, valType) {
+		} else if !typeEqual(lvalType, valType) {
 			tc.errorf("type error: variable '%s' declared as %s but assigned %s", lvalSymbol.Name, lvalSymbol.Type, valType)
 		}
 	} else {
@@ -355,7 +355,16 @@ func (tc *TypeChecker) VisitFor(f *ast.For) {
 
 // VisitDeref handles pointer dereference expressions (currently a no-op).
 func (tc *TypeChecker) VisitDeref(d *ast.Deref) {
-	// TODO: implement type checking for pointer dereference
+	// Dereference does not change the type, just returns the type of the dereferenced expression
+	ref := tc.visitNode(d.Expr)
+	if ref == nil || ref.Kind != ast.TypePointer {
+		tc.errorf("dereference requires pointer type, got %s", ref)
+		d.Type = &ast.Type{Kind: ast.TypeUnknown}
+	} else {
+		d.Type = ref.Elem // Dereference returns the element type
+	}
+
+	tc.lastType = d.Type
 }
 
 // visitNode is a helper method to visit a node and return the lastType.
