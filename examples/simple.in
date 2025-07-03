@@ -1,0 +1,8 @@
+package main
+
+@(export)
+main :: func() -> int {
+    a := 1 + 2
+
+    return a
+}

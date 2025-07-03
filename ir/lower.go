@@ -125,13 +125,23 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 
 	// Lower the left-hand side lvalue (result in v.lastVal)
 	v.lastVal = nil
-	a.LHS.Accept(v)
-	lhsVal := v.lastVal
-
-	// For assignment, use Binop with add as a stand-in for move
-	zero := NewValInteger(0)
-	binopInstr := NewBinop(BinOpAdd, lhsVal, val, zero)
-	v.appendInstruction(binopInstr)
+	switch lhs := a.LHS.(type) {
+	case *ast.Deref:
+		// Lower the pointer expression
+		lhs.Expr.Accept(v)
+		addr := v.lastVal
+		// Store: storew val, addr
+		v.appendInstruction(NewStore(addr, val))
+	case *ast.VariableRef:
+		lhs.Accept(v)
+		lhsVal := v.lastVal
+		// For assignment, use Binop with add as a stand-in for move
+		zero := NewValInteger(0)
+		binopInstr := NewBinop(BinOpAdd, lhsVal, val, zero)
+		v.appendInstruction(binopInstr)
+	default:
+		panic("unsupported LHS in assignment")
+	}
 }
 
 func (v *visitor) VisitCall(c *ast.Call) {
@@ -404,7 +414,13 @@ func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {
 
 // VisitDeref handles pointer dereference expressions (currently a no-op).
 func (v *visitor) VisitDeref(d *ast.Deref) {
-	// TODO: implement lowering for pointer dereference
+	// Lower the pointer expression
+	d.Expr.Accept(v)
+	addr := v.lastVal
+	// Load: %tmp =w loadw addr
+	tmp := NewValIdent(v.nextIdent("tmp"))
+	v.appendInstruction(NewLoad(tmp, addr))
+	v.lastVal = tmp
 }
 
 func (v *visitor) appendInstruction(instr Instruction) {
@@ -449,6 +465,8 @@ func (v *visitor) mapTypeToAbiTy(ty *ast.Type) AbiTy {
 	case ast.TypeInt:
 		return NewAbiTyBase(BaseWord)
 	case ast.TypeString:
+		return NewAbiTyBase(BaseLong)
+	case ast.TypePointer:
 		return NewAbiTyBase(BaseLong)
 	default:
 		return NewAbiTyBase(BaseWord) // fallback

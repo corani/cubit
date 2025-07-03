@@ -200,6 +200,8 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 		argType := tc.visitNode(arg.Value)
 		paramType := fnDef.Params[i].Type
 
+		call.Args[i].Type = argType // Set the type of the argument
+
 		if paramType != nil && paramType.Kind != ast.TypeUnknown && !typeEqual(argType, paramType) {
 			tc.errorf("call to '%s': argument %d type mismatch: expected %s, got %s", call.Ident, i+1, paramType, argType)
 		}

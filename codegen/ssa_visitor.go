@@ -292,8 +292,9 @@ func (v *SsaGen) VisitBinop(b *ir.Binop) string {
 		panic("unknown binop: " + string(b.Op))
 	}
 
-	// For now, always use =w (word) for the result type
-	return fmt.Sprintf("%s =w %s %s, %s", v.VisitVal(b.Ret), op, v.VisitVal(b.Lhs), v.VisitVal(b.Rhs))
+	// TODO(daniel): handle different result types based on the operation.
+	// For now, always use =l (long) for the result type
+	return fmt.Sprintf("%s =l %s %s, %s", v.VisitVal(b.Ret), op, v.VisitVal(b.Lhs), v.VisitVal(b.Rhs))
 }
 
 func (v *SsaGen) VisitVal(val *ir.Val) string {
@@ -347,12 +348,18 @@ func (v *SsaGen) VisitJnz(j *ir.Jnz) string {
 func (v *SsaGen) VisitLoad(l *ir.Load) string {
 	// For now, always use 'w' (word) as the type suffix. Adjust as needed for other types.
 	// QBE: %ret =w loadw %addr
-	return fmt.Sprintf("%s =w loadw %s", v.VisitVal(l.Ret), v.VisitVal(l.Addr))
+	ret := v.VisitVal(l.Ret)
+	addr := v.VisitVal(l.Addr)
+
+	return fmt.Sprintf("%s =w loadw %s", ret, addr)
 }
 
 // Implements QBE-style store: storew %val, %addr
 func (v *SsaGen) VisitStore(s *ir.Store) string {
 	// For now, always use 'w' (word) as the type suffix. Adjust as needed for other types.
 	// QBE: storew %val, %addr
-	return fmt.Sprintf("storew %s, %s", v.VisitVal(s.Val), v.VisitVal(s.Addr))
+	val := v.VisitVal(s.Val)
+	addr := v.VisitVal(s.Addr)
+
+	return fmt.Sprintf("storew %s, %s", val, addr)
 }

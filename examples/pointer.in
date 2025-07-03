@@ -9,7 +9,7 @@ printp :: func(msg: string, arg: ^int)
 printi :: func(msg: string, arg: int)
 
 @(extern)
-calloc :: func(size: int) -> ^int
+calloc :: func(num: int, size: int) -> ^int
 
 update :: func(a: ^int, value: int) {
     // this becomes a store
@@ -19,7 +19,7 @@ update :: func(a: ^int, value: int) {
 @(export)
 main :: func() -> int {
     a : ^int 
-    a = calloc(4)
+    a = calloc(1, 4)
 
     printp("Address of a: %p\n", a)
 
