@@ -191,7 +191,9 @@ func (v *SsaGen) VisitConst(c ir.Const) string {
 func (v *SsaGen) VisitParam(p ir.Param) string {
 	switch p.Type {
 	case ir.ParamRegular:
-		return fmt.Sprintf("%s %%%s", v.VisitAbiTy(p.AbiTy), p.Ident)
+		// TODO(daniel): generate correct parameter type.
+		//		return fmt.Sprintf("%s %%%s", v.VisitAbiTy(p.AbiTy), p.Ident)
+		return fmt.Sprintf("l %%%s", p.Ident)
 	case ir.ParamEnv:
 		return fmt.Sprintf("env %%%s", p.Ident)
 	case ir.ParamVariadic:
@@ -351,7 +353,9 @@ func (v *SsaGen) VisitLoad(l *ir.Load) string {
 	ret := v.VisitVal(l.Ret)
 	addr := v.VisitVal(l.Addr)
 
-	return fmt.Sprintf("%s =w loadw %s", ret, addr)
+	// TODO(daniel): generate correct type, for now we assume 'w' (word) for the loaded value
+	// and 'l' (long) for the target.
+	return fmt.Sprintf("%s =l loadw %s", ret, addr)
 }
 
 // Implements QBE-style store: storew %val, %addr
@@ -361,5 +365,6 @@ func (v *SsaGen) VisitStore(s *ir.Store) string {
 	val := v.VisitVal(s.Val)
 	addr := v.VisitVal(s.Addr)
 
+	// TODO(daniel): generate correct type, for now we assume 'w' (word) for the loaded value.
 	return fmt.Sprintf("storew %s, %s", val, addr)
 }
