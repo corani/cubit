@@ -247,6 +247,34 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 	rhsType := tc.visitNode(binop.Rhs)
 
 	switch binop.Operation {
+	case ast.BinOpAdd, ast.BinOpSub:
+		// Pointer arithmetic support
+		if lhsType != nil && rhsType != nil {
+			if lhsType.Kind == ast.TypePointer && rhsType.Kind == ast.TypeInt {
+				// pointer + int or pointer - int => pointer
+				binop.Type = lhsType
+			} else if lhsType.Kind == ast.TypeInt && rhsType.Kind == ast.TypePointer && binop.Operation == ast.BinOpAdd {
+				// int + pointer => pointer (only for add)
+				binop.Type = rhsType
+			} else if lhsType.Kind == ast.TypePointer && rhsType.Kind == ast.TypePointer && binop.Operation == ast.BinOpSub {
+				// pointer - pointer => int (if element types match)
+				if typeEqual(lhsType, rhsType) {
+					binop.Type = &ast.Type{Kind: ast.TypeInt}
+				} else {
+					binop.Type = &ast.Type{Kind: ast.TypeUnknown}
+					tc.errorf("pointer subtraction requires matching pointer types, got %s - %s", lhsType, rhsType)
+				}
+			} else if typeEqual(lhsType, rhsType) {
+				// fallback: both operands same type
+				binop.Type = lhsType
+			} else {
+				binop.Type = &ast.Type{Kind: ast.TypeUnknown}
+				tc.errorf("invalid operands for pointer arithmetic: %s %s %s", lhsType, binop.Operation, rhsType)
+			}
+		} else {
+			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
+			tc.errorf("invalid operands for pointer arithmetic: %s %s %s", lhsType, binop.Operation, rhsType)
+		}
 	case ast.BinOpEq, ast.BinOpNe:
 		// Equality/inequality returns bool if types match
 		if lhsType != nil && rhsType != nil && typeEqual(lhsType, rhsType) {
@@ -256,8 +284,9 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 			tc.errorf("type mismatch in equality/inequality operation: %s vs %s", lhsType, rhsType)
 		}
 	case ast.BinOpLt, ast.BinOpLe, ast.BinOpGt, ast.BinOpGe:
-		// Comparison operators: only valid for int or string, and types must match
-		if lhsType != nil && rhsType != nil && typeEqual(lhsType, rhsType) && (lhsType.Kind == ast.TypeInt || lhsType.Kind == ast.TypeString) {
+		// Comparison operators: valid for int, string, or pointer (if types match)
+		if lhsType != nil && rhsType != nil && typeEqual(lhsType, rhsType) &&
+			(lhsType.Kind == ast.TypeInt || lhsType.Kind == ast.TypeString || lhsType.Kind == ast.TypePointer) {
 			binop.Type = &ast.Type{Kind: ast.TypeBool}
 		} else {
 			binop.Type = &ast.Type{Kind: ast.TypeUnknown}

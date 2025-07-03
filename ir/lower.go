@@ -18,6 +18,7 @@ func Lower(unit *ast.CompilationUnit) (*CompilationUnit, error) {
 type visitor struct {
 	unit             *CompilationUnit
 	lastVal          *Val          // holds the result of lowering the last value (for expressions)
+	lastType         *ast.Type     // holds the type of the last value (for expressions)
 	lastParam        *Param        // holds the result of lowering the last parameter
 	lastInstructions []Instruction // holds the result of lowering a body
 	tmpCounter       int           // for unique temp and string literal names
@@ -197,6 +198,7 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 	if l.Type == nil {
 		panic("literal has nil type")
 	}
+
 	switch l.Type.Kind {
 	case ast.TypeInt:
 		v.lastVal = NewValInteger(int64(l.IntValue))
@@ -214,13 +216,15 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 	default:
 		panic("unsupported literal type: " + l.Type.String())
 	}
+
+	v.lastType = l.Type
 }
 
 func (v *visitor) VisitBinop(b *ast.Binop) {
 	// Lower left and right operands
-	v.lastVal = nil
+	v.lastVal, v.lastType = nil, nil
 	b.Lhs.Accept(v)
-	left := v.lastVal
+	left, leftType := v.lastVal, v.lastType
 
 	// Create a new temporary for the result
 	result := NewValIdent(v.nextIdent("tmp"))
@@ -287,13 +291,12 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 		v.appendInstruction(NewLabel(endLabel))
 
 		v.lastVal = result
-
 		return
 	}
 
-	v.lastVal = nil
+	v.lastVal, v.lastType = nil, nil
 	b.Rhs.Accept(v)
-	right := v.lastVal
+	right, rightType := v.lastVal, v.lastType
 
 	// Map ast.BinOpKind to ir.BinOpKind using a map for maintainability
 	binOpMap := map[ast.BinOpKind]BinOpKind{
@@ -318,8 +321,43 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 		panic("unsupported binary operation: " + b.Operation)
 	}
 
+	// Pointer arithmetic scaling
+	if b.Operation == ast.BinOpAdd || b.Operation == ast.BinOpSub {
+		var ptrSide *Val
+		var intSide *Val
+		var ptrType *ast.Type
+		isLhsPtr := leftType != nil && leftType.Kind == ast.TypePointer
+		isRhsPtr := rightType != nil && rightType.Kind == ast.TypePointer
+		if isLhsPtr != isRhsPtr {
+			var elemSize int64 = 4
+			if isLhsPtr {
+				ptrSide = left
+				intSide = right
+				ptrType = leftType
+			} else {
+				ptrSide = right
+				intSide = left
+				ptrType = rightType
+			}
+			if ptrType != nil && ptrType.Elem != nil && ptrType.Elem.Kind == ast.TypeInt {
+				elemSize = 4
+			}
+
+			// TODO: handle other element types
+			if elemSize != 1 {
+				tmpScaled := NewValIdent(v.nextIdent("idx"))
+				v.appendInstruction(NewBinop(BinOpMul, tmpScaled, intSide, NewValInteger(elemSize)))
+				v.appendInstruction(NewBinop(irOp, result, ptrSide, tmpScaled))
+				v.lastVal = result
+				v.lastType = b.Type
+				return
+			}
+		}
+	}
+
 	v.appendInstruction(NewBinop(irOp, result, left, right))
 	v.lastVal = result
+	v.lastType = b.Type
 }
 
 func (v *visitor) VisitIf(iff *ast.If) {
@@ -410,9 +448,10 @@ func (v *visitor) VisitFor(f *ast.For) {
 func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {
 	// Lower a variable reference to an identifier value
 	v.lastVal = NewValIdent(Ident(vr.Ident))
+	v.lastType = vr.Type
 }
 
-// VisitDeref handles pointer dereference expressions (currently a no-op).
+// VisitDeref handles pointer dereference expressions
 func (v *visitor) VisitDeref(d *ast.Deref) {
 	// Lower the pointer expression
 	d.Expr.Accept(v)
@@ -420,7 +459,9 @@ func (v *visitor) VisitDeref(d *ast.Deref) {
 	// Load: %tmp =w loadw addr
 	tmp := NewValIdent(v.nextIdent("tmp"))
 	v.appendInstruction(NewLoad(tmp, addr))
+
 	v.lastVal = tmp
+	v.lastType = d.Type
 }
 
 func (v *visitor) appendInstruction(instr Instruction) {

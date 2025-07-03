@@ -385,58 +385,49 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 				}
 				instructions = append(instructions, inst)
 			}
-		case lexer.TypeIdent:
-			token, err := p.nextToken()
-			if err != nil {
-				return nil, err
-			}
-
-			switch token.Type {
-			case lexer.TypeLparen:
-				inst, err := p.parseCall(first)
-				if err != nil {
-					return nil, err
-				}
-				instructions = append(instructions, inst)
-			case lexer.TypeColon:
-				instr, err := p.parseDeclare(first)
-				if err != nil {
-					return nil, err
-				}
-
-				instructions = append(instructions, instr...)
-			case lexer.TypeCaret:
-				lvalue := ast.NewDeref(ast.NewVariableRef(first.StringVal, ast.TypeUnknown))
-
-				next, err := p.peekType(lexer.TypeAssign)
-				if err != nil {
-					return nil, err
-				}
-
-				if next.Type == lexer.TypeAssign {
-					instr, err := p.parseAssign(lvalue)
+		case lexer.TypeIdent, lexer.TypeLparen:
+			// Try to parse a declaration (ident : ...)
+			if first.Type == lexer.TypeIdent {
+				next, err := p.peekType(lexer.TypeColon)
+				if err == nil && next.Type == lexer.TypeColon {
+					instr, err := p.parseDeclare(first)
 					if err != nil {
 						return nil, err
 					}
-
 					instructions = append(instructions, instr...)
-				} else {
-					return nil, fmt.Errorf("expected '=' after dereference at %s, got %s",
-						first.Location, next.StringVal)
+					continue
 				}
-			case lexer.TypeAssign:
-				lvalue := ast.NewVariableRef(first.StringVal, ast.TypeUnknown)
-
-				instr, err := p.parseAssign(lvalue)
-				if err != nil {
-					return nil, err
-				}
-
-				instructions = append(instructions, instr...)
-			default:
-				return nil, fmt.Errorf("expected ( after identifier at %s, got %s",
-					token.Location, token.StringVal)
 			}
+
+			// Otherwise, try to parse an lvalue expression followed by '='
+			p.index-- // Unconsume first token
+			lvalueExpr, err := p.parseLValue()
+			if err == nil {
+				next, err := p.peekType(lexer.TypeAssign)
+				if err == nil && next.Type == lexer.TypeAssign {
+					instr, err := p.parseAssign(lvalueExpr)
+					if err != nil {
+						return nil, err
+					}
+					instructions = append(instructions, instr...)
+					continue
+				}
+			}
+
+			// If not assignment, try to parse as a function call (ident(...))
+			if first.Type == lexer.TypeIdent {
+				next, err := p.peekType(lexer.TypeLparen)
+				if err == nil && next.Type == lexer.TypeLparen {
+					inst, err := p.parseCall(first)
+					if err != nil {
+						return nil, err
+					}
+					instructions = append(instructions, inst)
+					continue
+				}
+			}
+
+			return nil, fmt.Errorf("unexpected statement at %s", first.Location)
 		}
 	}
 }
@@ -698,10 +689,14 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		_, err = p.expectType(lexer.TypeRparen)
 		if err != nil {
 			return nil, err
+		}
+		// Check for dereference after parenthesized expression: (expr)^
+		next, err := p.peekType(lexer.TypeCaret)
+		if err == nil && next.Type == lexer.TypeCaret {
+			expr = ast.NewDeref(expr)
 		}
 	default:
 		panic("unreachable")

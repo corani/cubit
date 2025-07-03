@@ -1,17 +1,10 @@
-// Missing features before this can run:
-// - Pointer types
-// - Pointer dereferencing
-// - Pointer arithmetic
-// - Arrays
-// - Slices
-// - Built-in `len` function (replace `LEN` constant with `len(row)`)
 package main
 
 @(extern)
 printf :: func(msg: string)
 
 @(extern)
-calloc :: func(size: int) -> ^int
+calloc :: func(count: int, size: int) -> ^int
 
 display :: func(row: ^int, len: int) {
     for ptr := row; ptr < row + len; ptr = ptr + 1 {
@@ -27,9 +20,8 @@ display :: func(row: ^int, len: int) {
 
 update :: func(row: ^int, len: int) {
     state := row^
-    state = (state << 1) | (row + 1)^
 
-    for i := 2; i < len; i = i + 1 {
+    for i := 1; i < len; i = i + 1 {
         state = (state << 1) | (row + i)^
         state = state & 7
 
@@ -40,10 +32,12 @@ update :: func(row: ^int, len: int) {
 @(export)
 main :: func() -> int {
     len := 128
-    row := calloc(len * 8) // Allocate 128 integers (8 bytes each)
-    (row + len - 2)^ = 1   // Set the second last cell to 1 (initial condition)
+    row := calloc(len, 4)
 
-    for i := 0; i < len; i = i + 1 {
+    // Initialize the first cell
+    (row + len - 2)^ = 1
+
+    for i := 0; i < len - 2; i = i + 1 {
         display(row, len)
         update(row, len)
     }
