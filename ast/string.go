@@ -5,27 +5,6 @@ import (
 	"strings"
 )
 
-func (t *Type) String() string {
-	if t == nil {
-		return "<nil>"
-	}
-
-	switch t.Kind {
-	case TypeInt:
-		return "int"
-	case TypeBool:
-		return "bool"
-	case TypeString:
-		return "string"
-	case TypeVoid:
-		return "void"
-	case TypePointer:
-		return fmt.Sprintf("^%s", t.Elem)
-	default:
-		return "unknown"
-	}
-}
-
 func (cu CompilationUnit) String() string {
 	var types, data, funcs []string
 
@@ -88,22 +67,22 @@ func (b *Body) String() string {
 	return "\n\t\t" + strings.Join(instructions, "\n\t\t")
 }
 
-func (iff *If) String() string {
+func (i *If) String() string {
 	var initStr string
-	if len(iff.Init) > 0 {
+	if len(i.Init) > 0 {
 		var parts []string
-		for _, instr := range iff.Init {
+		for _, instr := range i.Init {
 			parts = append(parts, instr.String())
 		}
 		initStr = " " + strings.Join(parts, "; ")
 	}
 
 	var elseBranch string
-	if iff.Else != nil {
-		elseBranch = " " + iff.Else.String()
+	if i.Else != nil {
+		elseBranch = " " + i.Else.String()
 	}
 
-	return fmt.Sprintf("(if (init%s) %s (then %s) (else%s))", initStr, iff.Cond, iff.Then, elseBranch)
+	return fmt.Sprintf("(if (init%s) %s (then %s) (else%s))", initStr, i.Cond, i.Then, elseBranch)
 }
 
 func (f *For) String() string {

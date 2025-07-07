@@ -1,6 +1,10 @@
 package ast
 
-import "maps"
+import (
+	"maps"
+
+	"github.com/corani/refactored-giggle/lexer"
+)
 
 // Visitor interface for double-dispatch on AST nodes.
 type Visitor interface {
@@ -22,41 +26,29 @@ type Visitor interface {
 	VisitFor(*For)
 }
 
-// TypeKind represents the basic types in the language for type checking.
-
-type TypeKind int
-
-const (
-	TypeUnknown TypeKind = iota
-	TypeInt
-	TypeBool
-	TypeString
-	TypeVoid
-	TypePointer
-)
-
-// Type is a recursive type structure for basic and pointer types.
-type Type struct {
-	Kind TypeKind
-	Elem *Type // non-nil if Kind == TypePointer
-}
-
 type CompilationUnit struct {
 	Ident      string // package name
 	Types      []*TypeDef
 	Data       []*DataDef
 	Funcs      []*FuncDef
 	Attributes Attributes
+	Loc        lexer.Location
 }
 
 // NewCompilationUnit creates a new, empty CompilationUnit.
-func NewCompilationUnit() *CompilationUnit {
+func NewCompilationUnit(location lexer.Location) *CompilationUnit {
 	return &CompilationUnit{
+		Ident:      "",
 		Types:      nil,
 		Data:       nil,
 		Funcs:      nil,
 		Attributes: Attributes{},
+		Loc:        location,
 	}
+}
+
+func (cu *CompilationUnit) Location() lexer.Location {
+	return cu.Loc
 }
 
 // Accept implements the Visitor pattern for CompilationUnit.
@@ -69,6 +61,21 @@ type TypeDef struct {
 	Type       *Type
 	Value      Expression // optional initial value
 	Attributes Attributes
+	Loc        lexer.Location
+}
+
+func NewTypeDef(ident string, ty *Type, value Expression, attributes Attributes, location lexer.Location) *TypeDef {
+	return &TypeDef{
+		Ident:      ident,
+		Type:       ty,
+		Value:      value,
+		Attributes: maps.Clone(attributes),
+		Loc:        location,
+	}
+}
+
+func (td *TypeDef) Location() lexer.Location {
+	return td.Loc
 }
 
 func (td *TypeDef) Accept(v Visitor) {
@@ -80,6 +87,21 @@ type DataDef struct {
 	Type       *Type
 	Value      Expression // optional initial value
 	Attributes Attributes
+	Loc        lexer.Location
+}
+
+func NewDataDef(ident string, ty *Type, value Expression, attributes Attributes, location lexer.Location) *DataDef {
+	return &DataDef{
+		Ident:      ident,
+		Type:       ty,
+		Value:      value,
+		Attributes: maps.Clone(attributes),
+		Loc:        location,
+	}
+}
+
+func (dd *DataDef) Location() lexer.Location {
+	return dd.Loc
 }
 
 func (dd *DataDef) Accept(v Visitor) {
@@ -92,16 +114,22 @@ type FuncDef struct {
 	ReturnType *Type
 	Body       *Body
 	Attributes Attributes
+	Loc        lexer.Location
 }
 
-func NewFuncDef(ident string, attributes Attributes) *FuncDef {
+func NewFuncDef(ident string, attributes Attributes, location lexer.Location) *FuncDef {
 	return &FuncDef{
 		Ident:      ident,
 		Params:     nil,
 		ReturnType: &Type{Kind: TypeVoid},
 		Body:       nil,
 		Attributes: maps.Clone(attributes),
+		Loc:        location,
 	}
+}
+
+func (fd *FuncDef) Location() lexer.Location {
+	return fd.Loc
 }
 
 func (fd *FuncDef) Accept(v Visitor) {
@@ -113,6 +141,21 @@ type FuncParam struct {
 	Type       *Type
 	Value      Expression // optional default value
 	Attributes Attributes
+	Loc        lexer.Location
+}
+
+func NewFuncParam(ident string, ty *Type, value Expression, attributes Attributes, location lexer.Location) *FuncParam {
+	return &FuncParam{
+		Ident:      ident,
+		Type:       ty,
+		Value:      value,
+		Attributes: maps.Clone(attributes),
+		Loc:        location,
+	}
+}
+
+func (fp *FuncParam) Location() lexer.Location {
+	return fp.Loc
 }
 
 func (fp *FuncParam) Accept(v Visitor) {
@@ -121,6 +164,18 @@ func (fp *FuncParam) Accept(v Visitor) {
 
 type Body struct {
 	Instructions []Instruction
+	Loc          lexer.Location
+}
+
+func NewBody(instructions []Instruction, location lexer.Location) *Body {
+	return &Body{
+		Instructions: instructions,
+		Loc:          location,
+	}
+}
+
+func (b *Body) Location() lexer.Location {
+	return b.Loc
 }
 
 func (b *Body) Accept(v Visitor) {
@@ -131,6 +186,7 @@ func (*Body) isInstruction() {}
 
 type Instruction interface {
 	isInstruction()
+	Location() lexer.Location
 	String() string
 	Accept(v Visitor)
 }
@@ -155,6 +211,19 @@ type LValue interface {
 type Declare struct {
 	Ident string
 	Type  *Type // declared type, or TypeUnknown
+	Loc   lexer.Location
+}
+
+func NewDeclare(ident string, ty *Type, location lexer.Location) *Declare {
+	return &Declare{
+		Ident: ident,
+		Type:  ty,
+		Loc:   location,
+	}
+}
+
+func (d *Declare) Location() lexer.Location {
+	return d.Loc
 }
 
 func (d *Declare) Accept(v Visitor) {
@@ -168,6 +237,20 @@ type Assign struct {
 	LHS   LValue
 	Type  *Type
 	Value Expression
+	Loc   lexer.Location
+}
+
+func NewAssign(lhs LValue, value Expression, ty *Type, location lexer.Location) *Assign {
+	return &Assign{
+		LHS:   lhs,
+		Type:  ty,
+		Value: value,
+		Loc:   location,
+	}
+}
+
+func (a *Assign) Location() lexer.Location {
+	return a.Loc
 }
 
 func (a *Assign) Accept(v Visitor) {
@@ -182,10 +265,25 @@ type If struct {
 	Cond Expression    // condition expression
 	Then *Body         // body for the 'if' branch
 	Else Instruction   // *If, *Body, or nil
+	Loc  lexer.Location
 }
 
-func (iff *If) Accept(v Visitor) {
-	v.VisitIf(iff)
+func NewIf(location lexer.Location, init []Instruction, cond Expression, then *Body, elseBranch Instruction) *If {
+	return &If{
+		Init: init,
+		Cond: cond,
+		Then: then,
+		Else: elseBranch,
+		Loc:  location,
+	}
+}
+
+func (i *If) Location() lexer.Location {
+	return i.Loc
+}
+
+func (i *If) Accept(v Visitor) {
+	v.VisitIf(i)
 }
 
 func (*If) isInstruction() {}
@@ -195,6 +293,21 @@ type For struct {
 	Cond Expression
 	Post []Instruction // optional post-condition(s); can be nil or empty
 	Body *Body
+	Loc  lexer.Location
+}
+
+func NewFor(location lexer.Location, init []Instruction, cond Expression, post []Instruction, body *Body) *For {
+	return &For{
+		Init: init,
+		Cond: cond,
+		Post: post,
+		Body: body,
+		Loc:  location,
+	}
+}
+
+func (f *For) Location() lexer.Location {
+	return f.Loc
 }
 
 func (f *For) Accept(v Visitor) {
@@ -207,17 +320,23 @@ type Call struct {
 	Ident string // function name
 	Type  *Type  // return type, if any
 	Args  []Arg
+	Loc   lexer.Location
+}
+
+func NewCall(location lexer.Location, ident string, args ...Arg) *Call {
+	return &Call{
+		Ident: ident,
+		Args:  args,
+		Loc:   location,
+	}
+}
+
+func (c *Call) Location() lexer.Location {
+	return c.Loc
 }
 
 func (c *Call) Accept(v Visitor) {
 	v.VisitCall(c)
-}
-
-func NewCall(ident string, args ...Arg) *Call {
-	return &Call{
-		Ident: ident,
-		Args:  args,
-	}
 }
 
 func (*Call) isInstruction() {}
@@ -227,25 +346,44 @@ type Arg struct {
 	Ident string     // (optional) argument name
 	Value Expression // argument value
 	Type  *Type
+	Loc   lexer.Location
+}
+
+func NewArg(ident string, value Expression, ty *Type, location lexer.Location) Arg {
+	return Arg{
+		Ident: ident,
+		Value: value,
+		Type:  ty,
+		Loc:   location,
+	}
+}
+
+func (a *Arg) Location() lexer.Location {
+	return a.Loc
 }
 
 type Return struct {
 	Value Expression // optional return value
+	Loc   lexer.Location
+}
+
+func NewReturn(location lexer.Location, val ...Expression) *Return {
+	switch len(val) {
+	case 0:
+		return &Return{Loc: location}
+	case 1:
+		return &Return{Value: val[0], Loc: location}
+	default:
+		panic("Return can only have one value")
+	}
+}
+
+func (r *Return) Location() lexer.Location {
+	return r.Loc
 }
 
 func (r *Return) Accept(v Visitor) {
 	v.VisitReturn(r)
-}
-
-func NewReturn(val ...Expression) *Return {
-	switch len(val) {
-	case 0:
-		return &Return{}
-	case 1:
-		return &Return{Value: val[0]}
-	default:
-		panic("Return can only have one value")
-	}
 }
 
 func (*Return) isInstruction() {}
@@ -253,6 +391,7 @@ func (*Return) isInstruction() {}
 type Expression interface {
 	isExpression()
 	String() string
+	Location() lexer.Location
 	Accept(v Visitor)
 }
 
@@ -261,12 +400,26 @@ var _ []Expression = []Expression{
 	(*Binop)(nil),
 	(*VariableRef)(nil),
 	(*Deref)(nil),
+	(*Call)(nil),
 }
 
 // Deref represents a pointer dereference expression (e.g., a^)
 type Deref struct {
 	Expr Expression // the pointer expression to dereference
 	Type *Type      // the type after dereferencing
+	Loc  lexer.Location
+}
+
+func NewDeref(expr Expression, location lexer.Location) *Deref {
+	return &Deref{
+		Expr: expr,
+		Type: &Type{Kind: TypeUnknown},
+		Loc:  location,
+	}
+}
+
+func (d *Deref) Location() lexer.Location {
+	return d.Loc
 }
 
 func (d *Deref) Accept(v Visitor) {
@@ -276,27 +429,26 @@ func (d *Deref) Accept(v Visitor) {
 func (*Deref) isExpression() {}
 func (*Deref) isLValue()     {}
 
-func NewDeref(expr Expression) *Deref {
-	return &Deref{
-		Expr: expr,
-		Type: &Type{Kind: TypeUnknown},
-	}
-}
-
 type VariableRef struct {
 	Ident string
 	Type  *Type
+	Loc   lexer.Location
+}
+
+func NewVariableRef(ident string, ty TypeKind, location lexer.Location) *VariableRef {
+	return &VariableRef{
+		Ident: ident,
+		Type:  &Type{Kind: ty},
+		Loc:   location,
+	}
+}
+
+func (vref *VariableRef) Location() lexer.Location {
+	return vref.Loc
 }
 
 func (vref *VariableRef) Accept(v Visitor) {
 	v.VisitVariableRef(vref)
-}
-
-func NewVariableRef(ident string, ty TypeKind) *VariableRef {
-	return &VariableRef{
-		Ident: ident,
-		Type:  &Type{Kind: ty},
-	}
 }
 
 func (*VariableRef) isExpression() {}
@@ -307,31 +459,39 @@ type Literal struct {
 	IntValue    int
 	StringValue string
 	BoolValue   bool
+	Loc         lexer.Location
+}
+
+func NewIntLiteral(val int, location lexer.Location) *Literal {
+	return &Literal{
+		Type:     &Type{Kind: TypeInt},
+		IntValue: val,
+		Loc:      location,
+	}
+}
+
+func NewBoolLiteral(val bool, location lexer.Location) *Literal {
+	return &Literal{
+		Type:      &Type{Kind: TypeBool},
+		BoolValue: val,
+		Loc:       location,
+	}
+}
+
+func NewStringLiteral(val string, location lexer.Location) *Literal {
+	return &Literal{
+		Type:        &Type{Kind: TypeString},
+		StringValue: val,
+		Loc:         location,
+	}
+}
+
+func (l *Literal) Location() lexer.Location {
+	return l.Loc
 }
 
 func (l *Literal) Accept(v Visitor) {
 	v.VisitLiteral(l)
-}
-
-func NewIntLiteral(val int) *Literal {
-	return &Literal{
-		Type:     &Type{Kind: TypeInt},
-		IntValue: val,
-	}
-}
-
-func NewBoolLiteral(val bool) *Literal {
-	return &Literal{
-		Type:      &Type{Kind: TypeBool},
-		BoolValue: val,
-	}
-}
-
-func NewStringLiteral(val string) *Literal {
-	return &Literal{
-		Type:        &Type{Kind: TypeString},
-		StringValue: val,
-	}
 }
 
 func (*Literal) isExpression() {}
@@ -362,20 +522,26 @@ type Binop struct {
 	Operation BinOpKind
 	Lhs, Rhs  Expression
 	Type      *Type
-}
-
-func (b *Binop) Accept(v Visitor) {
-	v.VisitBinop(b)
+	Loc       lexer.Location
 }
 
 // NewBinop creates a new Binop node. Only Add is supported for now.
-func NewBinop(op BinOpKind, lhs, rhs Expression) *Binop {
+func NewBinop(op BinOpKind, lhs, rhs Expression, location lexer.Location) *Binop {
 	return &Binop{
 		Operation: op,
 		Lhs:       lhs,
 		Rhs:       rhs,
 		Type:      &Type{Kind: TypeUnknown},
+		Loc:       location,
 	}
+}
+
+func (b *Binop) Location() lexer.Location {
+	return b.Loc
+}
+
+func (b *Binop) Accept(v Visitor) {
+	v.VisitBinop(b)
 }
 
 func (*Binop) isExpression() {}
