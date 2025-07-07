@@ -1,0 +1,325 @@
+package parser
+
+import (
+	"github.com/corani/refactored-giggle/ast"
+	"github.com/corani/refactored-giggle/lexer"
+)
+
+func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
+	// <indent> ':'
+	// have been consumed already.
+	var instructions []ast.Instruction
+
+	// Could be a declaration or declaration+assignment
+	next, err := p.peekType(lexer.TypeAssign, lexer.TypeKeyword, lexer.TypeCaret)
+	if err != nil {
+		return nil, err // EOF
+	}
+
+	declaredType := ast.NewType(ast.TypeUnknown, ident.Location)
+
+	// type
+	if next.Type != lexer.TypeAssign {
+		p.index--
+
+		declaredType = p.parseType()
+
+		next, err = p.peekType(lexer.TypeAssign)
+		if err != nil {
+			return nil, err // EOF
+		}
+	}
+
+	instructions = append(instructions,
+		ast.NewDeclare(ident.StringVal, declaredType, ident.Location))
+
+	// optional assignment
+	if next.Type == lexer.TypeAssign {
+		lvalue := ast.NewVariableRef(ident.StringVal, declaredType.Kind, ident.Location)
+
+		instr, err := p.parseAssign(lvalue)
+		if err != nil {
+			return nil, err
+		}
+
+		instructions = append(instructions, instr...)
+	}
+
+	return instructions, nil
+}
+
+// parseAssign now accepts an LValue (e.g., variable ref, deref, etc.)
+func (p *Parser) parseAssign(lhs ast.LValue) ([]ast.Instruction, error) {
+	// <lvalue> '=' or <lvalue> ':' <type> '=' or <lvalue> ':='
+	// have been consumed already.
+	var instructions []ast.Instruction
+
+	expr, err := p.parseExpression(false)
+	if err != nil {
+		return nil, err
+	}
+
+	instructions = append(instructions,
+		ast.NewAssign(lhs, expr, nil, lhs.Location()))
+
+	return instructions, nil
+}
+
+// parseCall parses the argument list of a function call. It expects `first` to be the identifier
+// of the function being called. The left-parenthesis `(` should have already been consumed. It
+// parses a comma-separated list of expressions until it encounters a right-parenthesis `)`.
+func (p *Parser) parseCall(first lexer.Token) (*ast.Call, error) {
+	var (
+		args []ast.Arg
+		next lexer.Token
+	)
+
+	for next.Type != lexer.TypeRparen {
+		expr, err := p.parseExpression(true)
+		if err != nil {
+			return nil, err
+		}
+
+		if expr != nil {
+			// We successfully parsed an expression, this should be followed by either
+			// a comma or a right parenthesis.
+			args = append(args, ast.NewArg("", expr, nil, expr.Location()))
+
+			next, err = p.expectType(lexer.TypeRparen, lexer.TypeComma)
+			if err != nil {
+				return nil, err // EOF
+			}
+		} else {
+			// We didn't parse an expression, so we expect a right parenthesis to form `()`.
+			next, err = p.expectType(lexer.TypeRparen)
+			if err != nil {
+				return nil, err // EOF
+			}
+		}
+	}
+
+	return ast.NewCall(first.Location, first.StringVal, args...), nil
+}
+
+// parseIf parses an if/else statement.
+func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
+	// Expect 'if' keyword already consumed
+	var initInstrs []ast.Instruction
+
+	// Check for optional initializer: ident : type = expr or ident = expr
+	next, err := p.expectType(lexer.TypeIdent)
+	if err == nil {
+		// Look ahead for colon or assign
+		if tok, err := p.peekType(lexer.TypeColon, lexer.TypeAssign); err != nil {
+			// Not an initializer, roll back
+			p.index--
+		} else if tok.Type == lexer.TypeColon {
+			initInstrs, err = p.parseDeclare(next)
+			if err != nil {
+				return nil, err
+			}
+
+			// Expect semicolon
+			if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
+				return nil, err // EOF
+			}
+		} else if tok.Type == lexer.TypeAssign {
+			lvalue := ast.NewVariableRef(next.StringVal, ast.TypeUnknown, next.Location)
+
+			initInstrs, err = p.parseAssign(lvalue)
+			if err != nil {
+				return nil, err
+			}
+
+			// Expect semicolon
+			if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
+				return nil, err // EOF
+			}
+		} else {
+			// Not an initializer, roll back
+			p.index--
+		}
+	} else {
+		// Rollback whatever token we got
+		p.index--
+	}
+
+	// Parse condition
+	cond, err := p.parseExpression(false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse then branch
+	lbrace, err := p.expectType(lexer.TypeLbrace)
+	if err != nil {
+		return nil, err // EOF
+	}
+
+	thenInstrs, err := p.parseBlock(lbrace)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := p.expectType(lexer.TypeRbrace); err != nil {
+		return nil, err // EOF
+	}
+
+	thenBody := ast.NewBody(thenInstrs, lbrace.Location)
+
+	// Check for else or else if
+	elseInstr := ast.Instruction(nil)
+
+	nextElse, err := p.peekType(lexer.TypeKeyword)
+	if err != nil {
+		return nil, err // EOF
+	}
+
+	if nextElse.Type != lexer.TypeKeyword {
+		// Don't rollback, since peek didn't consume the token.
+	} else if nextElse.Keyword != lexer.KeywordElse {
+		// We expected an 'else' keyword, but got something else.
+		p.index--
+	} else {
+		afterElse, err := p.peekType(lexer.TypeKeyword, lexer.TypeLbrace)
+		if err != nil {
+			return nil, err // EOF
+		}
+
+		if afterElse.Type == lexer.TypeKeyword && afterElse.Keyword == lexer.KeywordIf {
+			// else if: recursively parse another if
+			elseInstr, err = p.parseIf(afterElse)
+			if err != nil {
+				return nil, err
+			}
+		} else if afterElse.Type == lexer.TypeLbrace {
+			// else: parse block
+			elseInstrs, err := p.parseBlock(lbrace)
+			if err != nil {
+				return nil, err
+			}
+
+			if _, err := p.expectType(lexer.TypeRbrace); err != nil {
+				return nil, err // EOF
+			}
+
+			elseInstr = ast.NewBody(elseInstrs, lbrace.Location)
+		} else {
+			p.errorf(afterElse.Location, "expected 'if' or '{' after 'else', got %s", afterElse.StringVal)
+
+			// error recovery:
+			elseInstr = nil
+		}
+	}
+
+	return ast.NewIf(first.Location, initInstrs, cond, thenBody, elseInstr), nil
+}
+
+// parseFor parses a for loop of the form: for <cond> { ... }
+func (p *Parser) parseFor(first lexer.Token) (ast.Instruction, error) {
+	// 'for' keyword already consumed
+	index := p.index
+
+	var (
+		initInstrs []ast.Instruction
+		postInstrs []ast.Instruction
+		cond       ast.Expression
+	)
+
+	// Try to parse an initializer (for now only assignment or set)
+	start, err := p.expectType(lexer.TypeIdent)
+	if err == nil {
+		next, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
+		if err != nil {
+			// If we didn't parse an initializer, roll back the index and try
+			// to parse it as a condition.
+			p.index = index
+		} else if next.Type == lexer.TypeColon {
+			initInstrs, err = p.parseDeclare(start)
+			if err != nil {
+				return nil, err
+			}
+
+			// If we successfully parsed an initializer, expect a semicolon
+			_, err := p.expectType(lexer.TypeSemicolon)
+			if err != nil {
+				return nil, err // EOF
+			}
+		} else if next.Type == lexer.TypeAssign {
+			lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
+
+			initInstrs, err = p.parseAssign(lvalue)
+			if err != nil {
+				return nil, err
+			}
+
+			// If we successfully parsed an initializer, expect a semicolon
+			_, err := p.expectType(lexer.TypeSemicolon)
+			if err != nil {
+				return nil, err // EOF
+			}
+		} else {
+			// If we didn't parse an initializer, roll back the index and try
+			// to parse it as a condition.
+			p.index = index
+		}
+	} else {
+		// If we didn't parse an initializer, roll back the index and try
+		// to parse it as a condition.
+		p.index = index
+	}
+
+	cond, err = p.parseExpression(false)
+	if err != nil {
+		return nil, err
+	}
+
+	semi, err := p.peekType(lexer.TypeSemicolon)
+	if err != nil {
+		return nil, err // EOF
+	}
+
+	if semi.Type == lexer.TypeSemicolon {
+		// If we found a semicolon, we expect another assignment
+		start, err := p.expectType(lexer.TypeIdent)
+		if err != nil {
+			return nil, err // EOF
+		}
+
+		next, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
+		if err != nil {
+			return nil, err
+		} else if next.Type == lexer.TypeColon {
+			postInstrs, err = p.parseDeclare(start)
+			if err != nil {
+				return nil, err // EOF
+			}
+		} else if next.Type == lexer.TypeAssign {
+			lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
+
+			postInstrs, err = p.parseAssign(lvalue)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			p.index--
+		}
+	}
+
+	lbrace, err := p.expectType(lexer.TypeLbrace)
+	if err != nil {
+		return nil, err // EOF
+	}
+
+	bodyInstrs, err := p.parseBlock(lbrace)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := p.expectType(lexer.TypeRbrace); err != nil {
+		return nil, err // EOF
+	}
+
+	return ast.NewFor(first.Location, initInstrs, cond, postInstrs,
+		ast.NewBody(bodyInstrs, lbrace.Location)), nil
+}

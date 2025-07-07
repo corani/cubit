@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -17,7 +16,8 @@ type Parser struct {
 	unit           *ast.CompilationUnit
 	attributes     ast.Attributes
 	localID        int
-	currentRetType lexer.Keyword
+	currentRetType *ast.Type
+	errors         []error
 }
 
 func New(tok []lexer.Token) *Parser {
@@ -36,7 +36,7 @@ func New(tok []lexer.Token) *Parser {
 		unit:           ast.NewCompilationUnit(location),
 		attributes:     ast.Attributes{},
 		localID:        0,
-		currentRetType: lexer.KeywordVoid,
+		currentRetType: nil,
 	}
 }
 
@@ -44,42 +44,47 @@ func (p *Parser) Parse() (*ast.CompilationUnit, error) {
 	for {
 		start, err := p.expectType(lexer.TypeKeyword, lexer.TypeIdent, lexer.TypeAt)
 		if err != nil {
-			return p.unit, err
+			return p.unit, err // EOF
 		}
 
 		switch start.Type {
 		case lexer.TypeAt:
 			if err := p.parseAttributes(start); err != nil {
-				return p.unit, err
+				return p.unit, err // EOF
 			}
 		case lexer.TypeKeyword:
 			switch start.Keyword {
 			case lexer.KeywordPackage:
 				if err := p.parsePackage(start); err != nil {
-					return p.unit, err
+					return p.unit, err // EOF
 				}
 			default:
+				p.errorf(start.Location, "expected package keyword, got %s",
+					start.StringVal)
+
+				// TODO: error recovery
 				return p.unit, fmt.Errorf("expected package keyword at %s, got %s",
 					start.Location, start.StringVal)
 			}
 		case lexer.TypeIdent:
 			if p.unit.Ident == "" {
-				return p.unit, fmt.Errorf("package must be defined before any other declarations at %s",
-					start.Location)
+				p.errorf(start.Location, "package must be defined before any other declarations")
+
+				// error recovery: just continue parsing
 			}
 
 			if _, err := p.expectType(lexer.TypeColon); err != nil {
-				return p.unit, err
+				return p.unit, err // EOF
 			}
 
 			// TODO(daniel): parse optional type.
 
 			if _, err := p.expectType(lexer.TypeColon); err != nil {
-				return p.unit, err
+				return p.unit, err // EOF
 			}
 
 			if _, err := p.expectKeyword(lexer.KeywordFunc); err != nil {
-				return p.unit, err
+				return p.unit, err // EOF
 			}
 
 			if err := p.parseFunc(start); err != nil {
@@ -89,63 +94,77 @@ func (p *Parser) Parse() (*ast.CompilationUnit, error) {
 	}
 }
 
+// parsePackage parses a package declaration.
+// It returns io.EOF when there are no more tokens.
 func (p *Parser) parsePackage(start lexer.Token) error {
-	p.unit.Loc = start.Location
-
 	if p.unit.Ident != "" {
-		return fmt.Errorf("package already defined at %s, cannot redefine",
-			p.tok[p.index-1].Location)
-	}
+		p.errorf(start.Location, "package already defined, cannot redefine")
+		p.infof(p.unit.Loc, "previous definition was here")
 
-	pkgName, err := p.expectType(lexer.TypeIdent)
-	if err != nil {
-		return err
-	}
+		// error recovery: just ignore the new package definition.
+		_, err := p.expectType(lexer.TypeIdent)
+		if err != nil {
+			return err // EOF
+		}
+	} else {
+		pkgName, err := p.expectType(lexer.TypeIdent)
+		if err != nil {
+			return err // EOF
+		}
 
-	// Store any attributes collected before the package in the unit's Attributes
-	p.unit.Attributes = maps.Clone(p.attributes)
-	p.unit.Ident = pkgName.StringVal
+		// Store any attributes collected before the package in the unit's Attributes
+		p.unit.Attributes = maps.Clone(p.attributes)
+		p.unit.Ident = pkgName.StringVal
+		p.unit.Loc = start.Location
+	}
 
 	clear(p.attributes)
 
 	return nil
 }
 
-func (p *Parser) parseAttributes(start lexer.Token) error {
-	_ = start
+// parseAttributes parses attributes in the form `@(...)`.
+// It returns io.EOF when there are no more tokens.
+func (p *Parser) parseAttributes(atToken lexer.Token) error {
+	_ = atToken
 
-	if _, err := p.expectType(lexer.TypeLparen); err != nil {
-		return err
+	lparen, err := p.expectType(lexer.TypeLparen)
+	if err != nil {
+		return err // EOF
+	}
+
+	if lparen.Type != lexer.TypeLparen {
+		p.errorf(lparen.Location, "expected ( after @, got %s", lparen.StringVal)
+
+		// TODO: error recovery
 	}
 
 	for {
 		tok, err := p.expectType(lexer.TypeRparen, lexer.TypeIdent)
 		if err != nil {
-			return err
+			return err // EOF
 		}
 
 		if tok.Type == lexer.TypeRparen {
 			break
 		}
 
-		key := tok.StringVal
-
-		validKey, err := ast.ParseAttrKey(key)
-		if err != nil {
-			return err
+		key, ok := ast.ParseAttrKey(tok.StringVal)
+		if !ok {
+			p.errorf(tok.Location, "invalid attribute key: %s", tok.StringVal)
 		}
 
 		var value ast.AttrValue
 
 		next, err := p.expectType(lexer.TypeAssign, lexer.TypeComma, lexer.TypeRparen)
 		if err != nil {
-			return err
+			return err // EOF
 		}
 
 		if next.Type == lexer.TypeAssign {
 			valTok, err := p.expectType(lexer.TypeString, lexer.TypeNumber)
 			if err != nil {
-				return err
+				return err // EOF
 			}
 
 			switch valTok.Type {
@@ -157,11 +176,14 @@ func (p *Parser) parseAttributes(start lexer.Token) error {
 
 			next, err = p.expectType(lexer.TypeComma, lexer.TypeRparen)
 			if err != nil {
-				return err
+				return err // EOF
 			}
 		}
 
-		p.attributes[validKey] = value
+		// ignore invalid attributes
+		if ok {
+			p.attributes[key] = value
+		}
 
 		if next.Type == lexer.TypeRparen {
 			break
@@ -173,7 +195,7 @@ func (p *Parser) parseAttributes(start lexer.Token) error {
 
 func (p *Parser) parseFunc(name lexer.Token) error {
 	if _, err := p.expectType(lexer.TypeLparen); err != nil {
-		return err
+		return err // EOF
 	}
 
 	def := ast.NewFuncDef(name.StringVal, p.attributes, name.Location)
@@ -193,7 +215,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 
 		tok, err := p.expectType(lexer.TypeComma, lexer.TypeRparen)
 		if err != nil {
-			return err
+			return err // EOF
 		}
 
 		if tok.Type == lexer.TypeRparen {
@@ -203,26 +225,20 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 
 	retType, err := p.parseFuncReturnType()
 	if err != nil {
-		return fmt.Errorf("error parsing return type at %s: %w", name.Location, err)
+		p.errorf(name.Location, "error parsing return type: %v", err)
+
+		// error recovery:
+		retType = ast.NewType(ast.TypeVoid, name.Location)
 	}
 
-	// For legacy: set currentRetType for void detection
-	if retType.Kind == ast.TypeVoid {
-		p.currentRetType = lexer.KeywordVoid
-	} else if retType.Kind == ast.TypeInt {
-		p.currentRetType = lexer.KeywordInt
-	} else if retType.Kind == ast.TypeString {
-		p.currentRetType = lexer.KeywordString
-	} else {
-		p.currentRetType = lexer.KeywordVoid // fallback
-	}
+	p.currentRetType = retType
 	def.ReturnType = retType
 
 	// If the function is not `extern`, we expect a body.
 	if _, ok := def.Attributes["extern"]; !ok {
 		lbrace, err := p.expectType(lexer.TypeLbrace)
 		if err != nil {
-			return err
+			return err // EOF
 		}
 
 		instructions, err := p.parseBlock(lbrace)
@@ -241,14 +257,19 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 		if addRet {
 			switch retType.Kind {
 			case ast.TypeVoid:
-				instructions = append(instructions, &ast.Return{})
+				// If the return type is void, we can just add an empty return.
+				instructions = append(instructions, ast.NewReturn(lbrace.Location))
 			default:
-				return fmt.Errorf("expected return statement at %s", name.Location)
+				p.errorf(name.Location, "function %s has return type %s but no return statement",
+					def.Ident, retType.String())
+
+				// error recovery:
+				instructions = append(instructions, ast.NewReturn(lbrace.Location))
 			}
 		}
 
 		if _, err := p.expectType(lexer.TypeRbrace); err != nil {
-			return err
+			return err // EOF
 		}
 
 		def.Body = ast.NewBody(instructions, lbrace.Location)
@@ -265,17 +286,18 @@ func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
 
 	nextTok, err := p.expectType(lexer.TypeRparen, lexer.TypeAt, lexer.TypeIdent)
 	if err != nil {
-		return nil, err
+		return nil, err // EOF
 	}
 
 	if nextTok.Type == lexer.TypeRparen {
+		// Empty parameter list.
 		return nil, nil
 	}
 
 	if nextTok.Type == lexer.TypeAt {
 		// Parse parameter attributes
 		if err := p.parseAttributes(nextTok); err != nil {
-			return nil, err
+			return nil, err // EOF
 		}
 
 		// Copy and clear parser attributes for this param
@@ -285,30 +307,27 @@ func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
 		// Now expect identifier
 		nextTok, err = p.expectType(lexer.TypeIdent)
 		if err != nil {
-			return nil, err
+			return nil, err // EOF
 		}
 	}
 
 	if _, err := p.expectType(lexer.TypeColon); err != nil {
-		return nil, err
+		return nil, err // EOF
 	}
 
 	equal, err := p.peekType(lexer.TypeAssign)
 	if err != nil {
-		return nil, err
+		return nil, err // EOF
 	}
 
 	var paramType *ast.Type
 
 	if equal.Type != lexer.TypeAssign {
-		paramType, err = p.parseType()
-		if err != nil {
-			return nil, err
-		}
+		paramType = p.parseType()
 
 		equal, err = p.peekType(lexer.TypeAssign)
 		if err != nil {
-			return nil, err
+			return nil, err // EOF
 		}
 	} else {
 		paramType = ast.NewType(ast.TypeUnknown, equal.Location)
@@ -328,6 +347,9 @@ func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
 		attrs, nextTok.Location), nil
 }
 
+// parseFuncReturnType parses the return type of a function.
+// If the return type is not specified, it defaults to void.
+// It returns io.EOF when there are no more tokens.
 func (p *Parser) parseFuncReturnType() (*ast.Type, error) {
 	arrow, err := p.peekType(lexer.TypeArrow)
 	if err != nil {
@@ -335,12 +357,7 @@ func (p *Parser) parseFuncReturnType() (*ast.Type, error) {
 	}
 
 	if arrow.Type == lexer.TypeArrow {
-		retType, err := p.parseType()
-		if err != nil {
-			return nil, err
-		}
-
-		return retType, nil
+		return p.parseType(), nil
 	}
 
 	// Default to void
@@ -348,27 +365,25 @@ func (p *Parser) parseFuncReturnType() (*ast.Type, error) {
 }
 
 func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
-	if start.Type != lexer.TypeLbrace {
-		return nil, fmt.Errorf("expected { at %s, got %s",
-			start.Location, start.StringVal)
-	}
+	_ = start
 
 	var instructions []ast.Instruction
 
 	for {
 		first, err := p.nextToken()
 		if err != nil {
-			return nil, err
+			return nil, err // EOF
 		}
 
 		switch first.Type {
 		case lexer.TypeRbrace:
+			// End of block
 			p.index--
 			return instructions, nil
 		case lexer.TypeKeyword:
 			switch first.Keyword {
 			case lexer.KeywordReturn:
-				if p.currentRetType == lexer.KeywordVoid {
+				if p.currentRetType.Kind == ast.TypeVoid {
 					instructions = append(instructions, ast.NewReturn(first.Location))
 				} else {
 					expr, err := p.parseExpression(false)
@@ -398,7 +413,7 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 			if first.Type == lexer.TypeIdent {
 				next, err := p.peekType(lexer.TypeColon)
 				if err != nil {
-					return nil, err
+					return nil, err // EOF
 				}
 
 				if next.Type == lexer.TypeColon {
@@ -420,7 +435,7 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 			if err == nil {
 				next, err := p.peekType(lexer.TypeAssign)
 				if err != nil {
-					return nil, err
+					return nil, err // EOF
 				}
 
 				if next.Type == lexer.TypeAssign {
@@ -439,7 +454,7 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 			if first.Type == lexer.TypeIdent {
 				next, err := p.peekType(lexer.TypeLparen)
 				if err != nil {
-					return nil, err
+					return nil, err // EOF
 				}
 
 				if next.Type == lexer.TypeLparen {
@@ -454,176 +469,17 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 				}
 			}
 
+			p.errorf(first.Location, "expected statement, got %s",
+				first.StringVal)
+
+			// TODO: error recovery
 			return nil, fmt.Errorf("unexpected statement at %s", first.Location)
 		}
 	}
 }
 
-func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
-	// <indent> ':'
-	// have been consumed already.
-	var instructions []ast.Instruction
-
-	// Could be a declaration or declaration+assignment
-	next, err := p.peekType(lexer.TypeAssign, lexer.TypeKeyword, lexer.TypeCaret)
-	if err != nil {
-		return nil, err
-	}
-
-	declaredType := ast.NewType(ast.TypeUnknown, ident.Location)
-
-	// type
-	if next.Type != lexer.TypeAssign {
-		p.index--
-
-		ty, err := p.parseType()
-		if err != nil {
-			return nil, err
-		}
-
-		declaredType = ty
-
-		next, err = p.peekType(lexer.TypeAssign)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	instructions = append(instructions,
-		ast.NewDeclare(ident.StringVal, declaredType, ident.Location))
-
-	// optional assignment
-	if next.Type == lexer.TypeAssign {
-		lvalue := ast.NewVariableRef(ident.StringVal, declaredType.Kind, ident.Location)
-
-		instr, err := p.parseAssign(lvalue)
-		if err != nil {
-			return nil, err
-		}
-
-		instructions = append(instructions, instr...)
-	}
-
-	return instructions, nil
-}
-
-// parseAssign now accepts an LValue (e.g., variable ref, deref, etc.)
-func (p *Parser) parseAssign(lhs ast.LValue) ([]ast.Instruction, error) {
-	// <lvalue> '=' or <lvalue> ':' <type> '=' or <lvalue> ':='
-	// have been consumed already.
-	var instructions []ast.Instruction
-
-	expr, err := p.parseExpression(false)
-	if err != nil {
-		return nil, err
-	}
-
-	instructions = append(instructions,
-		ast.NewAssign(lhs, expr, nil, lhs.Location()))
-
-	return instructions, nil
-}
-
-// parseCall parses the argument list of a function call. It expects `first` to be the identifier
-// of the function being called. The left-parenthesis `(` should have already been consumed. It
-// parses a comma-separated list of expressions until it encounters a right-parenthesis `)`.
-func (p *Parser) parseCall(first lexer.Token) (*ast.Call, error) {
-	var (
-		args []ast.Arg
-		next lexer.Token
-	)
-
-	for next.Type != lexer.TypeRparen {
-		expr, err := p.parseExpression(true)
-		if err != nil {
-			return nil, err
-		}
-
-		if expr != nil {
-			// We successfully parsed an expression, this should be followed by either
-			// a comma or a right parenthesis.
-			args = append(args, ast.NewArg("", expr, nil, expr.Location()))
-
-			next, err = p.expectType(lexer.TypeRparen, lexer.TypeComma)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			// We didn't parse an expression, so we expect a right parenthesis to form `()`.
-			next, err = p.expectType(lexer.TypeRparen)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	return ast.NewCall(first.Location, first.StringVal, args...), nil
-}
-
-func (p *Parser) expectKeyword(kws ...lexer.Keyword) (lexer.Token, error) {
-	token, err := p.expectType(lexer.TypeKeyword)
-	if err != nil {
-		return token, err
-	}
-
-	var kwnames []string
-
-	for _, kw := range kws {
-		kwnames = append(kwnames, string(kw))
-
-		if token.Keyword == kw {
-			return token, nil
-		}
-	}
-
-	return token, fmt.Errorf("expected %s at %s, got %s",
-		strings.Join(kwnames, " or "), token.Location, token.Keyword)
-}
-
-func (p *Parser) peekType(tts ...lexer.TokenType) (lexer.Token, error) {
-	tok, err := p.expectType(tts...)
-
-	if errors.Is(err, io.EOF) {
-		return tok, err
-	} else if err != nil {
-		p.index-- // Rollback index if not EOF
-	}
-
-	return tok, nil
-}
-
-func (p *Parser) expectType(tts ...lexer.TokenType) (lexer.Token, error) {
-	token, err := p.nextToken()
-	if err != nil {
-		return token, err
-	}
-
-	var ttnames []string
-
-	for _, tt := range tts {
-		ttnames = append(ttnames, string(tt))
-		if token.Type == tt {
-			return token, nil
-		}
-	}
-
-	return token, fmt.Errorf("expected %s at %s, got %s",
-		strings.Join(ttnames, " or "), token.Location, token.Type)
-}
-
-func (p *Parser) nextToken() (lexer.Token, error) {
-	if p.index >= len(p.tok) {
-		return lexer.Token{}, io.EOF
-	}
-
-	token := p.tok[p.index]
-	p.index++
-
-	return token, nil
-}
-
 // parseType parses a type, supporting pointer types (e.g., ^int, ^^int)
-func (p *Parser) parseType() (*ast.Type, error) {
+func (p *Parser) parseType() *ast.Type {
 	// Count leading carets (^) for pointer depth
 	pointerDepth := 0
 	for {
@@ -641,10 +497,18 @@ func (p *Parser) parseType() (*ast.Type, error) {
 
 	tok, err := p.expectType(lexer.TypeKeyword)
 	if err != nil {
-		return nil, err
+		p.errorf(tok.Location, "expected type keyword, got %s", tok.Type)
+
+		// error recover:
+		tok = lexer.Token{
+			Type:     lexer.TypeKeyword,
+			Keyword:  lexer.KeywordVoid,
+			Location: tok.Location, // FIXME(daniel): pass in the default location?
+		}
 	}
 
 	var base *ast.Type
+
 	switch tok.Keyword {
 	case lexer.KeywordInt:
 		base = ast.NewType(ast.TypeInt, tok.Location)
@@ -655,7 +519,10 @@ func (p *Parser) parseType() (*ast.Type, error) {
 	case lexer.KeywordVoid:
 		base = ast.NewType(ast.TypeVoid, tok.Location)
 	default:
-		return nil, fmt.Errorf("unexpected type keyword %s at %s", tok.Keyword, tok.Location)
+		p.errorf(tok.Location, "unexpected type keyword %s", tok.Keyword)
+
+		// error recovery:
+		base = ast.NewType(ast.TypeVoid, tok.Location)
 	}
 
 	// Wrap in pointer types as needed
@@ -663,231 +530,129 @@ func (p *Parser) parseType() (*ast.Type, error) {
 		base = ast.NewPointerType(base, tok.Location)
 	}
 
-	return base, nil
+	return base
 }
 
-// parseIf parses an if/else statement.
-func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
-	// Expect 'if' keyword already consumed
-	var initInstrs []ast.Instruction
-
-	// Check for optional initializer: ident : type = expr or ident = expr
-	next, err := p.expectType(lexer.TypeIdent)
-	if err == nil {
-		// Look ahead for colon or assign
-		if tok, err := p.peekType(lexer.TypeColon, lexer.TypeAssign); err != nil {
-			// Not an initializer, roll back
-			p.index--
-		} else if tok.Type == lexer.TypeColon {
-			initInstrs, err = p.parseDeclare(next)
-			if err != nil {
-				return nil, err
-			}
-
-			// Expect semicolon
-			if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
-				return nil, err
-			}
-		} else if tok.Type == lexer.TypeAssign {
-			lvalue := ast.NewVariableRef(next.StringVal, ast.TypeUnknown, next.Location)
-
-			initInstrs, err = p.parseAssign(lvalue)
-			if err != nil {
-				return nil, err
-			}
-
-			// Expect semicolon
-			if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
-				return nil, err
-			}
-		} else {
-			// Not an initializer, roll back
-			p.index--
-		}
-	} else {
-		// Rollback whatever token we got
-		p.index--
-	}
-
-	// Parse condition
-	cond, err := p.parseExpression(false)
+// expectKeyword checks if the next token is one of the expected keywords.
+// If it is, it consumes and returns the token. Otherwise it returns the first
+// expected keyword as a fallback and records an error.
+// It returns io.EOF when there are no more tokens.
+func (p *Parser) expectKeyword(kws ...lexer.Keyword) (lexer.Token, error) {
+	token, err := p.nextToken()
 	if err != nil {
-		return nil, err
+		return token, err
 	}
 
-	// Parse then branch
-	lbrace, err := p.expectType(lexer.TypeLbrace)
-	if err != nil {
-		return nil, err
+	if token.Type != lexer.TypeKeyword {
+		p.errorf(token.Location, "expected keyword, got %s", token.Type)
+
+		// error recovery:
+		return lexer.Token{
+			Type:       lexer.TypeKeyword,
+			Keyword:    kws[0], // Return the first keyword as a fallback
+			Identifier: string(kws[0]),
+			StringVal:  string(kws[0]),
+			Location:   token.Location, // Use the current token's location
+		}, nil
 	}
 
-	thenInstrs, err := p.parseBlock(lbrace)
-	if err != nil {
-		return nil, err
-	}
+	var kwnames []string
 
-	if _, err := p.expectType(lexer.TypeRbrace); err != nil {
-		return nil, err
-	}
+	for _, kw := range kws {
+		kwnames = append(kwnames, string(kw))
 
-	thenBody := ast.NewBody(thenInstrs, lbrace.Location)
-
-	// Check for else or else if
-	elseInstr := ast.Instruction(nil)
-
-	nextElse, err := p.peekType(lexer.TypeKeyword)
-	if err != nil {
-		return nil, err
-	}
-
-	if nextElse.Type != lexer.TypeKeyword {
-		// Don't rollback, since peek didn't consume the token.
-	} else if nextElse.Keyword != lexer.KeywordElse {
-		// We expected an 'else' keyword, but got something else.
-		p.index--
-	} else {
-		afterElse, err := p.peekType(lexer.TypeKeyword, lexer.TypeLbrace)
-		if err != nil {
-			return nil, err
-		}
-
-		if afterElse.Type == lexer.TypeKeyword && afterElse.Keyword == lexer.KeywordIf {
-			// else if: recursively parse another if
-			elseInstr, err = p.parseIf(afterElse)
-			if err != nil {
-				return nil, err
-			}
-		} else if afterElse.Type == lexer.TypeLbrace {
-			// else: parse block
-			elseInstrs, err := p.parseBlock(lbrace)
-			if err != nil {
-				return nil, err
-			}
-
-			if _, err := p.expectType(lexer.TypeRbrace); err != nil {
-				return nil, err
-			}
-
-			elseInstr = ast.NewBody(elseInstrs, lbrace.Location)
-		} else {
-			return nil, fmt.Errorf("expected 'if' or '{' after 'else'")
+		if token.Keyword == kw {
+			return token, nil
 		}
 	}
 
-	return ast.NewIf(
-		first.Location,
-		initInstrs,
-		cond,
-		thenBody,
-		elseInstr,
-	), nil
+	p.errorf(token.Location, "expected %s, got %s", strings.Join(kwnames, " or "), token.Keyword)
+
+	// error recovery:
+	return lexer.Token{
+		Type:       lexer.TypeKeyword,
+		Keyword:    kws[0], // Return the first keyword as a fallback
+		Identifier: string(kws[0]),
+		StringVal:  string(kws[0]),
+		Location:   token.Location, // Use the current token's location
+	}, nil
 }
 
-// parseFor parses a for loop of the form: for <cond> { ... }
-func (p *Parser) parseFor(first lexer.Token) (ast.Instruction, error) {
-	// 'for' keyword already consumed
-	index := p.index
-
-	var (
-		initInstrs []ast.Instruction
-		postInstrs []ast.Instruction
-		cond       ast.Expression
-	)
-
-	// Try to parse an initializer (for now only assignment or set)
-	start, err := p.expectType(lexer.TypeIdent)
-	if err == nil {
-		next, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
-		if err != nil {
-			// If we didn't parse an initializer, roll back the index and try
-			// to parse it as a condition.
-			p.index = index
-		} else if next.Type == lexer.TypeColon {
-			initInstrs, err = p.parseDeclare(start)
-			if err != nil {
-				return nil, err
-			}
-
-			// If we successfully parsed an initializer, expect a semicolon
-			_, err := p.expectType(lexer.TypeSemicolon)
-			if err != nil {
-				return nil, err
-			}
-		} else if next.Type == lexer.TypeAssign {
-			lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
-
-			initInstrs, err = p.parseAssign(lvalue)
-			if err != nil {
-				return nil, err
-			}
-
-			// If we successfully parsed an initializer, expect a semicolon
-			_, err := p.expectType(lexer.TypeSemicolon)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			// If we didn't parse an initializer, roll back the index and try
-			// to parse it as a condition.
-			p.index = index
-		}
-	} else {
-		// If we didn't parse an initializer, roll back the index and try
-		// to parse it as a condition.
-		p.index = index
-	}
-
-	cond, err = p.parseExpression(false)
+// peekType checks if the next token is of the expected type(s). If it is, it
+// consumes and returns the token. Otherwise it doesn't consume the token.
+// It returns io.EOF when there are no more tokens.
+func (p *Parser) peekType(tts ...lexer.TokenType) (lexer.Token, error) {
+	token, err := p.nextToken()
 	if err != nil {
-		return nil, err
+		return token, err
 	}
 
-	semi, err := p.peekType(lexer.TypeSemicolon)
-	if err != nil {
-		return nil, err
-	}
+	var ttnames []string
 
-	if semi.Type == lexer.TypeSemicolon {
-		// If we found a semicolon, we expect another assignment
-		start, err := p.expectType(lexer.TypeIdent)
-		if err != nil {
-			return nil, err
-		}
-
-		next, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
-		if err != nil {
-			return nil, err
-		} else if next.Type == lexer.TypeColon {
-			postInstrs, err = p.parseDeclare(start)
-			if err != nil {
-				return nil, err
-			}
-		} else if next.Type == lexer.TypeAssign {
-			lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
-
-			postInstrs, err = p.parseAssign(lvalue)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			p.index--
+	for _, tt := range tts {
+		ttnames = append(ttnames, string(tt))
+		if token.Type == tt {
+			return token, nil
 		}
 	}
 
-	lbrace, err := p.expectType(lexer.TypeLbrace)
+	// If we reach here, the token was not of the expected type(s)
+	p.index--
+
+	return token, nil
+}
+
+// expectType checks if the next token is of the expected type(s). If it is, it
+// consumes and returns the token. Otherwise it returns the first expected type
+// as a fallback and records an error.
+// It returns io.EOF when there are no more tokens.
+func (p *Parser) expectType(tts ...lexer.TokenType) (lexer.Token, error) {
+	token, err := p.nextToken()
 	if err != nil {
-		return nil, err
+		return token, err
 	}
 
-	bodyInstrs, err := p.parseBlock(lbrace)
-	if err != nil {
-		return nil, err
+	var ttnames []string
+
+	for _, tt := range tts {
+		ttnames = append(ttnames, string(tt))
+		if token.Type == tt {
+			return token, nil
+		}
 	}
 
-	if _, err := p.expectType(lexer.TypeRbrace); err != nil {
-		return nil, err
+	p.errorf(token.Location, "expected %s, got %s", strings.Join(ttnames, " or "), token.Type)
+
+	// error recover:
+	p.index--
+
+	return lexer.Token{
+		Type:     tts[0],
+		Location: token.Location,
+	}, nil
+}
+
+// nextToken retrieves the next token from the parser's token stream.
+// It returns io.EOF when there are no more tokens.
+func (p *Parser) nextToken() (lexer.Token, error) {
+	if p.index >= len(p.tok) {
+		return lexer.Token{}, io.EOF
 	}
 
-	return ast.NewFor(first.Location, initInstrs, cond, postInstrs,
-		ast.NewBody(bodyInstrs, lbrace.Location)), nil
+	token := p.tok[p.index]
+	p.index++
+
+	return token, nil
+}
+
+// Helper to record errors
+func (p *Parser) errorf(location lexer.Location, format string, args ...any) {
+	fmt.Printf("%s: [ERRO] "+format+"\n", append([]any{location}, args...)...)
+
+	err := fmt.Errorf("%s: "+format, append([]any{location}, args...)...)
+	p.errors = append(p.errors, err)
+}
+
+func (p *Parser) infof(location lexer.Location, format string, args ...any) {
+	fmt.Printf("%s: [INFO] "+format+"\n", append([]any{location}, args...)...)
 }

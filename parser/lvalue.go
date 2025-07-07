@@ -15,23 +15,23 @@ func (p *Parser) parseLValue() (ast.LValue, error) {
 	// Try to parse a parenthesized or deref expression
 	first, err := p.nextToken()
 	if err != nil {
-		return nil, err
+		return nil, err // EOF
 	}
 
 	switch first.Type {
 	case lexer.TypeIdent:
 		// Could be a variable, or a deref (ident^), or a chain
 		ident := first.StringVal
-		lv := ast.NewVariableRef(ident, ast.TypeUnknown, first.Location)
+		lv := ast.LValue(ast.NewVariableRef(ident, ast.TypeUnknown, first.Location))
 
 		next, err := p.peekType(lexer.TypeCaret)
 		if err != nil {
-			return nil, err
+			return nil, err // EOF
 		}
 
 		if next.Type == lexer.TypeCaret {
 			// Deref: ident^
-			return ast.NewDeref(lv, next.Location), nil
+			lv = ast.NewDeref(lv, next.Location)
 		}
 
 		return lv, nil
@@ -44,12 +44,12 @@ func (p *Parser) parseLValue() (ast.LValue, error) {
 
 		_, err = p.expectType(lexer.TypeRparen)
 		if err != nil {
-			return nil, err
+			return nil, err // EOF
 		}
 
 		next, err := p.peekType(lexer.TypeCaret)
 		if err != nil {
-			return nil, err
+			return nil, err // EOF
 		}
 
 		if next.Type == lexer.TypeCaret {
@@ -57,8 +57,14 @@ func (p *Parser) parseLValue() (ast.LValue, error) {
 			return ast.NewDeref(expr, next.Location), nil
 		}
 
-		return nil, fmt.Errorf("invalid lvalue: parenthesized expression must be dereferenced with ^")
+		p.errorf(first.Location, "expected dereference after parenthesized expression")
+
+		// error recovery:
+		return ast.NewDeref(expr, next.Location), nil
 	default:
+		p.errorf(first.Location, "expected lvalue, got %s", first.StringVal)
+
+		// TODO: error recovery
 		return nil, fmt.Errorf("invalid lvalue start: %s", first.StringVal)
 	}
 }

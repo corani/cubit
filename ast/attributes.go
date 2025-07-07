@@ -19,7 +19,7 @@ const (
 )
 
 // ParseAttrKey validates and returns an AttrKey or an error if invalid.
-func ParseAttrKey(s string) (AttrKey, error) {
+func ParseAttrKey(s string) (AttrKey, bool) {
 	attrs := []AttrKey{
 		AttrKeyExport,
 		AttrKeyExtern,
@@ -30,10 +30,10 @@ func ParseAttrKey(s string) (AttrKey, error) {
 	}
 
 	if slices.Contains(attrs, AttrKey(s)) {
-		return AttrKey(s), nil
+		return AttrKey(s), true
 	}
 
-	return "", fmt.Errorf("invalid attribute key: %s", s)
+	return AttrKey(s), false
 }
 
 // AttrValue is a union type for attribute values (string or int).

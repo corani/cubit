@@ -99,7 +99,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 
 	start, err := p.peekType(starters...)
 	if err != nil {
-		return nil, err
+		return nil, err // EOF
 	}
 
 	if !slices.Contains(starters, start.Type) {
@@ -109,8 +109,10 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 			return nil, nil
 		}
 
-		return nil, fmt.Errorf("expected start of expression at %s, got %s",
-			start.Location, start.StringVal)
+		p.errorf(start.Location, "expected start of expression, got %s", start.StringVal)
+
+		// TODO: error recovery
+		return nil, nil
 	}
 
 	var expr ast.Expression
@@ -123,6 +125,9 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		case lexer.KeywordFalse:
 			expr = ast.NewBoolLiteral(false, start.Location)
 		default:
+			p.errorf(start.Location, "unexpected keyword %s in expression", start.Keyword)
+
+			// TODO: error recovery
 			return nil, fmt.Errorf("unexpected keyword %s at %s",
 				start.Keyword, start.Location)
 		}
@@ -134,8 +139,10 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		} else if start.Keyword == lexer.KeywordFalse {
 			expr = ast.NewBoolLiteral(false, start.Location)
 		} else {
-			panic(fmt.Sprintf("unexpected boolean keyword %s at %s",
-				start.Keyword, start.Location))
+			p.errorf(start.Location, "unexpected boolean keyword %s in expression", start.Keyword)
+
+			// error recovery:
+			expr = ast.NewBoolLiteral(false, start.Location)
 		}
 	case lexer.TypeString:
 		expr = ast.NewStringLiteral(start.StringVal, start.Location)
@@ -143,7 +150,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		// Peek to see if this is a function call or dereference
 		next, err := p.peekType(lexer.TypeLparen, lexer.TypeCaret)
 		if err != nil && !errors.Is(err, io.EOF) {
-			return nil, err
+			return nil, err // EOF
 		}
 
 		switch next.Type {
@@ -168,20 +175,20 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 
 		_, err = p.expectType(lexer.TypeRparen)
 		if err != nil {
-			return nil, err
+			return nil, err // EOF
 		}
 
 		// Check for dereference after parenthesized expression: (expr)^
 		next, err := p.peekType(lexer.TypeCaret)
 		if err != nil {
-			return nil, err
+			return nil, err // EOF
 		}
 
 		if next.Type == lexer.TypeCaret {
 			expr = ast.NewDeref(expr, next.Location)
 		}
 	default:
-		panic("unreachable")
+		p.errorf(start.Location, "unexpected token %s in expression", start.StringVal)
 	}
 
 	return expr, nil

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/corani/refactored-giggle/ast"
+	"github.com/corani/refactored-giggle/lexer"
 )
 
 // Symbol represents a variable or function in the symbol table.
@@ -117,8 +118,8 @@ func (tc *TypeChecker) VisitFuncParam(fn *ast.FuncParam) {
 			fn.Type = valueType
 		} else {
 			// Case 2: arg : int = 1 (check match)
-			if !typeEqual(valueType, fn.Type) {
-				tc.errorf("type error: parameter '%s' declared as %s but default value is %s",
+			if !tc.typeEqual(valueType, fn.Type) {
+				tc.errorf(fn.Location(), "type error: parameter '%s' declared as %s but default value is %s",
 					fn.Ident, fn.Type, valueType)
 			}
 		}
@@ -162,13 +163,13 @@ func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
 	if lvalSymbol != nil {
 		if lvalSymbol.Type.Kind == ast.TypeUnknown {
 			lvalSymbol.Type = valType
-		} else if !typeEqual(lvalType, valType) {
-			tc.errorf("type error: variable '%s' declared as %s but assigned %s", lvalSymbol.Name, lvalSymbol.Type, valType)
+		} else if !tc.typeEqual(lvalType, valType) {
+			tc.errorf(a.Location(), "type error: variable '%s' declared as %s but assigned %s", lvalSymbol.Name, lvalSymbol.Type, valType)
 		}
 	} else {
 		// TODO: handle pointer deref, array index, etc.
-		if lvalType != nil && lvalType.Kind != ast.TypeUnknown && !typeEqual(lvalType, valType) {
-			tc.errorf("type error: lvalue type %s but assigned %s", lvalType, valType)
+		if lvalType != nil && lvalType.Kind != ast.TypeUnknown && !tc.typeEqual(lvalType, valType) {
+			tc.errorf(a.Location(), "type error: lvalue type %s but assigned %s", lvalType, valType)
 		}
 	}
 
@@ -179,7 +180,7 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 	// Look up the function definition
 	sym, ok := tc.lookupSymbol(call.Ident)
 	if !ok || !sym.IsFunc || sym.FuncDef == nil {
-		tc.errorf("call to undefined function '%s'", call.Ident)
+		tc.errorf(call.Location(), "call to undefined function '%s'", call.Ident)
 		tc.lastType = &ast.Type{Kind: ast.TypeUnknown}
 
 		return
@@ -189,7 +190,7 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 
 	// Check argument count
 	if len(call.Args) != len(fnDef.Params) {
-		tc.errorf("call to '%s' expects %d arguments, got %d", call.Ident, len(fnDef.Params), len(call.Args))
+		tc.errorf(call.Location(), "call to '%s' expects %d arguments, got %d", call.Ident, len(fnDef.Params), len(call.Args))
 		tc.lastType = sym.Type
 
 		return
@@ -202,8 +203,8 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 
 		call.Args[i].Type = argType // Set the type of the argument
 
-		if paramType != nil && paramType.Kind != ast.TypeUnknown && !typeEqual(argType, paramType) {
-			tc.errorf("call to '%s': argument %d type mismatch: expected %s, got %s", call.Ident, i+1, paramType, argType)
+		if paramType != nil && paramType.Kind != ast.TypeUnknown && !tc.typeEqual(argType, paramType) {
+			tc.errorf(arg.Location(), "call to '%s': argument %d type mismatch: expected %s, got %s", call.Ident, i+1, paramType, argType)
 		}
 	}
 
@@ -235,7 +236,7 @@ func (tc *TypeChecker) VisitVariableRef(ref *ast.VariableRef) {
 		tc.lastType = sym.Type
 		tc.lastSymbol = sym
 	} else {
-		tc.errorf("undefined variable '%s'", ref.Ident)
+		tc.errorf(ref.Location(), "undefined variable '%s'", ref.Ident)
 		ref.Type = &ast.Type{Kind: ast.TypeUnknown}
 		tc.lastType = ref.Type
 		tc.lastSymbol = nil
@@ -258,39 +259,39 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 				binop.Type = rhsType
 			} else if lhsType.Kind == ast.TypePointer && rhsType.Kind == ast.TypePointer && binop.Operation == ast.BinOpSub {
 				// pointer - pointer => int (if element types match)
-				if typeEqual(lhsType, rhsType) {
+				if tc.typeEqual(lhsType, rhsType) {
 					binop.Type = &ast.Type{Kind: ast.TypeInt}
 				} else {
 					binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-					tc.errorf("pointer subtraction requires matching pointer types, got %s - %s", lhsType, rhsType)
+					tc.errorf(binop.Location(), "pointer subtraction requires matching pointer types, got %s - %s", lhsType, rhsType)
 				}
-			} else if typeEqual(lhsType, rhsType) {
+			} else if tc.typeEqual(lhsType, rhsType) {
 				// fallback: both operands same type
 				binop.Type = lhsType
 			} else {
 				binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-				tc.errorf("invalid operands for pointer arithmetic: %s %s %s", lhsType, binop.Operation, rhsType)
+				tc.errorf(binop.Location(), "invalid operands for pointer arithmetic: %s %s %s", lhsType, binop.Operation, rhsType)
 			}
 		} else {
 			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf("invalid operands for pointer arithmetic: %s %s %s", lhsType, binop.Operation, rhsType)
+			tc.errorf(binop.Location(), "invalid operands for pointer arithmetic: %s %s %s", lhsType, binop.Operation, rhsType)
 		}
 	case ast.BinOpEq, ast.BinOpNe:
 		// Equality/inequality returns bool if types match
-		if lhsType != nil && rhsType != nil && typeEqual(lhsType, rhsType) {
+		if lhsType != nil && rhsType != nil && tc.typeEqual(lhsType, rhsType) {
 			binop.Type = &ast.Type{Kind: ast.TypeBool}
 		} else {
 			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf("type mismatch in equality/inequality operation: %s vs %s", lhsType, rhsType)
+			tc.errorf(binop.Location(), "type mismatch in equality/inequality operation: %s vs %s", lhsType, rhsType)
 		}
 	case ast.BinOpLt, ast.BinOpLe, ast.BinOpGt, ast.BinOpGe:
 		// Comparison operators: valid for int, string, or pointer (if types match)
-		if lhsType != nil && rhsType != nil && typeEqual(lhsType, rhsType) &&
+		if lhsType != nil && rhsType != nil && tc.typeEqual(lhsType, rhsType) &&
 			(lhsType.Kind == ast.TypeInt || lhsType.Kind == ast.TypeString || lhsType.Kind == ast.TypePointer) {
 			binop.Type = &ast.Type{Kind: ast.TypeBool}
 		} else {
 			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf("type mismatch or invalid types in comparison operation: %s vs %s", lhsType, rhsType)
+			tc.errorf(binop.Location(), "type mismatch or invalid types in comparison operation: %s vs %s", lhsType, rhsType)
 		}
 	case ast.BinOpShl, ast.BinOpShr:
 		// Shift ops: both sides must be int, result is int
@@ -298,7 +299,7 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 			binop.Type = &ast.Type{Kind: ast.TypeInt}
 		} else {
 			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf("shift operation requires int operands, got %s << %s", lhsType, rhsType)
+			tc.errorf(binop.Location(), "shift operation requires int operands, got %s << %s", lhsType, rhsType)
 		}
 	case ast.BinOpAnd, ast.BinOpOr:
 		// Bitwise ops: both sides must be int, result is int
@@ -306,7 +307,7 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 			binop.Type = &ast.Type{Kind: ast.TypeInt}
 		} else {
 			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf("bitwise operation requires int operands, got %s & %s", lhsType, rhsType)
+			tc.errorf(binop.Location(), "bitwise operation requires int operands, got %s & %s", lhsType, rhsType)
 		}
 	case ast.BinOpLogAnd, ast.BinOpLogOr:
 		// Logical ops: both sides must be bool, result is bool
@@ -314,14 +315,14 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 			binop.Type = &ast.Type{Kind: ast.TypeBool}
 		} else {
 			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf("logical operation requires bool operands, got %s && %s", lhsType, rhsType)
+			tc.errorf(binop.Location(), "logical operation requires bool operands, got %s && %s", lhsType, rhsType)
 		}
 	default:
-		if lhsType != nil && rhsType != nil && typeEqual(lhsType, rhsType) {
+		if lhsType != nil && rhsType != nil && tc.typeEqual(lhsType, rhsType) {
 			binop.Type = lhsType
 		} else {
 			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf("type mismatch in binary operation: %s vs %s", lhsType, rhsType)
+			tc.errorf(binop.Location(), "type mismatch in binary operation: %s vs %s", lhsType, rhsType)
 		}
 	}
 
@@ -340,7 +341,7 @@ func (tc *TypeChecker) VisitIf(iff *ast.If) {
 	// Type check the condition
 	condType := tc.visitNode(iff.Cond)
 	if condType == nil || condType.Kind != ast.TypeBool {
-		tc.errorf("if condition must be bool, got %s", condType)
+		tc.errorf(iff.Location(), "if condition must be bool, got %s", condType)
 	}
 
 	// Type check the 'then' branch
@@ -367,7 +368,7 @@ func (tc *TypeChecker) VisitFor(f *ast.For) {
 	// Type check the condition
 	condType := tc.visitNode(f.Cond)
 	if condType == nil || condType.Kind != ast.TypeBool {
-		tc.errorf("for condition must be bool, got %s", condType)
+		tc.errorf(f.Location(), "for condition must be bool, got %s", condType)
 	}
 
 	// Type check the body
@@ -389,7 +390,7 @@ func (tc *TypeChecker) VisitDeref(d *ast.Deref) {
 	// Dereference does not change the type, just returns the type of the dereferenced expression
 	ref := tc.visitNode(d.Expr)
 	if ref == nil || ref.Kind != ast.TypePointer {
-		tc.errorf("dereference requires pointer type, got %s", ref)
+		tc.errorf(d.Location(), "dereference requires pointer type, got %s", ref)
 		d.Type = &ast.Type{Kind: ast.TypeUnknown}
 	} else {
 		d.Type = ref.Elem // Dereference returns the element type
@@ -436,14 +437,8 @@ func (tc *TypeChecker) lookupSymbol(name string) (*Symbol, bool) {
 	return nil, false
 }
 
-// Helper to record errors
-func (tc *TypeChecker) errorf(format string, args ...any) {
-	err := fmt.Errorf(format, args...)
-	tc.errors = append(tc.errors, err)
-}
-
 // typeEqual returns true if two types are structurally equal (including pointer depth)
-func typeEqual(a, b *ast.Type) bool {
+func (tc *TypeChecker) typeEqual(a, b *ast.Type) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
@@ -451,7 +446,19 @@ func typeEqual(a, b *ast.Type) bool {
 		return false
 	}
 	if a.Kind == ast.TypePointer {
-		return typeEqual(a.Elem, b.Elem)
+		return tc.typeEqual(a.Elem, b.Elem)
 	}
 	return true
+}
+
+// Helper to record errors
+func (tc *TypeChecker) errorf(location lexer.Location, format string, args ...any) {
+	fmt.Printf("%s: [ERRO] "+format+"\n", append([]any{location}, args...)...)
+
+	err := fmt.Errorf("%s: "+format, append([]any{location}, args...)...)
+	tc.errors = append(tc.errors, err)
+}
+
+func (tc *TypeChecker) infof(location lexer.Location, format string, args ...any) {
+	fmt.Printf("%s: [INFO] "+format+"\n", append([]any{location}, args...)...)
 }
