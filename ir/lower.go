@@ -232,63 +232,12 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 	// Handle logical operations separately using compare and jump.
 	switch b.Operation {
 	case ast.BinOpLogAnd:
-		// Shape of a logical AND when lowered:
-		// 		%tmp = <left>
-		// 		jnz %tmp, @true, @false
-		//  @false:
-		// 		%result = %left
-		//		jp @end
-		// 	@true:
-		// 		%tmp = <right>
-		//		%result = %tmp
-		//  @end:
-		trueLabel := v.nextLabel("true")
-		falseLabel := v.nextLabel("false")
-		endLabel := v.nextLabel("end")
-
-		v.appendInstruction(NewJnz(left, trueLabel, falseLabel))
-		// @false:
-		v.appendInstruction(NewLabel(falseLabel))
-		v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0)))
-		v.appendInstruction(NewJmp(endLabel))
-		// @true:
-		v.appendInstruction(NewLabel(trueLabel))
-		b.Rhs.Accept(v)
-		right := v.lastVal
-		v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0)))
-		// @end:
-		v.appendInstruction(NewLabel(endLabel))
+		v.visitBinOpLogAnd(left, b, result)
 
 		v.lastVal = result
-
 		return
 	case ast.BinOpLogOr:
-		// Shape of a logical OR when lowered:
-		// 		%tmp = <left>
-		// 		jnz %tmp, @true, @false
-		//  @true:
-		//		%result = %left
-		//		jp @end
-		// 	@false:
-		// 		%tmp = <right>
-		// 		%result = %tmp
-		//  @end:
-		trueLabel := v.nextLabel("true")
-		falseLabel := v.nextLabel("false")
-		endLabel := v.nextLabel("end")
-
-		v.appendInstruction(NewJnz(left, trueLabel, falseLabel))
-		// @true:
-		v.appendInstruction(NewLabel(trueLabel))
-		v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0)))
-		v.appendInstruction(NewJmp(endLabel))
-		// @false:
-		v.appendInstruction(NewLabel(falseLabel))
-		b.Rhs.Accept(v)
-		right := v.lastVal
-		v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0)))
-		// @end:
-		v.appendInstruction(NewLabel(endLabel))
+		v.visitBinOpLogOr(left, b, result)
 
 		v.lastVal = result
 		return
@@ -358,6 +307,64 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 	v.appendInstruction(NewBinop(irOp, result, left, right))
 	v.lastVal = result
 	v.lastType = b.Type
+}
+
+func (v *visitor) visitBinOpLogAnd(left *Val, b *ast.Binop, result *Val) {
+	// Shape of a logical AND when lowered:
+	// 		%tmp = <left>
+	// 		jnz %tmp, @true, @false
+	//  @false:
+	// 		%result = %left
+	//		jp @end
+	// 	@true:
+	// 		%tmp = <right>
+	//		%result = %tmp
+	//  @end:
+	trueLabel := v.nextLabel("true")
+	falseLabel := v.nextLabel("false")
+	endLabel := v.nextLabel("end")
+
+	v.appendInstruction(NewJnz(left, trueLabel, falseLabel))
+	// @false:
+	v.appendInstruction(NewLabel(falseLabel))
+	v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0)))
+	v.appendInstruction(NewJmp(endLabel))
+	// @true:
+	v.appendInstruction(NewLabel(trueLabel))
+	b.Rhs.Accept(v)
+	right := v.lastVal
+	v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0)))
+	// @end:
+	v.appendInstruction(NewLabel(endLabel))
+}
+
+func (v *visitor) visitBinOpLogOr(left *Val, b *ast.Binop, result *Val) {
+	// Shape of a logical OR when lowered:
+	// 		%tmp = <left>
+	// 		jnz %tmp, @true, @false
+	//  @true:
+	//		%result = %left
+	//		jp @end
+	// 	@false:
+	// 		%tmp = <right>
+	// 		%result = %tmp
+	//  @end:
+	trueLabel := v.nextLabel("true")
+	falseLabel := v.nextLabel("false")
+	endLabel := v.nextLabel("end")
+
+	v.appendInstruction(NewJnz(left, trueLabel, falseLabel))
+	// @true:
+	v.appendInstruction(NewLabel(trueLabel))
+	v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0)))
+	v.appendInstruction(NewJmp(endLabel))
+	// @false:
+	v.appendInstruction(NewLabel(falseLabel))
+	b.Rhs.Accept(v)
+	right := v.lastVal
+	v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0)))
+	// @end:
+	v.appendInstruction(NewLabel(endLabel))
 }
 
 func (v *visitor) VisitIf(iff *ast.If) {

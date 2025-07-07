@@ -192,8 +192,8 @@ func (v *SsaGen) VisitParam(p ir.Param) string {
 	switch p.Type {
 	case ir.ParamRegular:
 		// TODO(daniel): generate correct parameter type.
-		//		return fmt.Sprintf("%s %%%s", v.VisitAbiTy(p.AbiTy), p.Ident)
-		return fmt.Sprintf("l %%%s", p.Ident)
+		return fmt.Sprintf("%s %%%s", v.VisitAbiTy(p.AbiTy), p.Ident)
+		//return fmt.Sprintf("l %%%s", p.Ident)
 	case ir.ParamEnv:
 		return fmt.Sprintf("env %%%s", p.Ident)
 	case ir.ParamVariadic:
@@ -367,4 +367,11 @@ func (v *SsaGen) VisitStore(s *ir.Store) string {
 
 	// TODO(daniel): generate correct type, for now we assume 'w' (word) for the loaded value.
 	return fmt.Sprintf("storew %s, %s", val, addr)
+}
+
+func (v *SsaGen) VisitConvert(c *ir.Convert) string {
+	ret := v.VisitVal(c.Ret)
+	val := v.VisitVal(c.Val)
+
+	return fmt.Sprintf("%s =l extsw %s", ret, val)
 }

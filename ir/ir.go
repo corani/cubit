@@ -14,6 +14,7 @@ type Visitor interface {
 	VisitJnz(*Jnz) string
 	VisitLoad(*Load) string
 	VisitStore(*Store) string
+	VisitConvert(*Convert) string
 }
 
 type CompilationUnit struct {
@@ -641,4 +642,19 @@ func (s *Store) isInstruction() {}
 
 func (s *Store) Accept(visitor Visitor) string {
 	return visitor.VisitStore(s)
+}
+
+type Convert struct {
+	Ret *Val // destination (SSA temp)
+	Val *Val // value to convert
+}
+
+func NewConvert(ret, val *Val) *Convert {
+	return &Convert{Ret: ret, Val: val}
+}
+
+func (c *Convert) isInstruction() {}
+
+func (c *Convert) Accept(visitor Visitor) string {
+	return visitor.VisitConvert(c)
 }
