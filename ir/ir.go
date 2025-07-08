@@ -167,25 +167,26 @@ type Val struct {
 	Type     ValType
 	DynConst DynConst
 	Ident    Ident
+	AbiTy    AbiTy
 }
 
-func NewValDynConst(dc DynConst) *Val {
-	return &Val{Type: ValDynConst, DynConst: dc}
+func NewValDynConst(dc DynConst, abiTy AbiTy) *Val {
+	return &Val{Type: ValDynConst, DynConst: dc, AbiTy: abiTy}
 }
 
-func NewValGlobal(ident Ident) *Val {
-	v := NewValDynConst(NewDynConst(NewConstIdent(ident)))
+func NewValGlobal(ident Ident, abiTy AbiTy) *Val {
+	v := NewValDynConst(NewDynConst(NewConstIdent(ident)), abiTy)
 	v.Ident = ident
 
 	return v
 }
 
-func NewValInteger(i int64) *Val {
-	return NewValDynConst(NewDynConst(NewConstInteger(i)))
+func NewValInteger(i int64, abiTy AbiTy) *Val {
+	return NewValDynConst(NewDynConst(NewConstInteger(i)), abiTy)
 }
 
-func NewValIdent(ident Ident) *Val {
-	return &Val{Type: ValIdent, Ident: ident}
+func NewValIdent(ident Ident, abiTy AbiTy) *Val {
+	return &Val{Type: ValIdent, Ident: ident, AbiTy: abiTy}
 }
 
 type ValType string
@@ -557,13 +558,12 @@ func NewBinop(op BinOpKind, ret, lhs, rhs *Val) *Binop {
 }
 
 type Arg struct {
-	Type  ArgType
-	AbiTy AbiTy
-	Val   *Val
+	Type ArgType
+	Val  *Val
 }
 
-func NewArgRegular(abiTy AbiTy, val *Val) Arg {
-	return Arg{Type: ArgRegular, AbiTy: abiTy, Val: val}
+func NewArgRegular(val *Val) Arg {
+	return Arg{Type: ArgRegular, Val: val}
 }
 
 func NewArgEnv(val *Val) Arg {

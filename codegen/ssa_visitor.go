@@ -270,7 +270,6 @@ func (v *SsaGen) VisitCall(c *ir.Call) string {
 }
 
 func (v *SsaGen) VisitBinop(b *ir.Binop) string {
-	// TODO(daniel): handle different types than 'word', handle signed/unsigned.
 	// Map ir.BinOpKind to SSA op string
 	opMap := map[ir.BinOpKind]string{
 		ir.BinOpAdd: "add",
@@ -294,9 +293,8 @@ func (v *SsaGen) VisitBinop(b *ir.Binop) string {
 		panic("unknown binop: " + string(b.Op))
 	}
 
-	// TODO(daniel): handle different result types based on the operation.
-	// For now, always use =l (long) for the result type
-	return fmt.Sprintf("%s =l %s %s, %s", v.VisitVal(b.Ret), op, v.VisitVal(b.Lhs), v.VisitVal(b.Rhs))
+	return fmt.Sprintf("%s =%s %s %s, %s",
+		v.VisitVal(b.Ret), v.VisitAbiTy(b.Ret.AbiTy), op, v.VisitVal(b.Lhs), v.VisitVal(b.Rhs))
 }
 
 func (v *SsaGen) VisitVal(val *ir.Val) string {
@@ -324,7 +322,7 @@ func (v *SsaGen) VisitDynConst(dc ir.DynConst) string {
 func (v *SsaGen) VisitArg(a ir.Arg) string {
 	switch a.Type {
 	case ir.ArgRegular:
-		return fmt.Sprintf("%s %s", v.VisitAbiTy(a.AbiTy), v.VisitVal(a.Val))
+		return fmt.Sprintf("%s %s", v.VisitAbiTy(a.Val.AbiTy), v.VisitVal(a.Val))
 	case ir.ArgEnv:
 		return fmt.Sprintf("env %s", v.VisitVal(a.Val))
 	case ir.ArgVariadic:
@@ -353,9 +351,8 @@ func (v *SsaGen) VisitLoad(l *ir.Load) string {
 	ret := v.VisitVal(l.Ret)
 	addr := v.VisitVal(l.Addr)
 
-	// TODO(daniel): generate correct type, for now we assume 'w' (word) for the loaded value
-	// and 'l' (long) for the target.
-	return fmt.Sprintf("%s =l loadw %s", ret, addr)
+	// TODO(daniel): generate correct type, for now we assume 'w' (word) for the loaded value.
+	return fmt.Sprintf("%s =%s loadw %s", ret, v.VisitAbiTy(l.Ret.AbiTy), addr)
 }
 
 // Implements QBE-style store: storew %val, %addr
@@ -373,5 +370,7 @@ func (v *SsaGen) VisitConvert(c *ir.Convert) string {
 	ret := v.VisitVal(c.Ret)
 	val := v.VisitVal(c.Val)
 
+	// TODO(daniel): generate correct type, for now we assume 'l' (long) for the result, and
+	// 'sw' (signed word) for the input value.
 	return fmt.Sprintf("%s =l extsw %s", ret, val)
 }

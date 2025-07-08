@@ -28,9 +28,9 @@ func TestAST_CompilationUnit(t *testing.T) {
 			WithBlocks(ir.Block{
 				Label: "start",
 				Instructions: []ir.Instruction{
-					ir.NewCall(ir.NewValGlobal(ir.Ident("printf")),
-						ir.NewArgRegular(ir.NewAbiTyBase(ir.BaseLong), ir.NewValGlobal(ir.Ident("data_hello0"))),
-						ir.NewArgRegular(ir.NewAbiTyBase(ir.BaseWord), ir.NewValIdent(ir.Ident("arg")))),
+					ir.NewCall(ir.NewValGlobal(ir.Ident("printf"), ir.NewAbiTyBase(ir.BaseLong)),
+						ir.NewArgRegular(ir.NewValGlobal(ir.Ident("data_hello0"), ir.NewAbiTyBase(ir.BaseLong))),
+						ir.NewArgRegular(ir.NewValIdent(ir.Ident("arg"), ir.NewAbiTyBase(ir.BaseWord)))),
 					ir.NewRet(),
 				},
 			}),
@@ -40,9 +40,9 @@ func TestAST_CompilationUnit(t *testing.T) {
 			WithBlocks(ir.Block{
 				Label: "start",
 				Instructions: []ir.Instruction{
-					ir.NewCall(ir.NewValGlobal(ir.Ident("hello")),
-						ir.NewArgRegular(ir.NewAbiTyBase(ir.BaseWord), ir.NewValInteger(33))),
-					ir.NewRet(ir.NewValInteger(0)),
+					ir.NewCall(ir.NewValGlobal(ir.Ident("hello"), ir.NewAbiTyBase(ir.BaseWord)),
+						ir.NewArgRegular(ir.NewValInteger(33, ir.NewAbiTyBase(ir.BaseWord)))),
+					ir.NewRet(ir.NewValInteger(0, ir.NewAbiTyBase(ir.BaseWord))),
 				},
 			}),
 	)

@@ -163,6 +163,12 @@ func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
 	if lvalSymbol != nil {
 		if lvalSymbol.Type.Kind == ast.TypeUnknown {
 			lvalSymbol.Type = valType
+
+			// If LHS is a variable, we can set its type now
+			switch lvalue := a.LHS.(type) {
+			case *ast.VariableRef:
+				lvalue.Type = lvalSymbol.Type
+			}
 		} else if !tc.typeEqual(lvalType, valType) {
 			tc.errorf(a.Location(), "type error: variable '%s' declared as %s but assigned %s", lvalSymbol.Name, lvalSymbol.Type, valType)
 		}

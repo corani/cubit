@@ -137,7 +137,7 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 		lhs.Accept(v)
 		lhsVal := v.lastVal
 		// For assignment, use Binop with add as a stand-in for move
-		zero := NewValInteger(0)
+		zero := NewValInteger(0, val.AbiTy)
 		binopInstr := NewBinop(BinOpAdd, lhsVal, val, zero)
 		v.appendInstruction(binopInstr)
 	default:
@@ -157,7 +157,7 @@ func (v *visitor) VisitCall(c *ast.Call) {
 		}
 	}
 
-	calleeVal := NewValGlobal(ident)
+	calleeVal := NewValGlobal(ident, v.mapTypeToAbiTy(c.Type))
 
 	// Lower arguments
 	var args []Arg
@@ -165,11 +165,11 @@ func (v *visitor) VisitCall(c *ast.Call) {
 	for _, arg := range c.Args {
 		v.lastVal = nil
 		arg.Value.Accept(v)
-		args = append(args, NewArgRegular(v.mapTypeToAbiTy(arg.Type), v.lastVal))
+		args = append(args, NewArgRegular(v.lastVal))
 	}
 
 	// Create a temporary for the return value
-	retVal := NewValIdent(v.nextIdent("tmp"))
+	retVal := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(c.Type))
 
 	// Emit the Call instruction
 	call := NewCall(calleeVal, args...)
@@ -201,18 +201,18 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 
 	switch l.Type.Kind {
 	case ast.TypeInt:
-		v.lastVal = NewValInteger(int64(l.IntValue))
+		v.lastVal = NewValInteger(int64(l.IntValue), v.mapTypeToAbiTy(l.Type))
 	case ast.TypeBool:
 		if l.BoolValue {
-			v.lastVal = NewValInteger(1)
+			v.lastVal = NewValInteger(1, v.mapTypeToAbiTy(l.Type))
 		} else {
-			v.lastVal = NewValInteger(0)
+			v.lastVal = NewValInteger(0, v.mapTypeToAbiTy(l.Type))
 		}
 	case ast.TypeString:
 		// TODO(daniel): This does not deduplicate identical string literals. Consider interning/deduplicating.
 		ident := v.nextIdent("str")
 		v.unit.DataDefs = append(v.unit.DataDefs, NewDataDefStringZ(ident, l.StringValue))
-		v.lastVal = NewValGlobal(ident)
+		v.lastVal = NewValGlobal(ident, v.mapTypeToAbiTy(l.Type))
 	default:
 		panic("unsupported literal type: " + l.Type.String())
 	}
@@ -227,7 +227,7 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 	left, leftType := v.lastVal, v.lastType
 
 	// Create a new temporary for the result
-	result := NewValIdent(v.nextIdent("tmp"))
+	result := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(b.Type))
 
 	// Handle logical operations separately using compare and jump.
 	switch b.Operation {
@@ -294,13 +294,39 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 
 			// TODO: handle other element types
 			if elemSize != 1 {
-				tmpScaled := NewValIdent(v.nextIdent("idx"))
-				v.appendInstruction(NewBinop(BinOpMul, tmpScaled, intSide, NewValInteger(elemSize)))
+				tmpScaled := NewValIdent(v.nextIdent("idx"), intSide.AbiTy)
+				v.appendInstruction(NewBinop(BinOpMul, tmpScaled, intSide, NewValInteger(elemSize, intSide.AbiTy)))
+				// Convert word to long
+				if tmpScaled.AbiTy.BaseTy != BaseLong {
+					tmpLong := NewValIdent(v.nextIdent("tmp"), NewAbiTyBase(BaseLong))
+					v.appendInstruction(NewConvert(tmpLong, tmpScaled))
+					tmpScaled = tmpLong
+				}
+
+				// Perform the pointer arithmetic
 				v.appendInstruction(NewBinop(irOp, result, ptrSide, tmpScaled))
 				v.lastVal = result
 				v.lastType = b.Type
 				return
 			}
+		}
+	}
+
+	if rightType.Kind != leftType.Kind {
+		// If types differ, we need to extend the small one
+		if leftType.Kind == ast.TypeInt && rightType.Kind == ast.TypePointer {
+			// Extend int to pointer
+			tmp := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(rightType))
+			v.appendInstruction(NewConvert(tmp, left))
+			left = tmp
+			leftType = rightType // now both are pointer
+		} else if leftType.Kind == ast.TypePointer && rightType.Kind == ast.TypeInt {
+			tmp := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(leftType))
+			v.appendInstruction(NewConvert(tmp, right))
+			right = tmp
+			rightType = leftType // now both are pointer
+		} else {
+			panic("type mismatch in binary operation: " + leftType.String() + " vs " + rightType.String())
 		}
 	}
 
@@ -327,13 +353,13 @@ func (v *visitor) visitBinOpLogAnd(left *Val, b *ast.Binop, result *Val) {
 	v.appendInstruction(NewJnz(left, trueLabel, falseLabel))
 	// @false:
 	v.appendInstruction(NewLabel(falseLabel))
-	v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0)))
+	v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0, left.AbiTy)))
 	v.appendInstruction(NewJmp(endLabel))
 	// @true:
 	v.appendInstruction(NewLabel(trueLabel))
 	b.Rhs.Accept(v)
 	right := v.lastVal
-	v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0)))
+	v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0, right.AbiTy)))
 	// @end:
 	v.appendInstruction(NewLabel(endLabel))
 }
@@ -356,13 +382,13 @@ func (v *visitor) visitBinOpLogOr(left *Val, b *ast.Binop, result *Val) {
 	v.appendInstruction(NewJnz(left, trueLabel, falseLabel))
 	// @true:
 	v.appendInstruction(NewLabel(trueLabel))
-	v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0)))
+	v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0, left.AbiTy)))
 	v.appendInstruction(NewJmp(endLabel))
 	// @false:
 	v.appendInstruction(NewLabel(falseLabel))
 	b.Rhs.Accept(v)
 	right := v.lastVal
-	v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0)))
+	v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0, right.AbiTy)))
 	// @end:
 	v.appendInstruction(NewLabel(endLabel))
 }
@@ -454,7 +480,7 @@ func (v *visitor) VisitFor(f *ast.For) {
 
 func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {
 	// Lower a variable reference to an identifier value
-	v.lastVal = NewValIdent(Ident(vr.Ident))
+	v.lastVal = NewValIdent(Ident(vr.Ident), v.mapTypeToAbiTy(vr.Type))
 	v.lastType = vr.Type
 }
 
@@ -463,8 +489,9 @@ func (v *visitor) VisitDeref(d *ast.Deref) {
 	// Lower the pointer expression
 	d.Expr.Accept(v)
 	addr := v.lastVal
+
 	// Load: %tmp =w loadw addr
-	tmp := NewValIdent(v.nextIdent("tmp"))
+	tmp := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(d.Type))
 	v.appendInstruction(NewLoad(tmp, addr))
 
 	v.lastVal = tmp
@@ -510,7 +537,7 @@ func (v *visitor) mapTypeToAbiTy(ty *ast.Type) AbiTy {
 		return NewAbiTyBase(BaseWord)
 	}
 	switch ty.Kind {
-	case ast.TypeInt:
+	case ast.TypeInt, ast.TypeBool:
 		return NewAbiTyBase(BaseWord)
 	case ast.TypeString:
 		return NewAbiTyBase(BaseLong)
