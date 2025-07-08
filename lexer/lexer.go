@@ -6,14 +6,20 @@ import (
 )
 
 type Tokenizer struct {
-	Scan   *Scanner
-	Buffer []Token
+	Scan         *Scanner
+	Buffer       []Token
+	parenDepth   int
+	bracketDepth int
+	prevToken    *Token
 }
 
 func NewTokenizer(scan *Scanner) *Tokenizer {
 	return &Tokenizer{
-		Scan:   scan,
-		Buffer: nil,
+		Scan:         scan,
+		Buffer:       nil,
+		parenDepth:   0,
+		bracketDepth: 0,
+		prevToken:    nil,
 	}
 }
 
@@ -38,7 +44,6 @@ func (t *Tokenizer) Next() (Token, error) {
 	if len(t.Buffer) > 0 {
 		token := t.Buffer[0]
 		t.Buffer = t.Buffer[1:]
-
 		return token, nil
 	}
 
@@ -52,14 +57,30 @@ func (t *Tokenizer) Next() (Token, error) {
 
 		start := t.Scan.Location()
 
-		// Special handling for comments, minus, slash, string, numbers, keywords and identifiers.
 		switch {
+		// NOTE(daniel): we track parentheses and brackets depth to manage virtual
+		// semicolon insertion.
+		case c == '(':
+			t.parenDepth++
+			return Token{Type: TypeLparen, StringVal: "(", Location: start}, nil
+		case c == ')':
+			if t.parenDepth > 0 {
+				t.parenDepth--
+			}
+			return Token{Type: TypeRparen, StringVal: ")", Location: start}, nil
+		case c == '[':
+			t.bracketDepth++
+			return Token{Type: TypeLBracket, StringVal: "[", Location: start}, nil
+		case c == ']':
+			if t.bracketDepth > 0 {
+				t.bracketDepth--
+			}
+			return Token{Type: TypeRBracket, StringVal: "]", Location: start}, nil
 		case c == '/':
 			c2, err := t.Scan.Next()
 			if err != nil {
 				return Token{}, err
 			}
-
 			switch {
 			case c2 == '/':
 				// Skip comment
@@ -68,36 +89,42 @@ func (t *Tokenizer) Next() (Token, error) {
 					if err != nil {
 						return Token{}, err
 					}
-
 					if c == '\n' || c == '\r' {
 						break
 					}
 				}
+				continue
 			default:
 				t.Scan.Unread(1)
-
-				return Token{Type: TypeSlash, StringVal: "/", Location: start}, nil
+				t.prevToken = &Token{Type: TypeSlash, StringVal: "/", Location: start}
+				return *t.prevToken, nil
 			}
 		case c == '-':
 			c2, err := t.Scan.Next()
 			if err != nil {
 				return Token{}, err
 			}
-
 			switch {
 			case c2 == '>':
-				return Token{Type: TypeArrow, StringVal: "->", Location: start}, nil
+				t.prevToken = &Token{Type: TypeArrow, StringVal: "->", Location: start}
+				return *t.prevToken, nil
 			case isNumeric(c2):
 				buf = append(buf, '-')
-
-				// Unread the number and continue, we'll fall into the numeric literal case
-				// with a '-' already in the buffer.
 				t.Scan.Unread(1)
 			default:
 				t.Scan.Unread(1)
-
-				return Token{Type: TypeMinus, StringVal: "-", Location: start}, nil
+				t.prevToken = &Token{Type: TypeMinus, StringVal: "-", Location: start}
+				return *t.prevToken, nil
 			}
+		case c == '\n':
+			// Only emit a semicolon if not inside parens or brackets
+			if t.shouldInsertSemicolon() {
+				t.prevToken = &Token{Type: TypeSemicolon, StringVal: ";", Location: start}
+				return *t.prevToken, nil
+			}
+
+			// Otherwise, skip the newline
+			continue
 		case isWhitespace(c):
 			continue
 		case c == '"':
@@ -107,105 +134,106 @@ func (t *Tokenizer) Next() (Token, error) {
 				if err != nil {
 					return Token{}, err
 				}
-
 				if c == '"' {
 					break
 				}
-
 				if c == '\\' {
 					c, err = t.Scan.Next()
 					if err != nil {
 						return Token{}, err
 					}
-
 					buf = append(buf, '\\', c)
 				} else {
 					buf = append(buf, c)
 				}
 			}
-
-			return NewStringToken(string(buf), start)
+			tok, err := NewStringToken(string(buf), start)
+			t.prevToken = &tok
+			return tok, err
 		case isNumeric(c):
 			// Handle numeric literals
-			// TODO(daniel): Handle floating point numbers
 			buf = append(buf, c)
-
 			for {
 				c, err = t.Scan.Next()
 				if err != nil {
 					return Token{}, err
 				}
-
 				if isNumeric(c) {
 					buf = append(buf, c)
 				} else {
 					t.Scan.Unread(1)
-
 					break
 				}
 			}
-
-			return NewNumberToken(string(buf), start)
+			tok, err := NewNumberToken(string(buf), start)
+			t.prevToken = &tok
+			return tok, err
 		case isAlpha(c):
 			// Handle identifiers and keywords
 			buf = append(buf, c)
-
 			for {
 				c, err = t.Scan.Next()
 				if err != nil {
 					return Token{}, err
 				}
-
 				if isAlphanumeric(c) {
 					buf = append(buf, c)
 				} else {
 					t.Scan.Unread(1)
-
 					break
 				}
 			}
-
-			return NewIdentOrKeywordToken(string(buf), start)
+			tok, err := NewIdentOrKeywordToken(string(buf), start)
+			t.prevToken = &tok
+			return tok, err
 		default:
 			// Maximal munch for symbolic tokens
 			mmType := TypeEOF
 			mmToken := ""
 			prefix := []byte{c}
-
 			for {
 				foundPrefix := false
 				for k, v := range symbols {
 					if len(k) >= len(prefix) && k[:len(prefix)] == string(prefix) {
 						foundPrefix = true
-
 						if k == string(prefix) {
 							mmToken = k
 							mmType = v
 						}
 					}
 				}
-
 				if !foundPrefix {
 					break
 				}
-
 				c2, err := t.Scan.Next()
 				if err != nil {
 					break
 				}
-
 				prefix = append(prefix, c2)
 			}
-
 			if mmToken != "" {
-				// Unread any extra characters
 				if count := len(prefix) - len(mmToken); count > 0 {
 					t.Scan.Unread(count)
 				}
-
-				return Token{Type: mmType, StringVal: mmToken, Location: start}, nil
+				t.prevToken = &Token{Type: mmType, StringVal: mmToken, Location: start}
+				return *t.prevToken, nil
 			}
 		}
+	}
+}
+
+// shouldInsertSemicolon returns true if a semicolon should be inserted after the given
+// token type.
+func (t *Tokenizer) shouldInsertSemicolon() bool {
+	if t.parenDepth > 0 || t.bracketDepth > 0 || t.prevToken == nil {
+		return false
+	}
+
+	switch t.prevToken.Type {
+	case TypeIdent, TypeNumber, TypeString, TypeBool, TypeRparen, TypeRBracket, TypeRbrace:
+		return true
+	default:
+		return false
 	}
 }
 

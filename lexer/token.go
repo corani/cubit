@@ -49,12 +49,8 @@ const (
 
 // Symbols is a map of string to TokenType for maximal munch.
 var symbols = map[string]TokenType{
-	"(":  TypeLparen,
-	")":  TypeRparen,
 	"{":  TypeLbrace,
 	"}":  TypeRbrace,
-	"[":  TypeLBracket,
-	"]":  TypeRBracket,
 	".":  TypeDot,
 	",":  TypeComma,
 	":":  TypeColon,

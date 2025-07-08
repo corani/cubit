@@ -118,6 +118,10 @@ func (p *Parser) parsePackage(start lexer.Token) error {
 		p.unit.Loc = start.Location
 	}
 
+	if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
+		return err // EOF
+	}
+
 	clear(p.attributes)
 
 	return nil
@@ -188,6 +192,11 @@ func (p *Parser) parseAttributes(atToken lexer.Token) error {
 		if next.Type == lexer.TypeRparen {
 			break
 		}
+	}
+
+	// parse optional semicolon
+	if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
+		return err // EOF
 	}
 
 	return nil
@@ -276,6 +285,10 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 	}
 
 	p.unit.Funcs = append(p.unit.Funcs, def)
+
+	if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
+		return err // EOF
+	}
 
 	return nil
 }
@@ -383,16 +396,12 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 		case lexer.TypeKeyword:
 			switch first.Keyword {
 			case lexer.KeywordReturn:
-				if p.currentRetType.Kind == ast.TypeVoid {
-					instructions = append(instructions, ast.NewReturn(first.Location))
-				} else {
-					expr, err := p.parseExpression(false)
-					if err != nil {
-						return nil, err
-					}
-
-					instructions = append(instructions, ast.NewReturn(first.Location, expr))
+				inst, err := p.parseReturn(first)
+				if err != nil {
+					return nil, err
 				}
+
+				instructions = append(instructions, inst)
 			case lexer.KeywordIf:
 				inst, err := p.parseIf(first)
 				if err != nil {

@@ -13,8 +13,8 @@ calloc :: func(num: int, size: int) -> ^int
 
 update :: func(a: ^int, value: int) {
     // this becomes a store
-    (a+1)^ = 35
     a^ = value
+    (a+1)^ = 35
 }
 
 @(export)

@@ -5,6 +5,26 @@ import (
 	"github.com/corani/refactored-giggle/lexer"
 )
 
+func (p *Parser) parseReturn(first lexer.Token) (ast.Instruction, error) {
+	var (
+		expr ast.Expression
+		err  error
+	)
+
+	if p.currentRetType.Kind != ast.TypeVoid {
+		expr, err = p.parseExpression(false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
+		return nil, err // EOF
+	}
+
+	return ast.NewReturn(first.Location, expr), nil
+}
+
 func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 	// <indent> ':'
 	// have been consumed already.
@@ -43,6 +63,10 @@ func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 		}
 
 		instructions = append(instructions, instr...)
+	} else {
+		if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
+			return nil, err // EOF
+		}
 	}
 
 	return instructions, nil
@@ -57,6 +81,10 @@ func (p *Parser) parseAssign(lhs ast.LValue) ([]ast.Instruction, error) {
 	expr, err := p.parseExpression(false)
 	if err != nil {
 		return nil, err
+	}
+
+	if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
+		return nil, err // EOF
 	}
 
 	instructions = append(instructions,
@@ -96,6 +124,10 @@ func (p *Parser) parseCall(first lexer.Token) (*ast.Call, error) {
 				return nil, err // EOF
 			}
 		}
+	}
+
+	if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
+		return nil, err // EOF
 	}
 
 	return ast.NewCall(first.Location, first.StringVal, args...), nil
@@ -212,6 +244,10 @@ func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
 		}
 	}
 
+	if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
+		return nil, err // EOF
+	}
+
 	return ast.NewIf(first.Location, initInstrs, cond, thenBody, elseInstr), nil
 }
 
@@ -239,24 +275,12 @@ func (p *Parser) parseFor(first lexer.Token) (ast.Instruction, error) {
 			if err != nil {
 				return nil, err
 			}
-
-			// If we successfully parsed an initializer, expect a semicolon
-			_, err := p.expectType(lexer.TypeSemicolon)
-			if err != nil {
-				return nil, err // EOF
-			}
 		} else if next.Type == lexer.TypeAssign {
 			lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
 
 			initInstrs, err = p.parseAssign(lvalue)
 			if err != nil {
 				return nil, err
-			}
-
-			// If we successfully parsed an initializer, expect a semicolon
-			_, err := p.expectType(lexer.TypeSemicolon)
-			if err != nil {
-				return nil, err // EOF
 			}
 		} else {
 			// If we didn't parse an initializer, roll back the index and try
@@ -317,6 +341,10 @@ func (p *Parser) parseFor(first lexer.Token) (ast.Instruction, error) {
 	}
 
 	if _, err := p.expectType(lexer.TypeRbrace); err != nil {
+		return nil, err // EOF
+	}
+
+	if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
 		return nil, err // EOF
 	}
 

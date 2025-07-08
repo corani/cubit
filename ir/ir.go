@@ -171,7 +171,11 @@ type Val struct {
 }
 
 func NewValDynConst(dc DynConst, abiTy AbiTy) *Val {
-	return &Val{Type: ValDynConst, DynConst: dc, AbiTy: abiTy}
+	return &Val{
+		Type:     ValDynConst,
+		DynConst: dc,
+		AbiTy:    abiTy,
+	}
 }
 
 func NewValGlobal(ident Ident, abiTy AbiTy) *Val {
@@ -186,7 +190,11 @@ func NewValInteger(i int64, abiTy AbiTy) *Val {
 }
 
 func NewValIdent(ident Ident, abiTy AbiTy) *Val {
-	return &Val{Type: ValIdent, Ident: ident, AbiTy: abiTy}
+	return &Val{
+		Type:  ValIdent,
+		Ident: ident,
+		AbiTy: abiTy,
+	}
 }
 
 type ValType string
