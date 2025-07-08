@@ -3,7 +3,7 @@
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
+YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 GRAY='\033[1;30m'
 BOLD='\033[1m'
@@ -29,7 +29,7 @@ for file in examples/*.in; do
 done
 
 if [ ${#missing[@]} -ne 0 ]; then
-  echo -e "${YELLOW}Warning: The following example files are not included in the tests:${NC}"
+  echo -e "${YELLOW}The following example files are not included in the tests:${NC}"
   for file in "${missing[@]}"; do
     echo -e "- $file"
   done
@@ -58,7 +58,7 @@ declare -A results=()
 
 # Run go test and store result
 echo -e "${BOLD}${CYAN}Running go test...${NC}"
-run_cmd go test ./...
+run_cmd go tool gotestsum --format pkgname-and-test-fails --format-icons hivis ./...
 go_test_exit_code=$?
 if [ $go_test_exit_code -eq 0 ]; then
   results["go test"]="${GREEN}✓${NC}"

@@ -1,14 +1,8 @@
 # Unordered TODO list / Wishlist
 
-- [ ] Type inference, so instead of `count : int = 1` you can use `count := 1`
-- [ ] Type checking, keep track of the type of things
 - [ ] Global variables
 - [ ] Complete expression parsing and generation
-- [ ] Loops
-- [ ] Assignments
-- [ ] Comparisons
 - [ ] Stack allocate locale variables
-- [ ] Load/Store
 - [ ] Memory allocation (malloc?)
 - [ ] Type conversions
 - [ ] Variadic functions
