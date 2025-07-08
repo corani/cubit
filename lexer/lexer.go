@@ -136,8 +136,9 @@ func (t *Lexer) Next() (Token, error) {
 			// Handle string literals
 			for {
 				c, err = t.Scan.Next()
-				if err != nil {
-					return Token{}, err // EOF
+				if err != nil { // EOF, we still want to return the token
+					t.prevToken = &Token{Type: TypeString, StringVal: string(buf), Location: start}
+					return *t.prevToken, nil
 				}
 				if c == '"' {
 					break
