@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-type Tokenizer struct {
+type Lexer struct {
 	Scan         *Scanner
 	Buffer       []Token
 	parenDepth   int
@@ -13,8 +13,8 @@ type Tokenizer struct {
 	prevToken    *Token
 }
 
-func NewTokenizer(scan *Scanner) *Tokenizer {
-	return &Tokenizer{
+func NewLexer(scan *Scanner) *Lexer {
+	return &Lexer{
 		Scan:         scan,
 		Buffer:       nil,
 		parenDepth:   0,
@@ -23,7 +23,7 @@ func NewTokenizer(scan *Scanner) *Tokenizer {
 	}
 }
 
-func (t *Tokenizer) Tokens() ([]Token, error) {
+func (t *Lexer) Tokens() ([]Token, error) {
 	var tokens []Token
 
 	for {
@@ -40,7 +40,7 @@ func (t *Tokenizer) Tokens() ([]Token, error) {
 	}
 }
 
-func (t *Tokenizer) Next() (Token, error) {
+func (t *Lexer) Next() (Token, error) {
 	if len(t.Buffer) > 0 {
 		token := t.Buffer[0]
 		t.Buffer = t.Buffer[1:]
@@ -52,7 +52,7 @@ func (t *Tokenizer) Next() (Token, error) {
 	for {
 		c, err := t.Scan.Next()
 		if err != nil {
-			return Token{}, err
+			return Token{}, err // EOF
 		}
 
 		start := t.Scan.Location()
@@ -78,18 +78,21 @@ func (t *Tokenizer) Next() (Token, error) {
 			return Token{Type: TypeRBracket, StringVal: "]", Location: start}, nil
 		case c == '/':
 			c2, err := t.Scan.Next()
-			if err != nil {
-				return Token{}, err
+			if err != nil { // EOF, we still want to return the token
+				t.prevToken = &Token{Type: TypeSlash, StringVal: "/", Location: start}
+				return *t.prevToken, nil
 			}
+
 			switch {
 			case c2 == '/':
 				// Skip comment
 				for {
 					c, err = t.Scan.Next()
 					if err != nil {
-						return Token{}, err
+						break // EOF
 					}
 					if c == '\n' || c == '\r' {
+						t.Scan.Unread(1) // Unread the newline character
 						break
 					}
 				}
@@ -101,9 +104,11 @@ func (t *Tokenizer) Next() (Token, error) {
 			}
 		case c == '-':
 			c2, err := t.Scan.Next()
-			if err != nil {
-				return Token{}, err
+			if err != nil { // EOF, we still want to return the token
+				t.prevToken = &Token{Type: TypeMinus, StringVal: "-", Location: start}
+				return *t.prevToken, nil
 			}
+
 			switch {
 			case c2 == '>':
 				t.prevToken = &Token{Type: TypeArrow, StringVal: "->", Location: start}
@@ -132,7 +137,7 @@ func (t *Tokenizer) Next() (Token, error) {
 			for {
 				c, err = t.Scan.Next()
 				if err != nil {
-					return Token{}, err
+					return Token{}, err // EOF
 				}
 				if c == '"' {
 					break
@@ -140,7 +145,7 @@ func (t *Tokenizer) Next() (Token, error) {
 				if c == '\\' {
 					c, err = t.Scan.Next()
 					if err != nil {
-						return Token{}, err
+						return Token{}, err // EOF
 					}
 					buf = append(buf, '\\', c)
 				} else {
@@ -156,7 +161,7 @@ func (t *Tokenizer) Next() (Token, error) {
 			for {
 				c, err = t.Scan.Next()
 				if err != nil {
-					return Token{}, err
+					break // EOF, we still want to return the token
 				}
 				if isNumeric(c) {
 					buf = append(buf, c)
@@ -174,7 +179,7 @@ func (t *Tokenizer) Next() (Token, error) {
 			for {
 				c, err = t.Scan.Next()
 				if err != nil {
-					return Token{}, err
+					break // EOF, we still want to return the token
 				}
 				if isAlphanumeric(c) {
 					buf = append(buf, c)
@@ -224,7 +229,7 @@ func (t *Tokenizer) Next() (Token, error) {
 
 // shouldInsertSemicolon returns true if a semicolon should be inserted after the given
 // token type.
-func (t *Tokenizer) shouldInsertSemicolon() bool {
+func (t *Lexer) shouldInsertSemicolon() bool {
 	if t.parenDepth > 0 || t.bracketDepth > 0 || t.prevToken == nil {
 		return false
 	}

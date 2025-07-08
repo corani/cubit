@@ -83,7 +83,7 @@ func main() {
 		panic(fmt.Sprintf("failed to create scanner: %v", err))
 	}
 
-	tokenizer := lexer.NewTokenizer(scanner)
+	tokenizer := lexer.NewLexer(scanner)
 
 	tokens, err := tokenizer.Tokens()
 	if err != nil {

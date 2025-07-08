@@ -7,6 +7,8 @@ import (
 )
 
 func TestNewStringToken(t *testing.T) {
+	t.Parallel()
+
 	loc := Location{"file.go", 1, 2}
 	tok, err := NewStringToken("hello", loc)
 	require.NoError(t, err)
@@ -16,6 +18,8 @@ func TestNewStringToken(t *testing.T) {
 }
 
 func TestNewNumberToken(t *testing.T) {
+	t.Parallel()
+
 	loc := Location{"file.go", 2, 3}
 	tok, err := NewNumberToken("123", loc)
 	require.NoError(t, err)
@@ -29,6 +33,8 @@ func TestNewNumberToken(t *testing.T) {
 }
 
 func TestNewIdentOrKeywordToken(t *testing.T) {
+	t.Parallel()
+
 	loc := Location{"file.go", 3, 4}
 
 	tok, err := NewIdentOrKeywordToken("if", loc)

@@ -9,6 +9,8 @@ import (
 )
 
 func TestNewScannerAndNext(t *testing.T) {
+	t.Parallel()
+
 	input := []byte("abc\nxyz")
 	s, err := NewScanner("test.txt", bytes.NewReader(input))
 	require.NoError(t, err, "unexpected error")
@@ -24,6 +26,8 @@ func TestNewScannerAndNext(t *testing.T) {
 }
 
 func TestUnread(t *testing.T) {
+	t.Parallel()
+
 	input := []byte("hello")
 	s, err := NewScanner("test.txt", bytes.NewReader(input))
 	require.NoError(t, err)
@@ -49,7 +53,9 @@ func TestUnread(t *testing.T) {
 }
 
 func TestLocation(t *testing.T) {
-	cases := []struct {
+	t.Parallel()
+
+	tt := []struct {
 		name       string
 		input      string
 		steps      int
@@ -86,8 +92,10 @@ func TestLocation(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
+	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			s, err := NewScanner(tc.filename, bytes.NewReader([]byte(tc.input)))
 			require.NoError(t, err)
 
