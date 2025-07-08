@@ -44,17 +44,9 @@ func GenerateAssembly(srcfile string, unit *ir.CompilationUnit, asmfile string) 
 	return os.WriteFile(asmfile, w.Bytes(), 0644)
 }
 
-func Compile(asm, bin string, run bool) error {
+func Compile(asm, bin string) error {
 	if out, err := exec.Command("cc", "-o", bin, asm).CombinedOutput(); err != nil {
 		return fmt.Errorf("cc failed: %s: %w", string(out), err)
-	}
-
-	if run {
-		if out, err := exec.Command(bin).CombinedOutput(); err != nil {
-			return fmt.Errorf("run failed: %s: %w", string(out), err)
-		} else if len(out) > 0 {
-			fmt.Printf("run output:\n%s\n", string(out))
-		}
 	}
 
 	return nil

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -142,7 +143,24 @@ func main() {
 		panic(fmt.Sprintf("failed to generate assembly: %v", err))
 	}
 
-	if err := codegen.Compile(asmFile, binFile, run); err != nil {
+	if err := codegen.Compile(asmFile, binFile); err != nil {
 		panic(fmt.Sprintf("failed to compile assembly: %v", err))
+	}
+
+	if run {
+		// run and check the exit code
+		cmd := exec.Command(binFile)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		if err := cmd.Run(); err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				fmt.Printf("Program exited with code %d\n", exitErr.ExitCode())
+
+				os.Exit(exitErr.ExitCode())
+			} else {
+				panic(fmt.Sprintf("failed to run compiled binary: %v", err))
+			}
+		}
 	}
 }
