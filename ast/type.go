@@ -33,12 +33,16 @@ func NewType(kind TypeKind, location lexer.Location) *Type {
 	}
 }
 
-func NewPointerType(elem *Type, location lexer.Location) *Type {
-	return &Type{
-		Kind: TypePointer,
-		Elem: elem,
-		Loc:  location,
+func NewPointerType(elem *Type, depth int, location lexer.Location) *Type {
+	for range depth {
+		elem = &Type{
+			Kind: TypePointer,
+			Elem: elem,
+			Loc:  location,
+		}
 	}
+
+	return elem
 }
 
 func (t *Type) Location() lexer.Location {

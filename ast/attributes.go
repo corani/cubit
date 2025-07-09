@@ -18,18 +18,18 @@ const (
 	AttrKeyNoMangle AttrKey = "no_mangle"
 )
 
+var attrKeys = []AttrKey{
+	AttrKeyExport,
+	AttrKeyExtern,
+	AttrKeyPrivate,
+	AttrKeyPure,
+	AttrKeyLinkname,
+	AttrKeyNoMangle,
+}
+
 // ParseAttrKey validates and returns an AttrKey or an error if invalid.
 func ParseAttrKey(s string) (AttrKey, bool) {
-	attrs := []AttrKey{
-		AttrKeyExport,
-		AttrKeyExtern,
-		AttrKeyPrivate,
-		AttrKeyPure,
-		AttrKeyLinkname,
-		AttrKeyNoMangle,
-	}
-
-	if slices.Contains(attrs, AttrKey(s)) {
+	if slices.Contains(attrKeys, AttrKey(s)) {
 		return AttrKey(s), true
 	}
 
@@ -63,6 +63,10 @@ func (AttrInt) Type() AttrValueType {
 type Attributes map[AttrKey]AttrValue
 
 func (a Attributes) String() string {
+	if len(a) == 0 {
+		return "(attr)"
+	}
+
 	var attrs []string
 
 	for k, v := range a {
@@ -74,10 +78,6 @@ func (a Attributes) String() string {
 		default:
 			attrs = append(attrs, string(k))
 		}
-	}
-
-	if len(attrs) == 0 {
-		return "(attr)"
 	}
 
 	return fmt.Sprintf("(attr %s)", strings.Join(attrs, " "))

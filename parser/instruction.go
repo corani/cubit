@@ -22,7 +22,7 @@ func (p *Parser) parseReturn(first lexer.Token) (ast.Instruction, error) {
 		return nil, err // EOF
 	}
 
-	return ast.NewReturn(first.Location, expr), nil
+	return ast.NewReturn(first.Location, p.currentRetType, expr), nil
 }
 
 func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
@@ -200,7 +200,7 @@ func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
 	thenBody := ast.NewBody(thenInstrs, lbrace.Location)
 
 	// Check for else or else if
-	elseInstr := ast.Instruction(nil)
+	var elseBody *ast.Body
 
 	nextElse, err := p.peekType(lexer.TypeKeyword)
 	if err != nil {
@@ -220,10 +220,12 @@ func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
 
 		if afterElse.Type == lexer.TypeKeyword && afterElse.Keyword == lexer.KeywordIf {
 			// else if: recursively parse another if
-			elseInstr, err = p.parseIf(afterElse)
+			elseInstr, err := p.parseIf(afterElse)
 			if err != nil {
 				return nil, err
 			}
+
+			elseBody = ast.NewBody([]ast.Instruction{elseInstr}, elseInstr.Location())
 		} else if afterElse.Type == lexer.TypeLbrace {
 			// else: parse block
 			elseInstrs, err := p.parseBlock(lbrace)
@@ -235,12 +237,12 @@ func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
 				return nil, err // EOF
 			}
 
-			elseInstr = ast.NewBody(elseInstrs, lbrace.Location)
+			elseBody = ast.NewBody(elseInstrs, lbrace.Location)
 		} else {
 			p.errorf(afterElse.Location, "expected 'if' or '{' after 'else', got %s", afterElse.StringVal)
 
 			// error recovery:
-			elseInstr = nil
+			elseBody = nil
 		}
 	}
 
@@ -248,7 +250,7 @@ func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
 		return nil, err // EOF
 	}
 
-	return ast.NewIf(first.Location, initInstrs, cond, thenBody, elseInstr), nil
+	return ast.NewIf(first.Location, initInstrs, cond, thenBody, elseBody), nil
 }
 
 // parseFor parses a for loop of the form: for <cond> { ... }

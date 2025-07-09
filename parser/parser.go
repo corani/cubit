@@ -263,17 +263,18 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 			_, hasRet := instructions[len(instructions)-1].(*ast.Return)
 			addRet = !hasRet
 		}
+
 		if addRet {
 			switch retType.Kind {
 			case ast.TypeVoid:
 				// If the return type is void, we can just add an empty return.
-				instructions = append(instructions, ast.NewReturn(lbrace.Location))
+				instructions = append(instructions, ast.NewReturn(lbrace.Location, retType))
 			default:
 				p.errorf(name.Location, "function %s has return type %s but no return statement",
 					def.Ident, retType.String())
 
 				// error recovery:
-				instructions = append(instructions, ast.NewReturn(lbrace.Location))
+				instructions = append(instructions, ast.NewReturn(lbrace.Location, retType))
 			}
 		}
 
@@ -535,8 +536,8 @@ func (p *Parser) parseType() *ast.Type {
 	}
 
 	// Wrap in pointer types as needed
-	for range pointerDepth {
-		base = ast.NewPointerType(base, tok.Location)
+	if pointerDepth > 0 {
+		base = ast.NewPointerType(base, pointerDepth, tok.Location)
 	}
 
 	return base

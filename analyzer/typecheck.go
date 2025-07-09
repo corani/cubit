@@ -179,6 +179,7 @@ func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
 		}
 	}
 
+	a.Type = valType
 	tc.lastType = valType
 }
 

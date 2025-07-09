@@ -187,7 +187,6 @@ func (*Body) isInstruction() {}
 type Instruction interface {
 	isInstruction()
 	Location() lexer.Location
-	String() string
 	Accept(v Visitor)
 }
 
@@ -264,11 +263,11 @@ type If struct {
 	Init []Instruction // optional initializer(s); can be nil or empty
 	Cond Expression    // condition expression
 	Then *Body         // body for the 'if' branch
-	Else Instruction   // *If, *Body, or nil
+	Else *Body         // optional body for the 'else' branch
 	Loc  lexer.Location
 }
 
-func NewIf(location lexer.Location, init []Instruction, cond Expression, then *Body, elseBranch Instruction) *If {
+func NewIf(location lexer.Location, init []Instruction, cond Expression, then *Body, elseBranch *Body) *If {
 	return &If{
 		Init: init,
 		Cond: cond,
@@ -364,15 +363,16 @@ func (a *Arg) Location() lexer.Location {
 
 type Return struct {
 	Value Expression // optional return value
+	Type  *Type
 	Loc   lexer.Location
 }
 
-func NewReturn(location lexer.Location, val ...Expression) *Return {
+func NewReturn(location lexer.Location, ty *Type, val ...Expression) *Return {
 	switch len(val) {
 	case 0:
-		return &Return{Loc: location}
+		return &Return{Loc: location, Type: ty}
 	case 1:
-		return &Return{Value: val[0], Loc: location}
+		return &Return{Value: val[0], Loc: location, Type: ty}
 	default:
 		panic("Return can only have one value")
 	}
@@ -390,7 +390,6 @@ func (*Return) isInstruction() {}
 
 type Expression interface {
 	isExpression()
-	String() string
 	Location() lexer.Location
 	Accept(v Visitor)
 }

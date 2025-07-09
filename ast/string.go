@@ -2,176 +2,247 @@ package ast
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
 func (cu CompilationUnit) String() string {
-	var types, data, funcs []string
+	s := NewStringer()
+	cu.Accept(s)
 
-	for _, t := range cu.Types {
-		types = append(types, t.String())
-	}
-
-	for _, d := range cu.Data {
-		data = append(data, d.String())
-	}
-
-	for _, f := range cu.Funcs {
-		funcs = append(funcs, f.String())
-	}
-
-	return fmt.Sprintf("(unit %q (%s) (%s) (%s) %s)",
-		cu.Ident,
-		strings.Join(types, " "),
-		strings.Join(data, " "),
-		strings.Join(funcs, " "),
-		cu.Attributes)
+	return s.String()
 }
 
-func (td TypeDef) String() string {
-	return fmt.Sprintf("(type %q %s %s)", td.Ident, td.Type, td.Attributes)
+// Stringer is a visitor that formats the AST as a string representation.
+type stringer struct {
+	sb     strings.Builder
+	indent int
 }
 
-func (dd DataDef) String() string {
-	return fmt.Sprintf("(data %q %s %s)", dd.Ident, dd.Type, dd.Attributes)
+func NewStringer() *stringer {
+	return &stringer{}
 }
 
-func (fd FuncDef) String() string {
-	var params []string
-	for _, param := range fd.Params {
-		params = append(params, param.String())
-	}
-	body := ""
-	if fd.Body != nil {
-		body = fd.Body.String()
-	}
-	return fmt.Sprintf("\n\t(func %q (%s) (%s) %s (%s))",
-		fd.Ident, strings.Join(params, " "), fd.ReturnType, fd.Attributes, body)
+func (s *stringer) String() string {
+	return s.sb.String()
 }
 
-func (fp FuncParam) String() string {
-	value := "()"
-	if fp.Value != nil {
-		value = fp.Value.String()
-	}
-	return fmt.Sprintf("(param %q %s %s %s)", fp.Ident, fp.Type, value, fp.Attributes)
+func (s *stringer) VisitCompilationUnit(cu *CompilationUnit) {
+	s.writef("(unit %s\n", cu.Ident)
+	s.writeIndented(func() {
+		s.writef("\t%s\n\t(types", cu.Attributes)
+		s.writeIndented(func() {
+			for _, t := range cu.Types {
+				t.Accept(s)
+			}
+		})
+		s.write(")\n\t(data")
+		s.writeIndented(func() {
+			for _, d := range cu.Data {
+				d.Accept(s)
+			}
+		})
+		s.write(")\n\t(funcs")
+		s.writeIndented(func() {
+			for _, f := range cu.Funcs {
+				f.Accept(s)
+			}
+		})
+		s.write("\n\t)\n")
+	})
+	s.write(")\n")
 }
 
-func (b *Body) String() string {
-	var instructions []string
-
-	for _, instr := range b.Instructions {
-		instructions = append(instructions, instr.String())
-	}
-
-	return "\n\t\t" + strings.Join(instructions, "\n\t\t")
+func (s *stringer) VisitTypeDef(td *TypeDef) {
+	s.writef("\n\t(type %s %s %s", td.Ident, td.Type, td.Attributes)
+	s.writeOptional(td.Value, "<nil>")
+	s.write(")")
 }
 
-func (i *If) String() string {
-	var initStr string
-	if len(i.Init) > 0 {
-		var parts []string
-		for _, instr := range i.Init {
-			parts = append(parts, instr.String())
+func (s *stringer) VisitDataDef(dd *DataDef) {
+	s.writef("\n\t(data %s %s %s ", dd.Ident, dd.Type, dd.Attributes)
+	s.writeOptional(dd.Value, "<nil>")
+	s.write(")")
+}
+
+func (s *stringer) VisitFuncDef(fd *FuncDef) {
+	s.writef("\n\t(func %s %q\n", fd.ReturnType, fd.Ident)
+	s.writeIndented(func() {
+		s.writef("\t%s\n\t(params", fd.Attributes)
+		if len(fd.Params) > 0 {
+			s.writeIndented(func() {
+				for _, param := range fd.Params {
+					s.write("\n\t")
+					param.Accept(s)
+				}
+			})
+			s.write("\n\t")
 		}
-		initStr = " " + strings.Join(parts, "; ")
-	}
-
-	var elseBranch string
-	if i.Else != nil {
-		elseBranch = " " + i.Else.String()
-	}
-
-	return fmt.Sprintf("(if (init%s) %s (then %s) (else%s))", initStr, i.Cond, i.Then, elseBranch)
+		s.write(")\n\t(body")
+		s.writeOptional(fd.Body, "")
+		s.write(")\n")
+	})
+	s.write("\t)")
 }
 
-func (f *For) String() string {
-	var initStr string
-	if len(f.Init) > 0 {
-		var parts []string
-		for _, instr := range f.Init {
-			parts = append(parts, instr.String())
+func (s *stringer) VisitFuncParam(fp *FuncParam) {
+	s.writef("(param %s %q ", fp.Type, fp.Ident)
+	s.writeOptional(fp.Value, "<nil>")
+	s.writef(" %s)", fp.Attributes)
+}
+
+func (s *stringer) VisitBody(b *Body) {
+	s.writeIndented(func() {
+		for _, instr := range b.Instructions {
+			s.write("\n\t")
+			instr.Accept(s)
 		}
-		initStr = " " + strings.Join(parts, "; ")
-	}
-
-	var postStr string
-	if len(f.Post) > 0 {
-		var parts []string
-		for _, instr := range f.Post {
-			parts = append(parts, instr.String())
-		}
-		postStr = " " + strings.Join(parts, "; ")
-	}
-
-	return fmt.Sprintf("(for (init%s) (cond %s) (post%s) %s)", initStr, f.Cond, postStr, f.Body)
+	})
 }
 
-func (c *Call) String() string {
-	var args []string
-
-	for _, arg := range c.Args {
-		args = append(args, arg.String())
-	}
-
-	return fmt.Sprintf("(call %q (%s) %s)", c.Ident, strings.Join(args, " "), c.Type)
+func (s *stringer) VisitCall(c *Call) {
+	s.writef("(call %s %q\n", c.Type, c.Ident)
+	s.writeIndented(func() {
+		s.write("\t(args\n")
+		s.writeIndented(func() {
+			for _, arg := range c.Args {
+				s.writef("\t(arg %s %q ", arg.Type, arg.Ident)
+				arg.Value.Accept(s)
+				s.write(")\n")
+			}
+		})
+		s.write("\t)\n")
+	})
+	s.write("\t)")
 }
 
-func (a Arg) String() string {
-	if a.Ident != "" {
-		return fmt.Sprintf("%s=%s", a.Ident, a.Value)
-	}
-	return a.Value.String()
+func (s *stringer) VisitDeclare(d *Declare) {
+	s.writef("(declare %s %q)", d.Type, d.Ident)
 }
 
-func (d *Declare) String() string {
-	if d.Type == nil {
-		return fmt.Sprintf("(declare %s <nil>)", d.Ident)
-	}
-	return fmt.Sprintf("(declare %s %s)", d.Ident, d.Type)
+func (s *stringer) VisitAssign(a *Assign) {
+	s.writef("(assign %s ", a.Type)
+	a.LHS.Accept(s)
+	s.write(" ")
+	a.Value.Accept(s)
+	s.write(")")
 }
 
-func (a *Assign) String() string {
-	lhs := a.LHS.String()
-
-	if a.Value == nil {
-		return fmt.Sprintf("(assign %s %s <nil>)", lhs, a.Type)
-	}
-
-	return fmt.Sprintf("(assign %s %s %s)", lhs, a.Type, a.Value)
-}
-
-func (r *Return) String() string {
+func (s *stringer) VisitReturn(r *Return) {
+	s.writef("(ret %s", r.Type)
 	if r.Value != nil {
-		return fmt.Sprintf("(return %s)", r.Value)
+		s.write(" ")
+		r.Value.Accept(s)
 	}
-	return "(return)"
+	s.write(")")
 }
 
-func (v *VariableRef) String() string {
-	return fmt.Sprintf("(ref %s %s)", v.Ident, v.Type)
-}
-
-func (l *Literal) String() string {
-	if l.Type == nil {
-		return "(lit <nil> <nil>)"
-	}
+func (s *stringer) VisitLiteral(l *Literal) {
+	s.writef("(lit %s ", l.Type)
 	switch l.Type.Kind {
 	case TypeInt:
-		return fmt.Sprintf("(lit %d %v)", l.IntValue, l.Type)
+		s.writef("%d)", l.IntValue)
 	case TypeString:
-		return fmt.Sprintf("(lit %q %v)", l.StringValue, l.Type)
+		s.writef("%q)", l.StringValue)
 	case TypeBool:
-		return fmt.Sprintf("(lit %t %v)", l.BoolValue, l.Type)
+		s.writef("%t)", l.BoolValue)
 	default:
-		return "(lit unknown unknown)"
+		s.write("unknown)")
 	}
 }
 
-func (b *Binop) String() string {
-	return fmt.Sprintf("(call %q %s %s %s)", b.Operation, b.Type, b.Lhs, b.Rhs)
+func (s *stringer) VisitBinop(b *Binop) {
+	s.writef("(binop %s %q\n", b.Type, b.Operation)
+	s.writeIndented(func() {
+		s.write("\t")
+		b.Lhs.Accept(s)
+	})
+	s.write("\n")
+	s.writeIndented(func() {
+		s.write("\t")
+		b.Rhs.Accept(s)
+	})
+	s.write("\n\t)")
 }
 
-func (d *Deref) String() string {
-	return fmt.Sprintf("(deref %s %s)", d.Expr, d.Type)
+func (s *stringer) VisitVariableRef(v *VariableRef) {
+	s.writef("(ref %s %q)", v.Type, v.Ident)
+}
+
+func (s *stringer) VisitDeref(d *Deref) {
+	s.writef("(deref %s ", d.Type)
+	d.Expr.Accept(s)
+	s.write(")")
+}
+
+func (s *stringer) VisitIf(i *If) {
+	s.write("(if\n")
+	s.writeIndented(func() {
+		s.write("\t")
+		s.writeInstrList("init", i.Init, "; ")
+		s.write("\t(cond ")
+		i.Cond.Accept(s)
+		s.write(")\n\t(then")
+		i.Then.Accept(s)
+		s.write("\n\t)\n\t(else")
+		s.writeOptional(i.Else, "")
+		s.write("\n\t)\n")
+	})
+	s.write("\t)")
+}
+
+func (s *stringer) VisitFor(f *For) {
+	s.write("(for\n")
+	s.writeIndented(func() {
+		s.write("\t")
+		s.writeInstrList("init", f.Init, "; ")
+		s.write("\t(cond ")
+		f.Cond.Accept(s)
+		s.write(")\n\t")
+		s.writeInstrList("post", f.Post, "; ")
+		s.write("\t(body")
+		f.Body.Accept(s)
+		s.write("\n\t)\n")
+	})
+	s.write("\t)")
+}
+
+func (s *stringer) writeIndented(fn func()) {
+	s.indent++
+	fn()
+	s.indent--
+}
+
+// write replaces any leading \t in the input string with the current indentation level.
+func (s *stringer) write(text string) {
+	text = strings.ReplaceAll(text, "\t", strings.Repeat("\t", s.indent))
+
+	s.sb.WriteString(text)
+}
+
+func (s *stringer) writef(format string, args ...any) {
+	s.write(fmt.Sprintf(format, args...))
+}
+
+func (s *stringer) writeOptional(node interface{ Accept(Visitor) }, orElse string) {
+	if node != nil && !reflect.ValueOf(node).IsNil() {
+		node.Accept(s)
+	} else {
+		s.write(orElse)
+	}
+}
+
+func (s *stringer) writeInstrList(name string, list []Instruction, sep string) {
+	s.writef("(%s", name)
+	if len(list) > 0 {
+		s.write(" ")
+	}
+
+	for i, instr := range list {
+		if i > 0 {
+			s.write(sep)
+		}
+		instr.Accept(s)
+	}
+	s.write(")\n")
 }
