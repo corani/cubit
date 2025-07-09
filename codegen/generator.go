@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/corani/refactored-giggle/ir"
+	"github.com/corani/cubit/ir"
 	"modernc.org/libqbe"
 )
 

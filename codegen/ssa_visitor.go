@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/corani/refactored-giggle/ir"
+	"github.com/corani/cubit/ir"
 )
 
 // SsaGen implements ast.Visitor and generates SSA code.
@@ -193,7 +193,7 @@ func (v *SsaGen) VisitParam(p ir.Param) string {
 	case ir.ParamRegular:
 		// TODO(daniel): generate correct parameter type.
 		return fmt.Sprintf("%s %%%s", v.VisitAbiTy(p.AbiTy), p.Ident)
-		//return fmt.Sprintf("l %%%s", p.Ident)
+		// return fmt.Sprintf("l %%%s", p.Ident)
 	case ir.ParamEnv:
 		return fmt.Sprintf("env %%%s", p.Ident)
 	case ir.ParamVariadic:

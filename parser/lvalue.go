@@ -3,8 +3,8 @@ package parser
 import (
 	"fmt"
 
-	"github.com/corani/refactored-giggle/ast"
-	"github.com/corani/refactored-giggle/lexer"
+	"github.com/corani/cubit/ast"
+	"github.com/corani/cubit/lexer"
 )
 
 // parseLValue parses an lvalue expression for assignment.

@@ -3,7 +3,7 @@ package ast
 import (
 	"fmt"
 
-	"github.com/corani/refactored-giggle/lexer"
+	"github.com/corani/cubit/lexer"
 )
 
 // TypeKind represents the basic types in the language for type checking.

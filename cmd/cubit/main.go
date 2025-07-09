@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/corani/refactored-giggle/analyzer"
-	"github.com/corani/refactored-giggle/codegen"
-	"github.com/corani/refactored-giggle/ir"
-	"github.com/corani/refactored-giggle/lexer"
-	parserpkg "github.com/corani/refactored-giggle/parser"
+	"github.com/corani/cubit/analyzer"
+	"github.com/corani/cubit/codegen"
+	"github.com/corani/cubit/ir"
+	"github.com/corani/cubit/lexer"
+	parserpkg "github.com/corani/cubit/parser"
 )
 
 func withExt(filename, ext string) string {

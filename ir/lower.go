@@ -3,7 +3,7 @@ package ir
 import (
 	"fmt"
 
-	"github.com/corani/refactored-giggle/ast"
+	"github.com/corani/cubit/ast"
 )
 
 func Lower(unit *ast.CompilationUnit) (*CompilationUnit, error) {

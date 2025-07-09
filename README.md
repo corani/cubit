@@ -1,4 +1,4 @@
-# compiler-33 🚀
+# cubit-lang 🚀
 
 A simple compiler project written in Go, demonstrating the process of tokenizing, parsing, and generating code for a minimal language. This project is educational and showcases the basics of building a compiler pipeline. 🛠️
 
@@ -14,7 +14,7 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
 
 ## Project Structure 📁
 
-- 📦 `cmd/c33/main.go` - Entry point, handles CLI flags and orchestrates compilation.
+- 📦 `cmd/cubit/main.go` - Entry point, handles CLI flags and orchestrates compilation.
 - 📁 `lexer/` - Contains the lexer package:
   - 📄 `tokenizer.go` - Tokenizes the input source code.
   - 📄 `scanner.go` - Reads and manages input data for tokenization.
@@ -25,7 +25,7 @@ Do not use this, it is only tested with the `example.in` file and doesn't even g
   - 📄 `ssa_visitor.go` - Generate QBE IR from the AST using visitor pattern.
 - 📁 `ast/` - Contains the AST package:
   - 📄 `ast.go` - AST structures and attribute logic.
-- 📄 `example.in` - Example source file for the compiler.
+- 📁 `examples/` - Contains various example programs.
 - 📄 `go.mod` / `go.sum` - Go module files and dependencies.
 
 ## Example 📝
@@ -59,7 +59,7 @@ main :: func() -> int {
 ## Usage 🏃
 
 ```sh
-go run ./cmd/c33 [options]
+go run ./cmd/cubit [options]
 ```
 
 ### Options
@@ -81,7 +81,8 @@ go run ./cmd/c33 [options]
 
 1. Clone the repository.
 2. Run `go mod tidy` to install dependencies.
-3. Use `go run ./cmd/c33 -run` to compile and run the example file.
+3. Use `go run ./cmd/cubit -run` to compile and run the example file.
+4. Use `./test.sh` to run the unit tests and example programs.
 
 ---
 

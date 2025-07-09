@@ -1,4 +1,4 @@
-module github.com/corani/refactored-giggle
+module github.com/corani/cubit
 
 go 1.24.3
 

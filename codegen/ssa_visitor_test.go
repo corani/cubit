@@ -3,7 +3,7 @@ package codegen
 import (
 	"testing"
 
-	"github.com/corani/refactored-giggle/ir"
+	"github.com/corani/cubit/ir"
 	"github.com/stretchr/testify/require"
 )
 

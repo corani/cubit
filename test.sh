@@ -36,7 +36,6 @@ if [ ${#missing[@]} -ne 0 ]; then
   echo
 fi
 
-
 # Function to print and execute a command
 run_cmd() {
   echo -e "${GRAY}$*${NC}"
@@ -45,7 +44,7 @@ run_cmd() {
 
 echo -e "${BOLD}${CYAN}Building project...${NC}"
 mkdir -p bin
-run_cmd go build -o bin/c33 ./cmd/c33
+run_cmd go build -o bin/cubit ./cmd/cubit
 if [ $? -ne 0 ]; then
   echo -e "${RED}Build failed!${NC}"
   exit 1
@@ -75,7 +74,7 @@ for example in "${!examples[@]}"; do
   echo -e "${YELLOW}==> Running $example...${NC}"
 
   # Run the command with the example input
-  run_cmd ./bin/c33 -ast -ssa -tok -run "$example"
+  run_cmd ./bin/cubit -ast -ssa -tok -run "$example"
   actual_exit_code=$?
 
   # Check the exit code
@@ -88,7 +87,6 @@ for example in "${!examples[@]}"; do
     results[$example]="${GREEN}✓${NC}"
   fi
 done
-
 
 # Print summary table
 echo -e "${BOLD}${CYAN}Test Summary:${NC}"

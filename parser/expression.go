@@ -6,8 +6,8 @@ import (
 	"io"
 	"slices"
 
-	"github.com/corani/refactored-giggle/ast"
-	"github.com/corani/refactored-giggle/lexer"
+	"github.com/corani/cubit/ast"
+	"github.com/corani/cubit/lexer"
 )
 
 // Pratt parser operator info

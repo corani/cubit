@@ -3,7 +3,7 @@ package analyzer
 import (
 	"fmt"
 
-	"github.com/corani/refactored-giggle/ast"
+	"github.com/corani/cubit/ast"
 )
 
 // Symbol represents a variable or function in the symbol table.

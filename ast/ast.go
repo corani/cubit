@@ -3,7 +3,7 @@ package ast
 import (
 	"maps"
 
-	"github.com/corani/refactored-giggle/lexer"
+	"github.com/corani/cubit/lexer"
 )
 
 // Visitor interface for double-dispatch on AST nodes.
