@@ -7,14 +7,6 @@ import (
 	"github.com/corani/refactored-giggle/lexer"
 )
 
-// Symbol represents a variable or function in the symbol table.
-type Symbol struct {
-	Name    string
-	Type    *ast.Type
-	IsFunc  bool
-	FuncDef *ast.FuncDef // Only set if IsFunc
-}
-
 // TypeChecker implements a visitor for type checking the AST.
 type TypeChecker struct {
 	scopes     []map[string]*Symbol
@@ -140,9 +132,10 @@ func (tc *TypeChecker) VisitBody(body *ast.Body) {
 func (tc *TypeChecker) VisitDeclare(d *ast.Declare) {
 	// Add the declared variable to the current scope with its type (may be TypeUnknown)
 	tc.addSymbol(&Symbol{
-		Name:   d.Ident,
-		Type:   d.Type,
-		IsFunc: false,
+		Name:        d.Ident,
+		Type:        d.Type,
+		IsFunc:      false,
+		Declaration: d,
 	})
 
 	// No type to propagate
@@ -162,7 +155,9 @@ func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
 	// If the lvalue is a variable, lastSymbol will be set
 	if lvalSymbol != nil {
 		if lvalSymbol.Type.Kind == ast.TypeUnknown {
-			lvalSymbol.Type = valType
+			if err := lvalSymbol.UpdateType(valType); err != nil {
+				tc.errorf(a.Location(), "type error: %s", err)
+			}
 
 			// If LHS is a variable, we can set its type now
 			switch lvalue := a.LHS.(type) {
@@ -415,33 +410,6 @@ func (tc *TypeChecker) visitNode(node interface{ Accept(visitor ast.Visitor) }) 
 	}
 
 	return tc.lastType
-}
-
-// Scope management helpers
-func (tc *TypeChecker) pushScope() {
-	tc.scopes = append(tc.scopes, make(map[string]*Symbol))
-}
-
-func (tc *TypeChecker) popScope() {
-	if len(tc.scopes) > 0 {
-		tc.scopes = tc.scopes[:len(tc.scopes)-1]
-	}
-}
-
-func (tc *TypeChecker) addSymbol(sym *Symbol) {
-	if len(tc.scopes) == 0 {
-		tc.pushScope()
-	}
-	tc.scopes[len(tc.scopes)-1][sym.Name] = sym
-}
-
-func (tc *TypeChecker) lookupSymbol(name string) (*Symbol, bool) {
-	for i := len(tc.scopes) - 1; i >= 0; i-- {
-		if sym, ok := tc.scopes[i][name]; ok {
-			return sym, true
-		}
-	}
-	return nil, false
 }
 
 // typeEqual returns true if two types are structurally equal (including pointer depth)
