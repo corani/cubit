@@ -46,12 +46,7 @@ func (tc *TypeChecker) VisitCompilationUnit(unit *ast.CompilationUnit) {
 
 	// Add all function definitions to the global scope first
 	for _, fn := range unit.Funcs {
-		tc.addSymbol(&Symbol{
-			Name:    fn.Ident,
-			Type:    fn.ReturnType,
-			IsFunc:  true,
-			FuncDef: fn,
-		})
+		tc.addSymbol(NewSymbolFunc(fn.Ident, fn.ReturnType, fn))
 	}
 
 	// Visit all function, type, and data definitions
@@ -75,35 +70,27 @@ func (tc *TypeChecker) VisitDataDef(fn *ast.DataDef) {
 }
 
 func (tc *TypeChecker) VisitFuncDef(fn *ast.FuncDef) {
-	// Enter a new scope for the function
-	tc.pushScope()
+	tc.withScope(func() {
+		// Add parameters to the new scope
+		for i := range fn.Params {
+			param := fn.Params[i]
 
-	// Add parameters to the new scope
-	for i := range fn.Params {
-		param := fn.Params[i]
+			// Visit first to allow type inference/checking
+			param.Accept(tc)
 
-		// Visit first to allow type inference/checking
-		param.Accept(tc)
+			tc.addSymbol(NewSymbolVariable(param.Ident, param.Type, nil))
+		}
 
-		tc.addSymbol(&Symbol{
-			Name:   param.Ident,
-			Type:   param.Type,
-			IsFunc: false,
-		})
-	}
-
-	// Type check the function body (if present)
-	if fn.Body != nil {
-		fn.Body.Accept(tc)
-	}
-
-	// Leave the function scope
-	tc.popScope()
+		// Type check the function body (if present)
+		if fn.Body != nil {
+			fn.Body.Accept(tc)
+		}
+	})
 }
 
 func (tc *TypeChecker) VisitFuncParam(fn *ast.FuncParam) {
 	if fn.Value != nil {
-		valueType := tc.visitNode(fn.Value)
+		valueType, _ := tc.visitNode(fn.Value)
 
 		if fn.Type != nil && fn.Type.Kind == ast.TypeUnknown {
 			// Case 3: arg := 1 (infer type from value)
@@ -128,29 +115,20 @@ func (tc *TypeChecker) VisitBody(body *ast.Body) {
 	}
 }
 
-// VisitDeclare handles variable declarations (no IR emitted, but needed for typechecking and lowering).
+// VisitDeclare handles variable declarations.
 func (tc *TypeChecker) VisitDeclare(d *ast.Declare) {
-	// Add the declared variable to the current scope with its type (may be TypeUnknown)
-	tc.addSymbol(&Symbol{
-		Name:        d.Ident,
-		Type:        d.Type,
-		IsFunc:      false,
-		Declaration: d,
-	})
-
-	// No type to propagate
+	// Add the declared variable to the current scope. Type may be unknown
+	// at this point, and could be updated later when the variable is assigned.
+	tc.addSymbol(NewSymbolVariable(d.Ident, d.Type, d))
 }
 
 // VisitAssign handles assignment to lvalues.
 func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
-	// Typecheck the lvalue (sets tc.lastType and tc.lastSymbol)
-	tc.lastSymbol = nil
-	a.LHS.Accept(tc)
-	lvalType := tc.lastType
-	lvalSymbol := tc.lastSymbol
+	// Typecheck the lvalue
+	lvalType, lvalSymbol := tc.visitNode(a.LHS)
 
 	// Typecheck the value
-	valType := tc.visitNode(a.Value)
+	valType, _ := tc.visitNode(a.Value)
 
 	// If the lvalue is a variable, lastSymbol will be set
 	if lvalSymbol != nil {
@@ -165,7 +143,8 @@ func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
 				lvalue.Type = lvalSymbol.Type
 			}
 		} else if !tc.typeEqual(lvalType, valType) {
-			tc.errorf(a.Location(), "type error: variable '%s' declared as %s but assigned %s", lvalSymbol.Name, lvalSymbol.Type, valType)
+			tc.errorf(a.Location(), "type error: variable '%s' declared as %s but assigned %s",
+				lvalSymbol.Name, lvalSymbol.Type, valType)
 		}
 	} else {
 		// TODO: handle pointer deref, array index, etc.
@@ -182,7 +161,8 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 	// Look up the function definition
 	sym, ok := tc.lookupSymbol(call.Ident)
 	if !ok || !sym.IsFunc || sym.FuncDef == nil {
-		tc.errorf(call.Location(), "call to undefined function '%s'", call.Ident)
+		tc.errorf(call.Location(), "call to undefined function '%s'",
+			call.Ident)
 		tc.lastType = &ast.Type{Kind: ast.TypeUnknown}
 
 		return
@@ -192,7 +172,8 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 
 	// Check argument count
 	if len(call.Args) != len(fnDef.Params) {
-		tc.errorf(call.Location(), "call to '%s' expects %d arguments, got %d", call.Ident, len(fnDef.Params), len(call.Args))
+		tc.errorf(call.Location(), "call to '%s' expects %d arguments, got %d",
+			call.Ident, len(fnDef.Params), len(call.Args))
 		tc.lastType = sym.Type
 
 		return
@@ -200,13 +181,14 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 
 	// Check argument types
 	for i, arg := range call.Args {
-		argType := tc.visitNode(arg.Value)
+		argType, _ := tc.visitNode(arg.Value)
 		paramType := fnDef.Params[i].Type
 
 		call.Args[i].Type = argType // Set the type of the argument
 
 		if paramType != nil && paramType.Kind != ast.TypeUnknown && !tc.typeEqual(argType, paramType) {
-			tc.errorf(arg.Location(), "call to '%s': argument %d type mismatch: expected %s, got %s", call.Ident, i+1, paramType, argType)
+			tc.errorf(arg.Location(), "call to '%s': argument %d type mismatch: expected %s, got %s",
+				call.Ident, i+1, paramType, argType)
 		}
 	}
 
@@ -220,7 +202,7 @@ func (tc *TypeChecker) VisitReturn(ret *ast.Return) {
 	retType := &ast.Type{Kind: ast.TypeVoid}
 
 	if ret.Value != nil {
-		retType = tc.visitNode(ret.Value)
+		retType, _ = tc.visitNode(ret.Value)
 	}
 
 	tc.lastType = retType
@@ -246,156 +228,172 @@ func (tc *TypeChecker) VisitVariableRef(ref *ast.VariableRef) {
 }
 
 func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
-	lhsType := tc.visitNode(binop.Lhs)
-	rhsType := tc.visitNode(binop.Rhs)
+	lhsType, _ := tc.visitNode(binop.Lhs)
+	rhsType, _ := tc.visitNode(binop.Rhs)
+
+	unknown := func(msg string, args ...any) *ast.Type {
+		binop.Type = &ast.Type{Kind: ast.TypeUnknown}
+		tc.errorf(binop.Location(), msg, args...)
+		return binop.Type
+	}
+
+	isInt := func(t *ast.Type) bool { return t != nil && t.Kind == ast.TypeInt }
+	isBool := func(t *ast.Type) bool { return t != nil && t.Kind == ast.TypeBool }
+	isPointer := func(t *ast.Type) bool { return t != nil && t.Kind == ast.TypePointer }
+	isString := func(t *ast.Type) bool { return t != nil && t.Kind == ast.TypeString }
 
 	switch binop.Operation {
 	case ast.BinOpAdd, ast.BinOpSub:
 		// Pointer arithmetic support
-		if lhsType != nil && rhsType != nil {
-			if lhsType.Kind == ast.TypePointer && rhsType.Kind == ast.TypeInt {
-				// pointer + int or pointer - int => pointer
-				binop.Type = lhsType
-			} else if lhsType.Kind == ast.TypeInt && rhsType.Kind == ast.TypePointer && binop.Operation == ast.BinOpAdd {
-				// int + pointer => pointer (only for add)
-				binop.Type = rhsType
-			} else if lhsType.Kind == ast.TypePointer && rhsType.Kind == ast.TypePointer && binop.Operation == ast.BinOpSub {
-				// pointer - pointer => int (if element types match)
-				if tc.typeEqual(lhsType, rhsType) {
-					binop.Type = &ast.Type{Kind: ast.TypeInt}
-				} else {
-					binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-					tc.errorf(binop.Location(), "pointer subtraction requires matching pointer types, got %s - %s", lhsType, rhsType)
-				}
-			} else if tc.typeEqual(lhsType, rhsType) {
-				// fallback: both operands same type
-				binop.Type = lhsType
+		if lhsType == nil || rhsType == nil {
+			unknown("invalid operands for pointer arithmetic: %s %s %s",
+				lhsType, binop.Operation, rhsType)
+			break
+		}
+		if isPointer(lhsType) && isInt(rhsType) {
+			binop.Type = lhsType
+		} else if isInt(lhsType) && isPointer(rhsType) && binop.Operation == ast.BinOpAdd {
+			binop.Type = rhsType
+		} else if isPointer(lhsType) && isPointer(rhsType) && binop.Operation == ast.BinOpSub {
+			if tc.typeEqual(lhsType, rhsType) {
+				binop.Type = &ast.Type{Kind: ast.TypeInt}
 			} else {
-				binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-				tc.errorf(binop.Location(), "invalid operands for pointer arithmetic: %s %s %s", lhsType, binop.Operation, rhsType)
+				unknown("pointer subtraction requires matching pointer types, got %s - %s",
+					lhsType, rhsType)
 			}
-		} else {
-			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf(binop.Location(), "invalid operands for pointer arithmetic: %s %s %s", lhsType, binop.Operation, rhsType)
-		}
-	case ast.BinOpEq, ast.BinOpNe:
-		// Equality/inequality returns bool if types match
-		if lhsType != nil && rhsType != nil && tc.typeEqual(lhsType, rhsType) {
-			binop.Type = &ast.Type{Kind: ast.TypeBool}
-		} else {
-			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf(binop.Location(), "type mismatch in equality/inequality operation: %s vs %s", lhsType, rhsType)
-		}
-	case ast.BinOpLt, ast.BinOpLe, ast.BinOpGt, ast.BinOpGe:
-		// Comparison operators: valid for int, string, or pointer (if types match)
-		if lhsType != nil && rhsType != nil && tc.typeEqual(lhsType, rhsType) &&
-			(lhsType.Kind == ast.TypeInt || lhsType.Kind == ast.TypeString || lhsType.Kind == ast.TypePointer) {
-			binop.Type = &ast.Type{Kind: ast.TypeBool}
-		} else {
-			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf(binop.Location(), "type mismatch or invalid types in comparison operation: %s vs %s", lhsType, rhsType)
-		}
-	case ast.BinOpShl, ast.BinOpShr:
-		// Shift ops: both sides must be int, result is int
-		if lhsType != nil && rhsType != nil && lhsType.Kind == ast.TypeInt && rhsType.Kind == ast.TypeInt {
-			binop.Type = &ast.Type{Kind: ast.TypeInt}
-		} else {
-			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf(binop.Location(), "shift operation requires int operands, got %s << %s", lhsType, rhsType)
-		}
-	case ast.BinOpAnd, ast.BinOpOr:
-		// Bitwise ops: both sides must be int, result is int
-		if lhsType != nil && rhsType != nil && lhsType.Kind == ast.TypeInt && rhsType.Kind == ast.TypeInt {
-			binop.Type = &ast.Type{Kind: ast.TypeInt}
-		} else {
-			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf(binop.Location(), "bitwise operation requires int operands, got %s & %s", lhsType, rhsType)
-		}
-	case ast.BinOpLogAnd, ast.BinOpLogOr:
-		// Logical ops: both sides must be bool, result is bool
-		if lhsType != nil && rhsType != nil && lhsType.Kind == ast.TypeBool && rhsType.Kind == ast.TypeBool {
-			binop.Type = &ast.Type{Kind: ast.TypeBool}
-		} else {
-			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf(binop.Location(), "logical operation requires bool operands, got %s && %s", lhsType, rhsType)
-		}
-	default:
-		if lhsType != nil && rhsType != nil && tc.typeEqual(lhsType, rhsType) {
+		} else if tc.typeEqual(lhsType, rhsType) {
 			binop.Type = lhsType
 		} else {
-			binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-			tc.errorf(binop.Location(), "type mismatch in binary operation: %s vs %s", lhsType, rhsType)
+			unknown("invalid operands for pointer arithmetic: %s %s %s",
+				lhsType, binop.Operation, rhsType)
 		}
+	case ast.BinOpDiv, ast.BinOpMul:
+		if isInt(lhsType) && isInt(rhsType) {
+			binop.Type = &ast.Type{Kind: ast.TypeInt}
+		} else {
+			unknown("invalid operands for arithmetic: %s %s %s",
+				lhsType, binop.Operation, rhsType)
+		}
+	case ast.BinOpEq, ast.BinOpNe:
+		if lhsType != nil && rhsType != nil && tc.typeEqual(lhsType, rhsType) {
+			binop.Type = &ast.Type{Kind: ast.TypeBool}
+		} else {
+			unknown("type mismatch in equality/inequality operation: %s %s %s",
+				lhsType, binop.Operation, rhsType)
+		}
+	case ast.BinOpLt, ast.BinOpLe, ast.BinOpGt, ast.BinOpGe:
+		if lhsType != nil && rhsType != nil && tc.typeEqual(lhsType, rhsType) &&
+			(isInt(lhsType) || isString(lhsType) || isPointer(lhsType)) {
+			binop.Type = &ast.Type{Kind: ast.TypeBool}
+		} else {
+			unknown("type mismatch or invalid types in comparison operation: %s %s %s",
+				lhsType, binop.Operation, rhsType)
+		}
+	case ast.BinOpShl, ast.BinOpShr:
+		if isInt(lhsType) && isInt(rhsType) {
+			binop.Type = &ast.Type{Kind: ast.TypeInt}
+		} else {
+			unknown("shift operation requires int operands, got %s %s %s",
+				lhsType, binop.Operation, rhsType)
+		}
+	case ast.BinOpAnd, ast.BinOpOr:
+		if isInt(lhsType) && isInt(rhsType) {
+			binop.Type = &ast.Type{Kind: ast.TypeInt}
+		} else {
+			unknown("bitwise operation requires int operands, got %s %s %s",
+				lhsType, binop.Operation, rhsType)
+		}
+	case ast.BinOpLogAnd, ast.BinOpLogOr:
+		if isBool(lhsType) && isBool(rhsType) {
+			binop.Type = &ast.Type{Kind: ast.TypeBool}
+		} else {
+			unknown("logical operation requires bool operands, got %s %s %s",
+				lhsType, binop.Operation, rhsType)
+		}
+	default:
+		tc.errorf(binop.Location(), "unknown binary operation: %s", binop.Operation)
+		binop.Type = &ast.Type{Kind: ast.TypeUnknown}
 	}
 
 	tc.lastType = binop.Type
 }
 
 func (tc *TypeChecker) VisitUnaryOp(u *ast.UnaryOp) {
-	u.Type = tc.visitNode(u.Expr)
+	// Type check the expression
+	u.Type, _ = tc.visitNode(u.Expr)
+
+	switch u.Operation {
+	case ast.UnaryOpMinus:
+		if u.Type == nil || u.Type.Kind != ast.TypeInt {
+			tc.errorf(u.Location(), "unary minus requires int type, got %s", u.Type)
+			u.Type = &ast.Type{Kind: ast.TypeUnknown}
+		}
+	default:
+		tc.errorf(u.Location(), "unknown unary operation: %s", u.Operation)
+		u.Type = &ast.Type{Kind: ast.TypeUnknown}
+	}
+
 	tc.lastType = u.Type
 }
 
 func (tc *TypeChecker) VisitIf(iff *ast.If) {
 	// If statements introduce a new scope for variables (e.g. initializer)
-	tc.pushScope()
+	tc.withScope(func() {
+		// Type check the initializers, if present
+		for _, init := range iff.Init {
+			init.Accept(tc)
+		}
 
-	// Type check the initializers, if present
-	for _, init := range iff.Init {
-		init.Accept(tc)
-	}
+		// Type check the condition
+		condType, _ := tc.visitNode(iff.Cond)
+		if condType == nil || condType.Kind != ast.TypeBool {
+			tc.errorf(iff.Location(), "if condition must be bool, got %s", condType)
+		}
 
-	// Type check the condition
-	condType := tc.visitNode(iff.Cond)
-	if condType == nil || condType.Kind != ast.TypeBool {
-		tc.errorf(iff.Location(), "if condition must be bool, got %s", condType)
-	}
+		// Type check the 'then' branch
+		iff.Then.Accept(tc)
 
-	// Type check the 'then' branch
-	iff.Then.Accept(tc)
+		// Type check the 'else' branch, if present
+		if iff.Else != nil {
+			iff.Else.Accept(tc)
+		}
 
-	// Type check the 'else' branch, if present
-	if iff.Else != nil {
-		iff.Else.Accept(tc)
-	}
-
-	tc.popScope()
-	tc.lastType = &ast.Type{Kind: ast.TypeVoid} // if is a statement, not an expression
+		tc.lastType = &ast.Type{Kind: ast.TypeVoid} // if is a statement, not an expression
+	})
 }
 
 func (tc *TypeChecker) VisitFor(f *ast.For) {
 	// For statements introduce a new scope for variables
-	tc.pushScope()
+	tc.withScope(func() {
+		// Type check the initializers, if present
+		for _, init := range f.Init {
+			init.Accept(tc)
+		}
 
-	// Type check the initializers, if present
-	for _, init := range f.Init {
-		init.Accept(tc)
-	}
+		// Type check the condition
+		condType, _ := tc.visitNode(f.Cond)
+		if condType == nil || condType.Kind != ast.TypeBool {
+			tc.errorf(f.Location(), "for condition must be bool, got %s", condType)
+		}
 
-	// Type check the condition
-	condType := tc.visitNode(f.Cond)
-	if condType == nil || condType.Kind != ast.TypeBool {
-		tc.errorf(f.Location(), "for condition must be bool, got %s", condType)
-	}
+		// Type check the body
+		if f.Body != nil {
+			f.Body.Accept(tc)
+		}
 
-	// Type check the body
-	if f.Body != nil {
-		f.Body.Accept(tc)
-	}
+		// Type check the post-conditions, if present
+		for _, post := range f.Post {
+			post.Accept(tc)
+		}
 
-	// Type check the post-conditions, if present
-	for _, post := range f.Post {
-		post.Accept(tc)
-	}
-
-	tc.popScope()
-	tc.lastType = &ast.Type{Kind: ast.TypeVoid} // for is a statement, not an expression
+		tc.lastType = &ast.Type{Kind: ast.TypeVoid} // for is a statement, not an expression
+	})
 }
 
 // VisitDeref handles pointer dereference expressions (currently a no-op).
 func (tc *TypeChecker) VisitDeref(d *ast.Deref) {
 	// Dereference does not change the type, just returns the type of the dereferenced expression
-	ref := tc.visitNode(d.Expr)
+	ref, _ := tc.visitNode(d.Expr)
 	if ref == nil || ref.Kind != ast.TypePointer {
 		tc.errorf(d.Location(), "dereference requires pointer type, got %s", ref)
 		d.Type = &ast.Type{Kind: ast.TypeUnknown}
@@ -409,8 +407,8 @@ func (tc *TypeChecker) VisitDeref(d *ast.Deref) {
 // VisitArrayIndex handles array index expressions.
 func (tc *TypeChecker) VisitArrayIndex(a *ast.ArrayIndex) {
 	// Typecheck the array expression
-	arrayType := tc.visitNode(a.Array)
-	indexType := tc.visitNode(a.Index)
+	arrayType, _ := tc.visitNode(a.Array)
+	indexType, _ := tc.visitNode(a.Index)
 
 	if arrayType == nil || arrayType.Kind != ast.TypeArray {
 		tc.errorf(a.Location(), "type error: cannot index non-array type %s", arrayType)
@@ -428,14 +426,14 @@ func (tc *TypeChecker) VisitArrayIndex(a *ast.ArrayIndex) {
 }
 
 // visitNode is a helper method to visit a node and return the lastType.
-func (tc *TypeChecker) visitNode(node interface{ Accept(visitor ast.Visitor) }) *ast.Type {
+func (tc *TypeChecker) visitNode(node interface{ Accept(visitor ast.Visitor) }) (*ast.Type, *Symbol) {
 	if node != nil {
 		node.Accept(tc)
 	} else {
 		tc.lastType = &ast.Type{Kind: ast.TypeUnknown}
 	}
 
-	return tc.lastType
+	return tc.lastType, tc.lastSymbol
 }
 
 // typeEqual returns true if two types are structurally equal (including pointer depth)

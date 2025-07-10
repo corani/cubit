@@ -15,6 +15,26 @@ type Symbol struct {
 	Declaration *ast.Declare
 }
 
+func NewSymbolFunc(name string, ty *ast.Type, def *ast.FuncDef) *Symbol {
+	return &Symbol{
+		Name:        name,
+		Type:        ty,
+		IsFunc:      true,
+		FuncDef:     def,
+		Declaration: nil,
+	}
+}
+
+func NewSymbolVariable(name string, ty *ast.Type, decl *ast.Declare) *Symbol {
+	return &Symbol{
+		Name:        name,
+		Type:        ty,
+		IsFunc:      false,
+		FuncDef:     nil,
+		Declaration: decl,
+	}
+}
+
 func (s *Symbol) UpdateType(ty *ast.Type) error {
 	if s.Type != nil && s.Type.Kind != ast.TypeUnknown {
 		return fmt.Errorf("symbol %s already has a type: %s", s.Name, s.Type)
@@ -44,6 +64,13 @@ func (tc *TypeChecker) popScope() {
 	if len(tc.scopes) > 0 {
 		tc.scopes = tc.scopes[:len(tc.scopes)-1]
 	}
+}
+
+func (tc *TypeChecker) withScope(fn func()) {
+	tc.pushScope()
+	defer tc.popScope()
+
+	fn()
 }
 
 func (tc *TypeChecker) addSymbol(sym *Symbol) {
