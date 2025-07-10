@@ -24,14 +24,26 @@ func (p *Parser) parseLValue() (ast.LValue, error) {
 		ident := first.StringVal
 		lv := ast.LValue(ast.NewVariableRef(ident, ast.TypeUnknown, first.Location))
 
-		next, err := p.peekType(lexer.TypeCaret)
+		next, err := p.peekType(lexer.TypeCaret, lexer.TypeLBracket)
 		if err != nil {
 			return nil, err // EOF
 		}
 
-		if next.Type == lexer.TypeCaret {
+		switch next.Type {
+		case lexer.TypeCaret:
 			// Deref: ident^
 			lv = ast.NewDeref(lv, next.Location)
+		case lexer.TypeLBracket:
+			// Array index: ident[expr]
+			index, err := p.parseExpression(false)
+			if err != nil {
+				return nil, err // EOF
+			}
+			_, err = p.expectType(lexer.TypeRBracket)
+			if err != nil {
+				return nil, err // EOF
+			}
+			lv = ast.NewArrayIndex(lv, index, next.Location)
 		}
 
 		return lv, nil

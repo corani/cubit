@@ -148,7 +148,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		expr = ast.NewStringLiteral(start.StringVal, start.Location)
 	case lexer.TypeIdent:
 		// Peek to see if this is a function call or dereference
-		next, err := p.peekType(lexer.TypeLparen, lexer.TypeCaret)
+		next, err := p.peekType(lexer.TypeLparen, lexer.TypeCaret, lexer.TypeLBracket)
 		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, err // EOF
 		}
@@ -163,6 +163,16 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		case lexer.TypeCaret:
 			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
 			expr = ast.NewDeref(expr, next.Location)
+		case lexer.TypeLBracket:
+			size, err := p.parseExpression(false)
+			if err != nil {
+				return nil, err // EOF
+			}
+			if _, err := p.expectType(lexer.TypeRBracket); err != nil {
+				return nil, err // EOF
+			}
+			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
+			expr = ast.NewArrayIndex(expr, size, start.Location)
 		default:
 			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
 		}

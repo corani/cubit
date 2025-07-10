@@ -489,7 +489,8 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 	}
 }
 
-// parseType parses a type, supporting arbitrary nesting of arrays and pointers (e.g., [N]^int, ^[N]int, [N][M]^int, etc.)
+// parseType parses a type, supporting arbitrary nesting of arrays and pointers
+// (e.g., [N]^int, ^[N]int, [N][M]^int, etc.)
 func (p *Parser) parseType() *ast.Type {
 	typeModifier := []func(*ast.Type) *ast.Type{}
 

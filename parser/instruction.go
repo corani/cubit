@@ -31,7 +31,7 @@ func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 	var instructions []ast.Instruction
 
 	// Could be a declaration or declaration+assignment
-	next, err := p.peekType(lexer.TypeAssign, lexer.TypeKeyword, lexer.TypeCaret)
+	next, err := p.peekType(lexer.TypeAssign, lexer.TypeKeyword, lexer.TypeCaret, lexer.TypeLBracket)
 	if err != nil {
 		return nil, err // EOF
 	}
