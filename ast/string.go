@@ -207,6 +207,14 @@ func (s *stringer) VisitFor(f *For) {
 	s.write("\t)")
 }
 
+func (s *stringer) VisitArrayIndex(a *ArrayIndex) {
+	s.writef("(index %s ", a.Type)
+	a.Array.Accept(s)
+	s.write(" ")
+	a.Index.Accept(s)
+	s.write(")")
+}
+
 func (s *stringer) writeIndented(fn func()) {
 	s.indent++
 	fn()

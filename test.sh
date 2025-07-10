@@ -16,8 +16,9 @@ declare -A examples=(
   ["examples/group.in"]=0
   ["examples/logical.in"]=0
   ["examples/pointer.in"]=0
-  ["examples/rule110.in"]=0
   ["examples/simple.in"]=3
+  ["examples/rule110a.in"]=0
+  ["examples/rule110b.in"]=0
 )
 
 # Warn if any file in examples/ is not included in the examples map

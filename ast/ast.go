@@ -22,6 +22,7 @@ type Visitor interface {
 	VisitBinop(*Binop)
 	VisitVariableRef(*VariableRef)
 	VisitDeref(*Deref)
+	VisitArrayIndex(*ArrayIndex)
 	VisitIf(*If)
 	VisitFor(*For)
 }
@@ -400,6 +401,7 @@ var _ []Expression = []Expression{
 	(*VariableRef)(nil),
 	(*Deref)(nil),
 	(*Call)(nil),
+	(*ArrayIndex)(nil),
 }
 
 // Deref represents a pointer dereference expression (e.g., a^)
@@ -544,3 +546,31 @@ func (b *Binop) Accept(v Visitor) {
 }
 
 func (*Binop) isExpression() {}
+
+// ArrayIndex represents an array access (e.g., data[1])
+type ArrayIndex struct {
+	Array Expression // the array variable/expression
+	Index Expression // the index expression
+	Type  *Type      // the type of the array element
+	Loc   lexer.Location
+}
+
+func NewArrayIndex(array, index Expression, location lexer.Location) *ArrayIndex {
+	return &ArrayIndex{
+		Array: array,
+		Index: index,
+		Type:  &Type{Kind: TypeUnknown},
+		Loc:   location,
+	}
+}
+
+func (a *ArrayIndex) Location() lexer.Location {
+	return a.Loc
+}
+
+func (a *ArrayIndex) Accept(v Visitor) {
+	v.VisitArrayIndex(a)
+}
+
+func (*ArrayIndex) isExpression() {}
+func (*ArrayIndex) isLValue()     {}

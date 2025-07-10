@@ -401,6 +401,14 @@ func (tc *TypeChecker) VisitDeref(d *ast.Deref) {
 	tc.lastType = d.Type
 }
 
+// VisitArrayIndex handles array index expressions.
+func (tc *TypeChecker) VisitArrayIndex(a *ast.ArrayIndex) {
+	// Dummy implementation: just visit children and set lastType to unknown
+	a.Array.Accept(tc)
+	a.Index.Accept(tc)
+	tc.lastType = &ast.Type{Kind: ast.TypeUnknown}
+}
+
 // visitNode is a helper method to visit a node and return the lastType.
 func (tc *TypeChecker) visitNode(node interface{ Accept(visitor ast.Visitor) }) *ast.Type {
 	if node != nil {

@@ -1,3 +1,4 @@
+// rule-110 implementation using pointers
 package main
 
 @(extern)

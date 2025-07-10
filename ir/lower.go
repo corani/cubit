@@ -498,6 +498,14 @@ func (v *visitor) VisitDeref(d *ast.Deref) {
 	v.lastType = d.Type
 }
 
+func (v *visitor) VisitArrayIndex(a *ast.ArrayIndex) {
+	// Dummy implementation: just visit children and set lastVal/lastType to nil
+	a.Array.Accept(v)
+	a.Index.Accept(v)
+	v.lastVal = nil
+	v.lastType = nil
+}
+
 func (v *visitor) appendInstruction(instr Instruction) {
 	if _, ok := instr.(*Label); ok {
 		v.lastInstructions = append(v.lastInstructions, instr)

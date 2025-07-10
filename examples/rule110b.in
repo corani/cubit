@@ -1,0 +1,51 @@
+// rule-110 implementation using arrays
+package main
+
+@(extern)
+printf :: func(msg: string)
+
+// Define a `len` function so we don't have to provide
+// a builtin or library function for it yet.
+len :: func(arr: [128]int) -> int {
+    return 128
+}
+
+display :: func(row: [128]int) {
+    for i := 0; i < len(row); i = i + 1 {
+        if row[i] == 1 {
+            printf("#")
+        } else {
+            printf(".")
+        }
+    }
+
+    printf("\n")
+}
+
+update :: func(row: [128]int) {
+    state := row[0]
+
+    // Start from 1 as we update the previous cell
+    // based on the current state
+    for i = 1; i < len(row); i = i + 1 {
+        state = (state << 1) | row[i]
+        state = state & 7
+
+        row[i-1] = (110 >> state) & 1
+    }
+}
+
+@(export)
+main :: func() -> int {
+    row : [128]int
+
+    // Initialize the first row
+    row[len(row)-2] = 1
+
+    for i := 0; i < len(row)-2; i = i + 1 {
+        display(row)
+        update(row)
+    }
+
+    return 0
+}
