@@ -271,6 +271,7 @@ func (v *visitor) VisitCall(c *ast.Call) {
 
 	v.appendInstruction(call)
 	v.lastVal = retVal
+	v.lastType = c.Type
 }
 
 func (v *visitor) VisitReturn(r *ast.Return) {

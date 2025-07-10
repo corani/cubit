@@ -18,10 +18,6 @@ func (p *Parser) parseReturn(first lexer.Token) (ast.Instruction, error) {
 		}
 	}
 
-	if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
-		return nil, err // EOF
-	}
-
 	return ast.NewReturn(first.Location, p.currentRetType, expr), nil
 }
 
@@ -63,10 +59,6 @@ func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 		}
 
 		instructions = append(instructions, instr...)
-	} else {
-		if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
-			return nil, err // EOF
-		}
 	}
 
 	return instructions, nil
@@ -83,6 +75,8 @@ func (p *Parser) parseAssign(lhs ast.LValue) ([]ast.Instruction, error) {
 		return nil, err
 	}
 
+	// TODO(daniel): figure out how to get rid of this check, semicolon should be
+	// consumed higher up.
 	if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
 		return nil, err // EOF
 	}
@@ -124,10 +118,6 @@ func (p *Parser) parseCall(first lexer.Token) (*ast.Call, error) {
 				return nil, err // EOF
 			}
 		}
-	}
-
-	if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
-		return nil, err // EOF
 	}
 
 	return ast.NewCall(first.Location, first.StringVal, args...), nil
@@ -246,10 +236,6 @@ func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
 		}
 	}
 
-	if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
-		return nil, err // EOF
-	}
-
 	return ast.NewIf(first.Location, initInstrs, cond, thenBody, elseBody), nil
 }
 
@@ -343,10 +329,6 @@ func (p *Parser) parseFor(first lexer.Token) (ast.Instruction, error) {
 	}
 
 	if _, err := p.expectType(lexer.TypeRbrace); err != nil {
-		return nil, err // EOF
-	}
-
-	if _, err := p.peekType(lexer.TypeSemicolon); err != nil {
 		return nil, err // EOF
 	}
 

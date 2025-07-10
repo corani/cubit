@@ -394,6 +394,9 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 			// End of block
 			p.index--
 			return instructions, nil
+		case lexer.TypeSemicolon:
+			// Empty statement, just continue
+			continue
 		case lexer.TypeKeyword:
 			switch first.Keyword {
 			case lexer.KeywordReturn:

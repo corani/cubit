@@ -1,9 +1,7 @@
 package parser
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"slices"
 
 	"github.com/corani/cubit/ast"
@@ -156,7 +154,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 	case lexer.TypeIdent:
 		// Peek to see if this is a function call or dereference
 		next, err := p.peekType(lexer.TypeLparen, lexer.TypeCaret, lexer.TypeLBracket)
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err != nil {
 			return nil, err // EOF
 		}
 
