@@ -489,28 +489,51 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 	}
 }
 
-// parseType parses a type, supporting pointer types (e.g., ^int, ^^int)
+// parseType parses a type, supporting arbitrary nesting of arrays and pointers (e.g., [N]^int, ^[N]int, [N][M]^int, etc.)
 func (p *Parser) parseType() *ast.Type {
-	// Count leading carets (^) for pointer depth
-	pointerDepth := 0
+	typeModifier := []func(*ast.Type) *ast.Type{}
+
 	for {
-		tok, err := p.peekType(lexer.TypeCaret)
-		if err != nil {
-			break
+		// Pointer(s)
+		if tok, err := p.peekType(lexer.TypeCaret); err == nil && tok.Type == lexer.TypeCaret {
+			loc := tok.Location // TODO(daniel): I think this is not needed?
+
+			typeModifier = append(typeModifier, func(inner *ast.Type) *ast.Type {
+				return ast.NewPointerType(inner, 1, loc)
+			})
+
+			continue
 		}
 
-		if tok.Type == lexer.TypeCaret {
-			pointerDepth++
-		} else {
-			break
+		// Array(s)
+		if tok, err := p.peekType(lexer.TypeLBracket); err == nil && tok.Type == lexer.TypeLBracket {
+			sizeTok, err := p.expectType(lexer.TypeNumber)
+			if err != nil {
+				p.errorf(tok.Location, "expected array size after '['")
+				sizeTok.NumberVal = 0
+			}
+
+			if _, err := p.expectType(lexer.TypeRBracket); err != nil {
+				p.errorf(tok.Location, "expected ']' after array size")
+			}
+
+			loc := tok.Location // TODO(daniel): I think this is not needed?
+			size := sizeTok.NumberVal
+			typeModifier = append(typeModifier, func(inner *ast.Type) *ast.Type {
+				return ast.NewArrayType(inner, size, loc)
+			})
+
+			continue
 		}
+
+		break
 	}
 
 	base := p.parseBaseType()
 
-	// Wrap in pointer types as needed
-	if pointerDepth > 0 {
-		base = ast.NewPointerType(base, pointerDepth, base.Location())
+	// Apply modifiers in reverse order (so the base type is wrapped by the last modifier parsed)
+	for i := len(typeModifier) - 1; i >= 0; i-- {
+		base = typeModifier[i](base)
 	}
 
 	return base
