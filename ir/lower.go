@@ -134,11 +134,58 @@ func (v *visitor) VisitDeclare(d *ast.Declare) {
 		sizeVal := NewValInteger(totalBytes, NewAbiTyBase(BaseLong))
 		retVal := NewValIdent(Ident(d.Ident), NewAbiTyBase(BaseLong))
 		v.appendInstruction(NewAlloc(retVal, sizeVal))
+
+		// Zero-initialize the allocated memory
+		// TODO(daniel): this should probably be optional, like in JAI. Or maybe we should use
+		// an explicit `zeroed()` like in Rust.
+		v.zeroInitialize(retVal, sizeVal)
+
 		v.lastVal = retVal
 		v.lastType = d.Type
 	} else {
 		// No IR emitted for non-array declarations (handled by Assign if initialized)
 	}
+}
+
+// zeroInitialize emits IR to zero out a memory region [addr, addr+size)
+func (v *visitor) zeroInitialize(addr *Val, size *Val) {
+	// We'll emit a simple loop:
+	//   i = 0
+	//   loop:
+	//     if i >= size goto end
+	//     storew 0, addr + i
+	//     i += 4
+	//     goto loop
+	//   end:
+
+	idx := NewValIdent(v.nextIdent("zi_idx"), NewAbiTyBase(BaseLong))
+	zero := NewValInteger(0, NewAbiTyBase(BaseWord))
+	step := NewValInteger(4, NewAbiTyBase(BaseLong))
+
+	loopLabel := v.nextLabel("zi_loop")
+	endLabel := v.nextLabel("zi_end")
+	falseLabel := v.nextLabel("zi_tmp")
+
+	// i = 0
+	v.appendInstruction(NewBinop(BinOpAdd, idx, zero, NewValInteger(0, NewAbiTyBase(BaseLong))))
+	// loop:
+	v.appendInstruction(NewLabel(loopLabel))
+	// if i >= size goto end
+	cmp := NewValIdent(v.nextIdent("zi_cmp"), NewAbiTyBase(BaseWord))
+	v.appendInstruction(NewBinop(BinOpGe, cmp, idx, size))
+	v.appendInstruction(NewJnz(cmp, endLabel, falseLabel))
+	v.appendInstruction(NewLabel(falseLabel))
+	// addr + i
+	addrPlusIdx := NewValIdent(v.nextIdent("zi_addr"), NewAbiTyBase(BaseLong))
+	v.appendInstruction(NewBinop(BinOpAdd, addrPlusIdx, addr, idx))
+	// storew 0, addr + i
+	v.appendInstruction(NewStore(addrPlusIdx, zero))
+	// i += 4
+	v.appendInstruction(NewBinop(BinOpAdd, idx, idx, step))
+	// goto loop
+	v.appendInstruction(NewJmp(loopLabel))
+	// end:
+	v.appendInstruction(NewLabel(endLabel))
 }
 
 func (v *visitor) VisitAssign(a *ast.Assign) {

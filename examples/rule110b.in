@@ -4,16 +4,6 @@ package main
 @(extern)
 printf :: func(msg: string)
 
-initialize :: func(row: [128]int, len: int) {
-    for i := 0; i < len; i = i + 1 {
-        if i == len - 2 {
-            row[i] = 1
-        } else {
-            row[i] = 0
-        }
-    }
-}
-
 display :: func(row: [128]int, len: int) {
     for i := 0; i < len; i = i + 1 {
         if row[i] == 1 {
@@ -45,7 +35,7 @@ main :: func() -> int {
     len := 128
 
     // Initialize the first row
-    initialize(row, len)
+    row[126] = 1
 
     for i := 0; i < len - 2; i = i + 1 {
         display(row, len)
