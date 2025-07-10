@@ -4,14 +4,18 @@ package main
 @(extern)
 printf :: func(msg: string)
 
-// Define a `len` function so we don't have to provide
-// a builtin or library function for it yet.
-len :: func(arr: [128]int) -> int {
-    return 128
+initialize :: func(row: [128]int, len: int) {
+    for i := 0; i < len; i = i + 1 {
+        if i == len - 2 {
+            row[i] = 1
+        } else {
+            row[i] = 0
+        }
+    }
 }
 
-display :: func(row: [128]int) {
-    for i := 0; i < 128; i = i + 1 {
+display :: func(row: [128]int, len: int) {
+    for i := 0; i < len; i = i + 1 {
         if row[i] == 1 {
             printf("#")
         } else {
@@ -22,12 +26,12 @@ display :: func(row: [128]int) {
     printf("\n")
 }
 
-update :: func(row: [128]int) {
+update :: func(row: [128]int, len: int) {
     state := row[0]
 
     // Start from 1 as we update the previous cell
     // based on the current state
-    for i := 1; i < 128; i = i + 1 {
+    for i := 1; i < len; i = i + 1 {
         state = (state << 1) | row[i]
         state = state & 7
 
@@ -38,13 +42,14 @@ update :: func(row: [128]int) {
 @(export)
 main :: func() -> int {
     row : [128]int
+    len := 128
 
     // Initialize the first row
-    row[126] = 1
+    initialize(row, len)
 
-    for i := 0; i < 126; i = i + 1 {
-        display(row)
-        update(row)
+    for i := 0; i < len - 2; i = i + 1 {
+        display(row, len)
+        update(row, len)
     }
 
     return 0

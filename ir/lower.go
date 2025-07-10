@@ -115,7 +115,30 @@ func (v *visitor) VisitBody(b *ast.Body) {
 
 // VisitDeclare handles variable declarations (no IR emitted, but needed for IR lowering).
 func (v *visitor) VisitDeclare(d *ast.Declare) {
-	// No IR emitted for declarations alone (handled by Assign if initialized)
+	// Lower array declarations to stack allocation if type is array
+	if d.Type != nil && d.Type.Kind == ast.TypeArray {
+		size := int64(1)
+		// Compute total size: product of all dimensions * sizeof(element)
+
+		tmpType := d.Type
+		for tmpType != nil && tmpType.Kind == ast.TypeArray {
+			size *= int64(tmpType.Size)
+			tmpType = tmpType.Elem
+		}
+
+		// Assume only int arrays for now (4 bytes per int)
+		// TODO: handle other element types
+		eleSize := int64(4)
+		totalBytes := size * eleSize
+
+		sizeVal := NewValInteger(totalBytes, NewAbiTyBase(BaseLong))
+		retVal := NewValIdent(Ident(d.Ident), NewAbiTyBase(BaseLong))
+		v.appendInstruction(NewAlloc(retVal, sizeVal))
+		v.lastVal = retVal
+		v.lastType = d.Type
+	} else {
+		// No IR emitted for non-array declarations (handled by Assign if initialized)
+	}
 }
 
 func (v *visitor) VisitAssign(a *ast.Assign) {
@@ -133,6 +156,27 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 		addr := v.lastVal
 		// Store: storew val, addr
 		v.appendInstruction(NewStore(addr, val))
+	case *ast.ArrayIndex:
+		// Lower the array expression
+		lhs.Array.Accept(v)
+		arrayAddr := v.lastVal
+		// Compute the offset for the array index
+		lhs.Index.Accept(v)
+		index := v.lastVal
+		// Convert the index to long if necessary
+		if index.AbiTy.BaseTy != BaseLong {
+			tmp := NewValIdent(v.nextIdent("idx"), NewAbiTyBase(BaseLong))
+			v.appendInstruction(NewConvert(tmp, index))
+			index = tmp
+		}
+		// Scale the index by the element size (assume 4 bytes for int)
+		elemSize := int64(4)
+		tmpScaled := NewValIdent(v.nextIdent("idx"), index.AbiTy)
+		v.appendInstruction(NewBinop(BinOpMul, tmpScaled, index, NewValInteger(elemSize, index.AbiTy)))
+		// Compute the address: addr = arrayAddr + index * elemSize
+		v.appendInstruction(NewBinop(BinOpAdd, tmpScaled, tmpScaled, arrayAddr))
+		// Store: storew val, addr
+		v.appendInstruction(NewStore(tmpScaled, val))
 	case *ast.VariableRef:
 		lhs.Accept(v)
 		lhsVal := v.lastVal
@@ -499,11 +543,46 @@ func (v *visitor) VisitDeref(d *ast.Deref) {
 }
 
 func (v *visitor) VisitArrayIndex(a *ast.ArrayIndex) {
-	// Dummy implementation: just visit children and set lastVal/lastType to nil
+	// Lower array indexing: compute address and load value
+	// 1. Lower base (array) expression
 	a.Array.Accept(v)
+	base := v.lastVal
+	baseType := v.lastType
+
+	// 2. Lower index expression
 	a.Index.Accept(v)
-	v.lastVal = nil
-	v.lastType = nil
+	idx := v.lastVal
+
+	// 3. Compute element size
+	eleSize := int64(4) // default to 4 for int
+	if baseType != nil && baseType.Kind == ast.TypeArray && baseType.Elem != nil {
+		if baseType.Elem.Kind == ast.TypeInt {
+			eleSize = 4
+		}
+		// TODO: handle other element types
+	}
+
+	// 4. Compute offset: idx * eleSize
+	tmpMul := NewValIdent(v.nextIdent("idx"), idx.AbiTy)
+	v.appendInstruction(NewBinop(BinOpMul, tmpMul, idx, NewValInteger(eleSize, idx.AbiTy)))
+
+	// 5. Convert offset to long if needed
+	offset := tmpMul
+	if tmpMul.AbiTy.BaseTy != BaseLong {
+		tmpLong := NewValIdent(v.nextIdent("tmp"), NewAbiTyBase(BaseLong))
+		v.appendInstruction(NewConvert(tmpLong, tmpMul))
+		offset = tmpLong
+	}
+
+	// 6. Compute address: base + offset
+	addr := NewValIdent(v.nextIdent("addr"), NewAbiTyBase(BaseLong))
+	v.appendInstruction(NewBinop(BinOpAdd, addr, base, offset))
+
+	// 7. For r-value: load from address
+	result := NewValIdent(v.nextIdent("tmp"), NewAbiTyBase(BaseWord))
+	v.appendInstruction(NewLoad(result, addr))
+	v.lastVal = result
+	v.lastType = baseType.Elem
 }
 
 func (v *visitor) appendInstruction(instr Instruction) {
@@ -550,6 +629,8 @@ func (v *visitor) mapTypeToAbiTy(ty *ast.Type) AbiTy {
 	case ast.TypeString:
 		return NewAbiTyBase(BaseLong)
 	case ast.TypePointer:
+		return NewAbiTyBase(BaseLong)
+	case ast.TypeArray:
 		return NewAbiTyBase(BaseLong)
 	default:
 		return NewAbiTyBase(BaseWord) // fallback
