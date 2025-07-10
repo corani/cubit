@@ -442,6 +442,7 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 			p.index-- // Unconsume first token
 
 			lvalueExpr, err := p.parseLValue()
+			err = nil
 			if err == nil {
 				next, err := p.peekType(lexer.TypeAssign)
 				if err != nil {
@@ -505,6 +506,18 @@ func (p *Parser) parseType() *ast.Type {
 		}
 	}
 
+	base := p.parseBaseType()
+
+	// Wrap in pointer types as needed
+	if pointerDepth > 0 {
+		base = ast.NewPointerType(base, pointerDepth, base.Location())
+	}
+
+	return base
+}
+
+// parseBaseType parses the base type (int, bool, string, void, etc.)
+func (p *Parser) parseBaseType() *ast.Type {
 	tok, err := p.expectType(lexer.TypeKeyword)
 	if err != nil {
 		p.errorf(tok.Location, "expected type keyword, got %s", tok.Type)
@@ -517,30 +530,21 @@ func (p *Parser) parseType() *ast.Type {
 		}
 	}
 
-	var base *ast.Type
-
 	switch tok.Keyword {
 	case lexer.KeywordInt:
-		base = ast.NewType(ast.TypeInt, tok.Location)
+		return ast.NewType(ast.TypeInt, tok.Location)
 	case lexer.KeywordString:
-		base = ast.NewType(ast.TypeString, tok.Location)
+		return ast.NewType(ast.TypeString, tok.Location)
 	case lexer.KeywordBool:
-		base = ast.NewType(ast.TypeBool, tok.Location)
+		return ast.NewType(ast.TypeBool, tok.Location)
 	case lexer.KeywordVoid:
-		base = ast.NewType(ast.TypeVoid, tok.Location)
+		return ast.NewType(ast.TypeVoid, tok.Location)
 	default:
 		p.errorf(tok.Location, "unexpected type keyword %s", tok.Keyword)
 
 		// error recovery:
-		base = ast.NewType(ast.TypeVoid, tok.Location)
+		return ast.NewType(ast.TypeVoid, tok.Location)
 	}
-
-	// Wrap in pointer types as needed
-	if pointerDepth > 0 {
-		base = ast.NewPointerType(base, pointerDepth, tok.Location)
-	}
-
-	return base
 }
 
 // expectKeyword checks if the next token is one of the expected keywords.
