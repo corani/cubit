@@ -20,6 +20,7 @@ type Visitor interface {
 	VisitReturn(*Return)
 	VisitLiteral(*Literal)
 	VisitBinop(*Binop)
+	VisitUnaryOp(*UnaryOp)
 	VisitVariableRef(*VariableRef)
 	VisitDeref(*Deref)
 	VisitArrayIndex(*ArrayIndex)
@@ -398,6 +399,7 @@ type Expression interface {
 var _ []Expression = []Expression{
 	(*Literal)(nil),
 	(*Binop)(nil),
+	(*UnaryOp)(nil),
 	(*VariableRef)(nil),
 	(*Deref)(nil),
 	(*Call)(nil),
@@ -574,3 +576,36 @@ func (a *ArrayIndex) Accept(v Visitor) {
 
 func (*ArrayIndex) isExpression() {}
 func (*ArrayIndex) isLValue()     {}
+
+// UnaryOpKind represents the kind of unary operation.
+type UnaryOpKind string
+
+const (
+	UnaryOpMinus UnaryOpKind = "-"
+)
+
+type UnaryOp struct {
+	Operation UnaryOpKind
+	Expr      Expression
+	Type      *Type
+	Loc       lexer.Location
+}
+
+func NewUnaryOp(op UnaryOpKind, expr Expression, location lexer.Location) *UnaryOp {
+	return &UnaryOp{
+		Operation: op,
+		Expr:      expr,
+		Type:      &Type{Kind: TypeUnknown},
+		Loc:       location,
+	}
+}
+
+func (u *UnaryOp) Location() lexer.Location {
+	return u.Loc
+}
+
+func (u *UnaryOp) Accept(v Visitor) {
+	v.VisitUnaryOp(u)
+}
+
+func (*UnaryOp) isExpression() {}

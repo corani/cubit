@@ -25,7 +25,7 @@ update :: func(row: [128]int, len: int) {
         state = (state << 1) | row[i]
         state = state & 7
 
-        row[i-(1)] = (110 >> state) & 1
+        row[i-1] = (110 >> state) & 1
     }
 }
 

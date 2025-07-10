@@ -33,14 +33,14 @@ func TestLexer_EdgeCases(t *testing.T) {
 		{
 			name:     "negative number",
 			input:    `-123`,
-			expected: []TokenType{TypeNumber},
-			values:   []string{"-123"},
+			expected: []TokenType{TypeMinus, TypeNumber},
+			values:   []string{"-", "123"},
 		},
 		{
 			name:     "assign negative number",
 			input:    `x = -42`,
-			expected: []TokenType{TypeIdent, TypeAssign, TypeNumber},
-			values:   []string{"x", "=", "-42"},
+			expected: []TokenType{TypeIdent, TypeAssign, TypeMinus, TypeNumber},
+			values:   []string{"x", "=", "-", "42"},
 		},
 		// Arrow
 		{

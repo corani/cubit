@@ -113,9 +113,6 @@ func (t *Lexer) Next() (Token, error) {
 			case c2 == '>':
 				t.prevToken = &Token{Type: TypeArrow, StringVal: "->", Location: start}
 				return *t.prevToken, nil
-			case isNumeric(c2):
-				buf = append(buf, '-')
-				t.Scan.Unread(1)
 			default:
 				t.Scan.Unread(1)
 				t.prevToken = &Token{Type: TypeMinus, StringVal: "-", Location: start}

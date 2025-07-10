@@ -442,7 +442,6 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 			p.index-- // Unconsume first token
 
 			lvalueExpr, err := p.parseLValue()
-			err = nil
 			if err == nil {
 				next, err := p.peekType(lexer.TypeAssign)
 				if err != nil {

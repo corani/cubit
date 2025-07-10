@@ -484,6 +484,28 @@ func (v *visitor) visitBinOpLogOr(left *Val, b *ast.Binop, result *Val) {
 	v.appendInstruction(NewLabel(endLabel))
 }
 
+func (v *visitor) VisitUnaryOp(u *ast.UnaryOp) {
+	u.Expr.Accept(v)
+	operand := v.lastVal
+	operandType := v.lastType
+
+	switch u.Operation {
+	case ast.UnaryOpMinus:
+		// Only support int for now
+		if operandType != nil && operandType.Kind == ast.TypeInt {
+			result := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(operandType))
+			zero := NewValInteger(0, v.mapTypeToAbiTy(operandType))
+			v.appendInstruction(NewBinop(BinOpSub, result, zero, operand))
+			v.lastVal = result
+			v.lastType = operandType
+		} else {
+			panic("unsupported type for unary minus in lowering")
+		}
+	default:
+		panic("unsupported unary operator in lowering")
+	}
+}
+
 func (v *visitor) VisitIf(iff *ast.If) {
 	// Shape of an If statement when lowered:
 	// 		%tmp = <cond>

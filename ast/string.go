@@ -165,6 +165,12 @@ func (s *stringer) VisitBinop(b *Binop) {
 	s.write("\n\t)")
 }
 
+func (s *stringer) VisitUnaryOp(u *UnaryOp) {
+	s.writef("(unop %s %q ", u.Type, u.Operation)
+	u.Expr.Accept(s)
+	s.write(")")
+}
+
 func (s *stringer) VisitVariableRef(v *VariableRef) {
 	s.writef("(ref %s %q)", v.Type, v.Ident)
 }

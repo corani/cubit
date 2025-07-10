@@ -331,6 +331,11 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 	tc.lastType = binop.Type
 }
 
+func (tc *TypeChecker) VisitUnaryOp(u *ast.UnaryOp) {
+	u.Type = tc.visitNode(u.Expr)
+	tc.lastType = u.Type
+}
+
 func (tc *TypeChecker) VisitIf(iff *ast.If) {
 	// If statements introduce a new scope for variables (e.g. initializer)
 	tc.pushScope()

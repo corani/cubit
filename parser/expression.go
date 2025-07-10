@@ -89,6 +89,7 @@ func (p *Parser) parseExpressionPratt(optional bool, minPrec int) (ast.Expressio
 
 func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 	starters := []lexer.TokenType{
+		lexer.TypeMinus, // allow unary minus as a primary
 		lexer.TypeNumber,
 		lexer.TypeBool,
 		lexer.TypeString,
@@ -118,6 +119,12 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 	var expr ast.Expression
 
 	switch start.Type {
+	case lexer.TypeMinus:
+		operand, err := p.parsePrimary(false)
+		if err != nil {
+			return nil, err
+		}
+		expr = ast.NewUnaryOp(ast.UnaryOpMinus, operand, start.Location)
 	case lexer.TypeKeyword:
 		switch start.Keyword {
 		case lexer.KeywordTrue:
