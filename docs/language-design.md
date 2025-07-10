@@ -562,3 +562,20 @@ if Option.Some(x) := opt {
 ```
 
 ---
+
+## 15. Strings: Immutable, Sized, and Zero-Terminated
+
+Strings in this language are immutable and designed for maximal interoperability, especially with C code. Each string value stores both its length and a trailing zero byte (\0), enabling efficient and safe operations:
+
+- **Immutability:** Strings cannot be modified after creation. This guarantees safety, thread-friendliness, and allows for internal sharing and optimizations.
+- **Sized:** The length of a string is always known in O(1) time, allowing fast slicing, concatenation, and iteration without scanning for a terminator.
+- **Zero-Terminated:** All strings are guaranteed to have a trailing \0 byte, making them directly usable with C APIs expecting null-terminated strings (e.g., `printf`, `strcpy`).
+- **C Interoperability:**
+    - When calling C functions, you can pass the string pointer directly for APIs expecting a null-terminated string, or both pointer and length for APIs expecting both.
+    - When receiving strings from C, the language can construct a string value by scanning for the first \0 and storing the length.
+- **Embedded Nulls:** Embedded null bytes (\0) are allowed in strings, but passing such strings to C APIs expecting null-terminated strings will result in truncation at the first null. The length field is always authoritative within the language.
+- **Minimal Overhead:** The only overhead is a single trailing byte per string, which is negligible on modern systems.
+
+This design provides the best of both worlds: fast, safe string operations and seamless C interop, while keeping the language simple and efficient.
+
+---
