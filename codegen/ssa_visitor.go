@@ -374,3 +374,11 @@ func (v *SsaGen) VisitConvert(c *ir.Convert) string {
 	// 'sw' (signed word) for the input value.
 	return fmt.Sprintf("%s =l extsw %s", ret, val)
 }
+
+func (v *SsaGen) VisitAlloc(a *ir.Alloc) string {
+	// Dummy implementation for Alloc; QBE: %ret =l alloc4 %size
+	// TODO: implement correct type and size handling
+	ret := v.VisitVal(a.Ret)
+	size := v.VisitVal(a.Size)
+	return fmt.Sprintf("%s =l alloc4 %s", ret, size)
+}

@@ -15,6 +15,7 @@ type Visitor interface {
 	VisitLoad(*Load) string
 	VisitStore(*Store) string
 	VisitConvert(*Convert) string
+	VisitAlloc(*Alloc) string
 }
 
 type CompilationUnit struct {
@@ -665,4 +666,20 @@ func (c *Convert) isInstruction() {}
 
 func (c *Convert) Accept(visitor Visitor) string {
 	return visitor.VisitConvert(c)
+}
+
+// Alloc represents stack allocation (e.g., for arrays or structs)
+type Alloc struct {
+	Ret  *Val // destination (SSA temp)
+	Size *Val // size in bytes (word or long)
+}
+
+func NewAlloc(ret, size *Val) *Alloc {
+	return &Alloc{Ret: ret, Size: size}
+}
+
+func (a *Alloc) isInstruction() {}
+
+func (a *Alloc) Accept(visitor Visitor) string {
+	return visitor.VisitAlloc(a)
 }
