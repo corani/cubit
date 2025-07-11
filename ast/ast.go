@@ -462,9 +462,17 @@ type Literal struct {
 	IntValue    int
 	StringValue string
 	BoolValue   bool
+	ArrayValue  []Literal
 	Loc         lexer.Location
 }
 
+func NewArrayLiteral(ty *Type, elements []Literal, location lexer.Location) *Literal {
+	return &Literal{
+		Type:       ty,
+		ArrayValue: elements,
+		Loc:        location,
+	}
+}
 func NewIntLiteral(val int, location lexer.Location) *Literal {
 	return &Literal{
 		Type:     &Type{Kind: TypeInt},

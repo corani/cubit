@@ -146,6 +146,16 @@ func (s *stringer) VisitLiteral(l *Literal) {
 		s.writef("%q)", l.StringValue)
 	case TypeBool:
 		s.writef("%t)", l.BoolValue)
+	case TypeArray:
+		s.write("{")
+		for i, elem := range l.ArrayValue {
+			if i > 0 {
+				s.write(", ")
+			}
+
+			elem.Accept(s)
+		}
+		s.write("}")
 	default:
 		s.write("unknown)")
 	}

@@ -94,6 +94,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		lexer.TypeIdent,
 		lexer.TypeLparen,
 		lexer.TypeKeyword,
+		lexer.TypeLBracket, // allow array literal as a primary
 	}
 
 	start, err := p.peekType(starters...)
@@ -202,6 +203,92 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		if next.Type == lexer.TypeCaret {
 			expr = ast.NewDeref(expr, next.Location)
 		}
+	case lexer.TypeLBracket:
+		// Array literal: [size]type{...}
+		sizeExpr, err := p.parseExpression(false)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, err := p.expectType(lexer.TypeRBracket); err != nil {
+			return nil, err // EOF
+		}
+
+		typeTok, err := p.expectType(lexer.TypeKeyword)
+		if err != nil {
+			return nil, err
+		}
+
+		var elemType *ast.Type
+
+		switch typeTok.Keyword {
+		case lexer.KeywordInt:
+			elemType = ast.NewType(ast.TypeInt, typeTok.Location)
+		case lexer.KeywordBool:
+			elemType = ast.NewType(ast.TypeBool, typeTok.Location)
+		case lexer.KeywordString:
+			elemType = ast.NewType(ast.TypeString, typeTok.Location)
+		default:
+			typeTok.Location.Errorf("unexpected type %s in array literal", typeTok.StringVal)
+
+			// error recovery:
+			elemType = ast.NewType(ast.TypeUnknown, typeTok.Location)
+		}
+
+		if _, err := p.expectType(lexer.TypeLbrace); err != nil {
+			return nil, err
+		}
+
+		// Parse elements: [size]type{1,2,3}
+		var elements []ast.Literal
+		for {
+			tok, err := p.peekType(lexer.TypeRbrace)
+			if err != nil {
+				return nil, err // EOF
+			}
+
+			if tok.Type == lexer.TypeRbrace {
+				break
+			}
+
+			elemExpr, err := p.parseExpression(false)
+			if err != nil {
+				return nil, err
+			}
+
+			// Only allow scalar literals for now
+			lit, ok := elemExpr.(*ast.Literal)
+			if !ok {
+				tok.Location.Errorf("array literal elements must be literals")
+
+				// error recovery: ignore element
+			} else {
+				elements = append(elements, *lit)
+			}
+
+			tok, err = p.peekType(lexer.TypeComma, lexer.TypeRbrace)
+			if err != nil {
+				return nil, err // EOF
+			}
+
+			if tok.Type == lexer.TypeComma {
+				continue
+			} else if tok.Type == lexer.TypeRbrace {
+				break
+			}
+		}
+
+		// Build the array type
+		sizeLit, ok := sizeExpr.(*ast.Literal)
+		if !ok || sizeLit.Type.Kind != ast.TypeInt {
+			start.Location.Errorf("array size must be an integer literal")
+
+			// error recovery
+			sizeLit = ast.NewIntLiteral(0, start.Location)
+		}
+
+		arrType := ast.NewArrayType(elemType, sizeLit.IntValue, start.Location)
+		expr = ast.NewArrayLiteral(arrType, elements, start.Location)
 	default:
 		start.Location.Errorf("unexpected token %s in expression", start.StringVal)
 	}

@@ -112,10 +112,27 @@ p := pair(1, "foo") // $A=int, $B=string
 ## 6. Arrays and Slices
 
 ```odin
-nums   : [4]int       // Fixed-size array
+nums   : [4]int       // Fixed-size array (uninitialized, contents undefined)
 names  : []string     // Slice (dynamic array)
 matrix : [3][3]float  // Multi-dimensional array
+
+// Array initialization semantics:
+// Declaration without initialization (no zeroing, contents are undefined)
+a : [128]int
+
+// Declaration with zero-initialization
+a := [128]int{}
+
+// Assignment with zero-initialization
+a = [128]int{}
+
+// Declaration with explicit initialization
+b := [4]int{1, 2, 3, 4}
 ```
+
+- `a : [128]int` declares an array variable, but does not initialize its contents.
+- `a := [128]int{}` or `a = [128]int{}` zero-initializes the array.
+- Explicit value initialization (`{1,2,3}`) requires the array size to match the number of elements provided.
 
 ---
 

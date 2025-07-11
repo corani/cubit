@@ -38,7 +38,8 @@ update :: func(row: [128]int) {
 
 @(export)
 main :: func() -> int {
-    row : [128]int
+    // Zero-initialize a row of 128 integers
+    row := [128]int{}
 
     // Initialize the first row
     row[len(row) - 2] = 1

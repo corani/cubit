@@ -119,28 +119,18 @@ func (v *visitor) VisitDeclare(d *ast.Declare) {
 	// Lower array declarations to stack allocation if type is array
 	if d.Type != nil && d.Type.Kind == ast.TypeArray {
 		size := int64(1)
-		// Compute total size: product of all dimensions * sizeof(element)
-
 		tmpType := d.Type
 		for tmpType != nil && tmpType.Kind == ast.TypeArray {
 			size *= int64(tmpType.Size)
 			tmpType = tmpType.Elem
 		}
-
 		// Assume only int arrays for now (4 bytes per int)
-		// TODO: handle other element types
 		eleSize := int64(4)
 		totalBytes := size * eleSize
-
 		sizeVal := NewValInteger(d.Location(), totalBytes, NewAbiTyBase(BaseLong))
 		retVal := NewValIdent(d.Location(), Ident(d.Ident), NewAbiTyBase(BaseLong))
 		v.appendInstruction(NewAlloc(d.Location(), retVal, sizeVal))
-
-		// Zero-initialize the allocated memory
-		// TODO(daniel): this should probably be optional, like in JAI. Or maybe we should use
-		// an explicit `zeroed()` like in Rust.
-		v.zeroInitialize(d.Location(), retVal, sizeVal)
-
+		// No zero-initialization here; handled by VisitLiteral if needed
 		v.lastVal = retVal
 		v.lastType = d.Type
 	} else {
@@ -306,6 +296,25 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 		ident := v.nextIdent("str")
 		v.unit.DataDefs = append(v.unit.DataDefs, NewDataDefStringZ(l.Location(), ident, l.StringValue))
 		v.lastVal = NewValGlobal(l.Location(), ident, v.mapTypeToAbiTy(l.Type))
+	case ast.TypeArray:
+		// Only support zero-initialized array literals for now
+		if len(l.ArrayValue) != 0 {
+			l.Location().Errorf("non-empty array literals are not supported in IR lowering yet")
+		}
+		size := int64(1)
+		tmpType := l.Type
+		for tmpType != nil && tmpType.Kind == ast.TypeArray {
+			size *= int64(tmpType.Size)
+			tmpType = tmpType.Elem
+		}
+		// Assume only int arrays for now (4 bytes per int)
+		eleSize := int64(4)
+		totalBytes := size * eleSize
+		sizeVal := NewValInteger(l.Location(), totalBytes, NewAbiTyBase(BaseLong))
+		retVal := NewValIdent(l.Location(), v.nextIdent("arr"), NewAbiTyBase(BaseLong))
+		v.appendInstruction(NewAlloc(l.Location(), retVal, sizeVal))
+		v.zeroInitialize(l.Location(), retVal, sizeVal)
+		v.lastVal = retVal
 	default:
 		panic("unsupported literal type: " + l.Type.String())
 	}

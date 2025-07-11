@@ -201,7 +201,14 @@ func (tc *TypeChecker) VisitReturn(ret *ast.Return) {
 }
 
 func (tc *TypeChecker) VisitLiteral(lit *ast.Literal) {
-	// Literals already have their type set
+	switch lit.Type.Kind {
+	case ast.TypeInt, ast.TypeBool, ast.TypeString:
+		// Literals already have their type set
+	case ast.TypeArray:
+		// Array literals must have all elements of the same type
+		// TODO(daniel): check array value types
+	}
+
 	tc.lastType = lit.Type
 }
 
