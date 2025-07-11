@@ -515,6 +515,7 @@ const (
 	BinOpSub    BinOpKind = "-"
 	BinOpMul    BinOpKind = "*"
 	BinOpDiv    BinOpKind = "/"
+	BinOpMod    BinOpKind = "%"
 	BinOpEq     BinOpKind = "=="
 	BinOpNe     BinOpKind = "!="
 	BinOpLt     BinOpKind = "<"

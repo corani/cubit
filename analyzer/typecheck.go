@@ -266,7 +266,7 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 			unknown("invalid operands for pointer arithmetic: %s %s %s",
 				lhsType, binop.Operation, rhsType)
 		}
-	case ast.BinOpDiv, ast.BinOpMul:
+	case ast.BinOpDiv, ast.BinOpMul, ast.BinOpMod:
 		if isInt(lhsType) && isInt(rhsType) {
 			binop.Type = &ast.Type{Kind: ast.TypeInt}
 		} else {

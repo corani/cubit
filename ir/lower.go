@@ -355,6 +355,7 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 		ast.BinOpSub: BinOpSub,
 		ast.BinOpMul: BinOpMul,
 		ast.BinOpDiv: BinOpDiv,
+		ast.BinOpMod: BinOpMod,
 		ast.BinOpEq:  BinOpEq,
 		ast.BinOpNe:  BinOpNe,
 		ast.BinOpLt:  BinOpLt,

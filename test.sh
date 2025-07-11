@@ -19,6 +19,7 @@ declare -A examples=(
   ["examples/simple.in"]=3
   ["examples/rule110a.in"]=0
   ["examples/rule110b.in"]=0
+  ["examples/fizzbuzz.in"]=0
 )
 
 # Warn if any file in examples/ is not included in the examples map

@@ -1,0 +1,25 @@
+// FizzBuzz example
+package main
+
+@(extern, link_name="printf")
+prints :: func(msg: string)
+
+@(extern, link_name="printf")
+printi :: func(msg: string, n: int)
+
+@(export)
+main :: func() -> int {
+    for i := 1; i <= 100; i = i + 1 {
+        if i % 15 == 0 {
+            prints("FizzBuzz\n")
+        } else if i % 3 == 0 {
+            prints("Fizz\n")
+        } else if i % 5 == 0 {
+            prints("Buzz\n")
+        } else {
+            printi("%d\n", i)
+        }
+    }
+    
+    return 0
+}

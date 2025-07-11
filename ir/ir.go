@@ -604,6 +604,7 @@ const (
 	BinOpSub BinOpKind = "sub"
 	BinOpMul BinOpKind = "mul"
 	BinOpDiv BinOpKind = "div"
+	BinOpMod BinOpKind = "mod"
 	BinOpEq  BinOpKind = "eq"
 	BinOpNe  BinOpKind = "ne"
 	BinOpLt  BinOpKind = "lt"

@@ -31,6 +31,7 @@ const (
 	TypeMinus     TokenType = "Minus"        // "-"
 	TypeStar      TokenType = "Star"         // "*"
 	TypeSlash     TokenType = "Slash"        // "/"
+	TypePercent   TokenType = "Percent"      // "%"
 	TypeEq        TokenType = "Eq"           // "=="
 	TypeNe        TokenType = "Ne"           // "!="
 	TypeLt        TokenType = "Lt"           // "<"
@@ -58,6 +59,7 @@ var symbols = map[string]TokenType{
 	"@":  TypeAt,
 	"+":  TypePlus,
 	"*":  TypeStar,
+	"%":  TypePercent,
 	"$":  TypeDollar,
 	"^":  TypeCaret,
 	"=":  TypeAssign,

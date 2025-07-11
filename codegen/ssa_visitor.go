@@ -282,6 +282,7 @@ func (v *SsaGen) VisitBinop(b *ir.Binop) string {
 		ir.BinOpSub: "sub",
 		ir.BinOpMul: "mul",
 		ir.BinOpDiv: "div",
+		ir.BinOpMod: "rem",
 		ir.BinOpEq:  "ceqw",
 		ir.BinOpNe:  "cnew",
 		ir.BinOpLt:  "csltw",
