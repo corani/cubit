@@ -108,7 +108,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 			return nil, nil
 		}
 
-		p.errorf(start.Location, "expected start of expression, got %s", start.StringVal)
+		start.Location.Errorf("expected start of expression, got %s", start.StringVal)
 
 		// TODO: error recovery
 		return nil, nil
@@ -130,7 +130,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		case lexer.KeywordFalse:
 			expr = ast.NewBoolLiteral(false, start.Location)
 		default:
-			p.errorf(start.Location, "unexpected keyword %s in expression", start.Keyword)
+			start.Location.Errorf("unexpected keyword %s in expression", start.Keyword)
 
 			// TODO: error recovery
 			return nil, fmt.Errorf("unexpected keyword %s at %s",
@@ -144,7 +144,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		} else if start.Keyword == lexer.KeywordFalse {
 			expr = ast.NewBoolLiteral(false, start.Location)
 		} else {
-			p.errorf(start.Location, "unexpected boolean keyword %s in expression", start.Keyword)
+			start.Location.Errorf("unexpected boolean keyword %s in expression", start.Keyword)
 
 			// error recovery:
 			expr = ast.NewBoolLiteral(false, start.Location)
@@ -203,7 +203,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 			expr = ast.NewDeref(expr, next.Location)
 		}
 	default:
-		p.errorf(start.Location, "unexpected token %s in expression", start.StringVal)
+		start.Location.Errorf("unexpected token %s in expression", start.StringVal)
 	}
 
 	return expr, nil

@@ -59,7 +59,7 @@ func (p *Parser) Parse() (*ast.CompilationUnit, error) {
 					return p.unit, err // EOF
 				}
 			default:
-				p.errorf(start.Location, "expected package keyword, got %s",
+				start.Location.Errorf("expected package keyword, got %s",
 					start.StringVal)
 
 				// TODO: error recovery
@@ -68,7 +68,7 @@ func (p *Parser) Parse() (*ast.CompilationUnit, error) {
 			}
 		case lexer.TypeIdent:
 			if p.unit.Ident == "" {
-				p.errorf(start.Location, "package must be defined before any other declarations")
+				start.Location.Errorf("package must be defined before any other declarations")
 
 				// error recovery: just continue parsing
 			}
@@ -98,8 +98,8 @@ func (p *Parser) Parse() (*ast.CompilationUnit, error) {
 // It returns io.EOF when there are no more tokens.
 func (p *Parser) parsePackage(start lexer.Token) error {
 	if p.unit.Ident != "" {
-		p.errorf(start.Location, "package already defined, cannot redefine")
-		p.infof(p.unit.Loc, "previous definition was here")
+		start.Location.Errorf("package already defined, cannot redefine")
+		p.unit.Loc.Infof("previous definition was here")
 
 		// error recovery: just ignore the new package definition.
 		_, err := p.expectType(lexer.TypeIdent)
@@ -138,7 +138,7 @@ func (p *Parser) parseAttributes(atToken lexer.Token) error {
 	}
 
 	if lparen.Type != lexer.TypeLparen {
-		p.errorf(lparen.Location, "expected ( after @, got %s", lparen.StringVal)
+		lparen.Location.Errorf("expected ( after @, got %s", lparen.StringVal)
 
 		// TODO: error recovery
 	}
@@ -155,7 +155,7 @@ func (p *Parser) parseAttributes(atToken lexer.Token) error {
 
 		key, ok := ast.ParseAttrKey(tok.StringVal)
 		if !ok {
-			p.errorf(tok.Location, "invalid attribute key: %s", tok.StringVal)
+			tok.Location.Errorf("invalid attribute key: %s", tok.StringVal)
 		}
 
 		var value ast.AttrValue
@@ -234,7 +234,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 
 	retType, err := p.parseFuncReturnType()
 	if err != nil {
-		p.errorf(name.Location, "error parsing return type: %v", err)
+		name.Location.Errorf("error parsing return type: %v", err)
 
 		// error recovery:
 		retType = ast.NewType(ast.TypeVoid, name.Location)
@@ -270,7 +270,7 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 				// If the return type is void, we can just add an empty return.
 				instructions = append(instructions, ast.NewReturn(lbrace.Location, retType))
 			default:
-				p.errorf(name.Location, "function %s has return type %s but no return statement",
+				name.Location.Errorf("function %s has return type %s but no return statement",
 					def.Ident, retType.String())
 
 				// error recovery:
@@ -482,8 +482,7 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 				}
 			}
 
-			p.errorf(first.Location, "expected statement, got %s",
-				first.StringVal)
+			first.Location.Errorf("expected statement, got %s", first.StringVal)
 
 			// TODO: error recovery
 			return nil, fmt.Errorf("unexpected statement at %s", first.Location)
@@ -512,12 +511,12 @@ func (p *Parser) parseType() *ast.Type {
 		if tok, err := p.peekType(lexer.TypeLBracket); err == nil && tok.Type == lexer.TypeLBracket {
 			sizeTok, err := p.expectType(lexer.TypeNumber)
 			if err != nil {
-				p.errorf(tok.Location, "expected array size after '['")
+				tok.Location.Errorf("expected array size after '['")
 				sizeTok.NumberVal = 0
 			}
 
 			if _, err := p.expectType(lexer.TypeRBracket); err != nil {
-				p.errorf(tok.Location, "expected ']' after array size")
+				tok.Location.Errorf("expected ']' after array size")
 			}
 
 			loc := tok.Location // TODO(daniel): I think this is not needed?
@@ -546,7 +545,7 @@ func (p *Parser) parseType() *ast.Type {
 func (p *Parser) parseBaseType() *ast.Type {
 	tok, err := p.expectType(lexer.TypeKeyword)
 	if err != nil {
-		p.errorf(tok.Location, "expected type keyword, got %s", tok.Type)
+		tok.Location.Errorf("expected type keyword, got %s", tok.Type)
 
 		// error recover:
 		tok = lexer.Token{
@@ -566,7 +565,7 @@ func (p *Parser) parseBaseType() *ast.Type {
 	case lexer.KeywordVoid:
 		return ast.NewType(ast.TypeVoid, tok.Location)
 	default:
-		p.errorf(tok.Location, "unexpected type keyword %s", tok.Keyword)
+		tok.Location.Errorf("unexpected type keyword %s", tok.Keyword)
 
 		// error recovery:
 		return ast.NewType(ast.TypeVoid, tok.Location)
@@ -584,7 +583,7 @@ func (p *Parser) expectKeyword(kws ...lexer.Keyword) (lexer.Token, error) {
 	}
 
 	if token.Type != lexer.TypeKeyword {
-		p.errorf(token.Location, "expected keyword, got %s", token.Type)
+		token.Location.Errorf("expected keyword, got %s", token.Type)
 
 		// error recovery:
 		return lexer.Token{
@@ -606,7 +605,7 @@ func (p *Parser) expectKeyword(kws ...lexer.Keyword) (lexer.Token, error) {
 		}
 	}
 
-	p.errorf(token.Location, "expected %s, got %s", strings.Join(kwnames, " or "), token.Keyword)
+	token.Location.Errorf("expected %s, got %s", strings.Join(kwnames, " or "), token.Keyword)
 
 	// error recovery:
 	return lexer.Token{
@@ -661,7 +660,7 @@ func (p *Parser) expectType(tts ...lexer.TokenType) (lexer.Token, error) {
 		}
 	}
 
-	p.errorf(token.Location, "expected %s, got %s", strings.Join(ttnames, " or "), token.Type)
+	token.Location.Errorf("expected %s, got %s", strings.Join(ttnames, " or "), token.Type)
 
 	// error recover:
 	p.index--
@@ -683,16 +682,4 @@ func (p *Parser) nextToken() (lexer.Token, error) {
 	p.index++
 
 	return token, nil
-}
-
-// Helper to record errors
-func (p *Parser) errorf(location lexer.Location, format string, args ...any) {
-	fmt.Printf("%s: [ERRO] "+format+"\n", append([]any{location}, args...)...)
-
-	err := fmt.Errorf("%s: "+format, append([]any{location}, args...)...)
-	p.errors = append(p.errors, err)
-}
-
-func (p *Parser) infof(location lexer.Location, format string, args ...any) {
-	fmt.Printf("%s: [INFO] "+format+"\n", append([]any{location}, args...)...)
 }

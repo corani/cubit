@@ -17,10 +17,14 @@ func NewSSAVisitor() *SsaGen {
 
 func (v *SsaGen) VisitCompilationUnit(cu *ir.CompilationUnit) string {
 	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("# package %s (%s)\n", cu.Package, cu.Loc))
+
 	for i := range cu.Types {
 		sb.WriteString(cu.Types[i].Accept(v))
 		sb.WriteString("\n")
 	}
+
 	for i := range cu.FuncDefs {
 		// TODO(daniel): Skip functions with the extern attribute. There's probably a better way
 		// to handle this, other than assuming that if a function has no blocks, it is extern.
@@ -31,10 +35,12 @@ func (v *SsaGen) VisitCompilationUnit(cu *ir.CompilationUnit) string {
 		sb.WriteString(cu.FuncDefs[i].Accept(v))
 		sb.WriteString("\n")
 	}
+
 	for i := range cu.DataDefs {
 		sb.WriteString(cu.DataDefs[i].Accept(v))
 		sb.WriteString("\n")
 	}
+
 	return sb.String()
 }
 
@@ -98,8 +104,8 @@ func (v *SsaGen) VisitFuncDef(fd *ir.FuncDef) string {
 	for i, block := range fd.Blocks {
 		blocks[i] = v.VisitBlock(block)
 	}
-	return fmt.Sprintf("%sfunction %s$%s(%s) {%s}",
-		linkage, retTy, fd.Ident,
+	return fmt.Sprintf("\n# %s\n%sfunction %s$%s(%s) {%s}",
+		fd.Loc, linkage, retTy, fd.Ident,
 		strings.Join(params, ", "),
 		strings.Join(blocks, "\n"))
 }
@@ -238,11 +244,11 @@ func (v *SsaGen) VisitBlock(b ir.Block) string {
 }
 
 func (v *SsaGen) VisitLabel(l *ir.Label) string {
-	if *l == "" {
+	if l.Name == "" {
 		return ""
 	}
 
-	return fmt.Sprintf("@%s", *l)
+	return fmt.Sprintf("@%s", l.Name)
 }
 
 func (v *SsaGen) VisitRet(r *ir.Ret) string {
@@ -380,5 +386,6 @@ func (v *SsaGen) VisitAlloc(a *ir.Alloc) string {
 	// TODO: implement correct type and size handling
 	ret := v.VisitVal(a.Ret)
 	size := v.VisitVal(a.Size)
+
 	return fmt.Sprintf("%s =l alloc4 %s", ret, size)
 }

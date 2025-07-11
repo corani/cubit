@@ -229,7 +229,7 @@ func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
 
 			elseBody = ast.NewBody(elseInstrs, lbrace.Location)
 		} else {
-			p.errorf(afterElse.Location, "expected 'if' or '{' after 'else', got %s", afterElse.StringVal)
+			afterElse.Location.Errorf("expected 'if' or '{' after 'else', got %s", afterElse.StringVal)
 
 			// error recovery:
 			elseBody = nil

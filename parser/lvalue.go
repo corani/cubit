@@ -69,12 +69,12 @@ func (p *Parser) parseLValue() (ast.LValue, error) {
 			return ast.NewDeref(expr, next.Location), nil
 		}
 
-		p.errorf(first.Location, "expected dereference after parenthesized expression")
+		first.Location.Errorf("expected dereference after parenthesized expression")
 
 		// error recovery:
 		return ast.NewDeref(expr, next.Location), nil
 	default:
-		p.errorf(first.Location, "expected lvalue, got %s", first.StringVal)
+		first.Location.Errorf("expected lvalue, got %s", first.StringVal)
 
 		// TODO: error recovery
 		return nil, fmt.Errorf("invalid lvalue start: %s", first.StringVal)

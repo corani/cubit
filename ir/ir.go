@@ -1,5 +1,7 @@
 package ir
 
+import "github.com/corani/cubit/lexer"
+
 // Visitor defines the visitor interface for SSA code generation.
 type Visitor interface {
 	VisitCompilationUnit(*CompilationUnit) string
@@ -19,6 +21,8 @@ type Visitor interface {
 }
 
 type CompilationUnit struct {
+	Loc      lexer.Location
+	Package  string
 	Types    []TypeDef
 	DataDefs []DataDef
 	FuncDefs []FuncDef
@@ -35,6 +39,13 @@ func NewCompilationUnit() *CompilationUnit {
 		DataDefs: []DataDef{},
 		FuncDefs: []FuncDef{},
 	}
+}
+
+func (cu *CompilationUnit) WithPackage(name string, loc lexer.Location) *CompilationUnit {
+	cu.Package = name
+	cu.Loc = loc
+
+	return cu
 }
 
 func (cu *CompilationUnit) WithTypes(types ...TypeDef) *CompilationUnit {
@@ -111,6 +122,7 @@ func NewSubTyIdentSize(ident Ident, size int) SubTySize {
 }
 
 type Const struct {
+	Loc   lexer.Location
 	Type  ConstType
 	F32   float32
 	F64   float64
@@ -118,20 +130,20 @@ type Const struct {
 	Ident Ident
 }
 
-func NewConstInteger(i int64) Const {
-	return Const{Type: ConstInteger, I64: i}
+func NewConstInteger(loc lexer.Location, i int64) Const {
+	return Const{Loc: loc, Type: ConstInteger, I64: i}
 }
 
-func NewConstSingle(f float32) Const {
-	return Const{Type: ConstSingle, F32: f}
+func NewConstSingle(loc lexer.Location, f float32) Const {
+	return Const{Loc: loc, Type: ConstSingle, F32: f}
 }
 
-func NewConstDouble(f float64) Const {
-	return Const{Type: ConstDouble, F64: f}
+func NewConstDouble(loc lexer.Location, f float64) Const {
+	return Const{Loc: loc, Type: ConstDouble, F64: f}
 }
 
-func NewConstIdent(ident Ident) Const {
-	return Const{Type: ConstIdent, Ident: ident}
+func NewConstIdent(loc lexer.Location, ident Ident) Const {
+	return Const{Loc: loc, Type: ConstIdent, Ident: ident}
 }
 
 type ConstType string
@@ -144,17 +156,18 @@ const (
 )
 
 type DynConst struct {
+	Loc   lexer.Location
 	Type  DynConstType
 	Const Const
 	Ident Ident
 }
 
-func NewDynConst(constv Const) DynConst {
-	return DynConst{Type: DynConstConst, Const: constv}
+func NewDynConst(loc lexer.Location, constv Const) DynConst {
+	return DynConst{Loc: loc, Type: DynConstConst, Const: constv}
 }
 
-func NewDynConstThread(ident Ident) DynConst {
-	return DynConst{Type: DynConstThread, Ident: ident}
+func NewDynConstThread(loc lexer.Location, ident Ident) DynConst {
+	return DynConst{Loc: loc, Type: DynConstThread, Ident: ident}
 }
 
 type DynConstType string
@@ -164,40 +177,6 @@ const (
 	DynConstThread DynConstType = "thread"
 )
 
-type Val struct {
-	Type     ValType
-	DynConst DynConst
-	Ident    Ident
-	AbiTy    AbiTy
-}
-
-func NewValDynConst(dc DynConst, abiTy AbiTy) *Val {
-	return &Val{
-		Type:     ValDynConst,
-		DynConst: dc,
-		AbiTy:    abiTy,
-	}
-}
-
-func NewValGlobal(ident Ident, abiTy AbiTy) *Val {
-	v := NewValDynConst(NewDynConst(NewConstIdent(ident)), abiTy)
-	v.Ident = ident
-
-	return v
-}
-
-func NewValInteger(i int64, abiTy AbiTy) *Val {
-	return NewValDynConst(NewDynConst(NewConstInteger(i)), abiTy)
-}
-
-func NewValIdent(ident Ident, abiTy AbiTy) *Val {
-	return &Val{
-		Type:  ValIdent,
-		Ident: ident,
-		AbiTy: abiTy,
-	}
-}
-
 type ValType string
 
 const (
@@ -205,22 +184,60 @@ const (
 	ValIdent    ValType = "ident"
 )
 
+type Val struct {
+	Loc      lexer.Location
+	Type     ValType
+	DynConst DynConst
+	Ident    Ident
+	AbiTy    AbiTy
+}
+
+func NewValDynConst(loc lexer.Location, dc DynConst, abiTy AbiTy) *Val {
+	return &Val{
+		Loc:      loc,
+		Type:     ValDynConst,
+		DynConst: dc,
+		AbiTy:    abiTy,
+	}
+}
+
+func NewValGlobal(loc lexer.Location, ident Ident, abiTy AbiTy) *Val {
+	v := NewValDynConst(loc, NewDynConst(loc, NewConstIdent(loc, ident)), abiTy)
+	v.Ident = ident
+
+	return v
+}
+
+func NewValInteger(loc lexer.Location, i int64, abiTy AbiTy) *Val {
+	return NewValDynConst(loc, NewDynConst(loc, NewConstInteger(loc, i)), abiTy)
+}
+
+func NewValIdent(loc lexer.Location, ident Ident, abiTy AbiTy) *Val {
+	return &Val{
+		Loc:   loc,
+		Type:  ValIdent,
+		Ident: ident,
+		AbiTy: abiTy,
+	}
+}
+
 type Linkage struct {
+	Loc      lexer.Location
 	Type     LinkageType
 	SecName  string
 	SecFlags string
 }
 
-func NewLinkageExport() Linkage {
-	return Linkage{Type: LinkageExport}
+func NewLinkageExport(loc lexer.Location) Linkage {
+	return Linkage{Loc: loc, Type: LinkageExport}
 }
 
-func NewLinkageThread() Linkage {
-	return Linkage{Type: LinkageThread}
+func NewLinkageThread(loc lexer.Location) Linkage {
+	return Linkage{Loc: loc, Type: LinkageThread}
 }
 
-func NewLinkageSection(secName, secFlags string) Linkage {
-	return Linkage{Type: LinkageSection, SecName: secName, SecFlags: secFlags}
+func NewLinkageSection(loc lexer.Location, secName, secFlags string) Linkage {
+	return Linkage{Loc: loc, Type: LinkageSection, SecName: secName, SecFlags: secFlags}
 }
 
 type LinkageType string
@@ -232,6 +249,7 @@ const (
 )
 
 type TypeDef struct {
+	Loc         lexer.Location
 	Type        TypeDefType
 	Ident       Ident
 	Align       int
@@ -244,16 +262,16 @@ func (td *TypeDef) Accept(visitor Visitor) string {
 	return visitor.VisitTypeDef(td)
 }
 
-func NewTypeDefRegular(ident Ident, fields ...SubTySize) TypeDef {
-	return TypeDef{Type: TypeDefRegular, Ident: ident, Fields: fields}
+func NewTypeDefRegular(loc lexer.Location, ident Ident, fields ...SubTySize) TypeDef {
+	return TypeDef{Loc: loc, Type: TypeDefRegular, Ident: ident, Fields: fields}
 }
 
-func NewTypeDefUnion(ident Ident, unionFields ...[]SubTySize) TypeDef {
-	return TypeDef{Type: TypeDefUnion, Ident: ident, UnionFields: unionFields}
+func NewTypeDefUnion(loc lexer.Location, ident Ident, unionFields ...[]SubTySize) TypeDef {
+	return TypeDef{Loc: loc, Type: TypeDefUnion, Ident: ident, UnionFields: unionFields}
 }
 
-func NewTypeDefOpaque(ident Ident, opaqueSize int) TypeDef {
-	return TypeDef{Type: TypeDefOpaque, Ident: ident, OpaqueSize: opaqueSize}
+func NewTypeDefOpaque(loc lexer.Location, ident Ident, opaqueSize int) TypeDef {
+	return TypeDef{Loc: loc, Type: TypeDefOpaque, Ident: ident, OpaqueSize: opaqueSize}
 }
 
 func (td TypeDef) WithAlign(align int) TypeDef {
@@ -271,6 +289,7 @@ const (
 )
 
 type DataDef struct {
+	Loc         lexer.Location
 	Linkage     *Linkage
 	Ident       Ident
 	Align       int
@@ -281,14 +300,14 @@ func (dd *DataDef) Accept(visitor Visitor) string {
 	return visitor.VisitDataDef(dd)
 }
 
-func NewDataDef(ident Ident, initializer ...DataInit) DataDef {
-	return DataDef{Ident: ident, Initializer: initializer}
+func NewDataDef(loc lexer.Location, ident Ident, initializer ...DataInit) DataDef {
+	return DataDef{Loc: loc, Ident: ident, Initializer: initializer}
 }
 
-func NewDataDefStringZ(ident Ident, val string) DataDef {
-	return NewDataDef(ident,
-		NewDataInitString(val),
-		NewDataInitExt(ExtByte, NewDataItemInteger(0)),
+func NewDataDefStringZ(loc lexer.Location, ident Ident, val string) DataDef {
+	return NewDataDef(loc, ident,
+		NewDataInitString(loc, val),
+		NewDataInitExt(loc, ExtByte, NewDataItemInteger(loc, 0)),
 	)
 }
 
@@ -305,22 +324,28 @@ func (dd DataDef) WithAlign(align int) DataDef {
 }
 
 type DataInit struct {
+	Loc   lexer.Location
 	Type  DataInitType
 	ExtTy ExtTy
 	Items []DataItem
 	Size  int
 }
 
-func NewDataInitExt(extTy ExtTy, items ...DataItem) DataInit {
-	return DataInit{Type: DataInitExt, ExtTy: extTy, Items: items}
+func NewDataInitExt(loc lexer.Location, extTy ExtTy, items ...DataItem) DataInit {
+	return DataInit{Loc: loc, Type: DataInitExt, ExtTy: extTy, Items: items}
 }
 
-func NewDataInitString(val string) DataInit {
-	return DataInit{Type: DataInitExt, ExtTy: ExtByte, Items: []DataItem{NewDataItemString(val)}}
+func NewDataInitString(loc lexer.Location, val string) DataInit {
+	return DataInit{
+		Loc:   loc,
+		Type:  DataInitExt,
+		ExtTy: ExtByte,
+		Items: []DataItem{NewDataItemString(loc, val)},
+	}
 }
 
-func NewDataInitZero(size int) DataInit {
-	return DataInit{Type: DataInitZero, Size: size}
+func NewDataInitZero(loc lexer.Location, size int) DataInit {
+	return DataInit{Loc: loc, Type: DataInitZero, Size: size}
 }
 
 type DataInitType string
@@ -331,6 +356,7 @@ const (
 )
 
 type DataItem struct {
+	Loc       lexer.Location
 	Type      DataItemType
 	Ident     Ident
 	Offset    int
@@ -338,20 +364,20 @@ type DataItem struct {
 	Const     Const
 }
 
-func NewDataItemConst(c Const) DataItem {
-	return DataItem{Type: DataItemConst, Const: c}
+func NewDataItemConst(loc lexer.Location, c Const) DataItem {
+	return DataItem{Loc: loc, Type: DataItemConst, Const: c}
 }
 
-func NewDataItemString(val string) DataItem {
-	return DataItem{Type: DataItemString, StringVal: val}
+func NewDataItemString(loc lexer.Location, val string) DataItem {
+	return DataItem{Loc: loc, Type: DataItemString, StringVal: val}
 }
 
-func NewDataItemInteger(i int64) DataItem {
-	return NewDataItemConst(NewConstInteger(i))
+func NewDataItemInteger(loc lexer.Location, i int64) DataItem {
+	return NewDataItemConst(loc, NewConstInteger(loc, i))
 }
 
-func NewDataItemSymbol(ident Ident, offset int) DataItem {
-	return DataItem{Type: DataItemSymbol, Ident: ident, Offset: offset}
+func NewDataItemSymbol(loc lexer.Location, ident Ident, offset int) DataItem {
+	return DataItem{Loc: loc, Type: DataItemSymbol, Ident: ident, Offset: offset}
 }
 
 type DataItemType string
@@ -362,21 +388,8 @@ const (
 	DataItemConst  DataItemType = "const"
 )
 
-type Label string
-
-func NewLabel(name string) *Label {
-	l := Label(name)
-
-	return &l
-}
-
-func (l *Label) isInstruction() {}
-
-func (l *Label) Accept(visitor Visitor) string {
-	return visitor.VisitLabel(l)
-}
-
 type FuncDef struct {
+	Loc      lexer.Location
 	Linkage  *Linkage
 	RetTy    *AbiTy
 	Ident    Ident
@@ -385,12 +398,12 @@ type FuncDef struct {
 	Blocks   []Block
 }
 
-func (fd *FuncDef) Accept(visitor Visitor) string {
-	return visitor.VisitFuncDef(fd)
+func NewFuncDef(loc lexer.Location, ident Ident, params ...*Param) FuncDef {
+	return FuncDef{Loc: loc, Ident: ident, Params: params}
 }
 
-func NewFuncDef(ident Ident, params ...*Param) FuncDef {
-	return FuncDef{Ident: ident, Params: params}
+func (fd *FuncDef) Accept(visitor Visitor) string {
+	return visitor.VisitFuncDef(fd)
 }
 
 func (fd FuncDef) WithLinkage(linkage Linkage) FuncDef {
@@ -409,21 +422,22 @@ func (fd FuncDef) WithBlocks(blocks ...Block) FuncDef {
 }
 
 type Param struct {
+	Loc   lexer.Location
 	Type  ParamType
 	AbiTy AbiTy
 	Ident Ident
 }
 
-func NewParamRegular(abiTy AbiTy, ident Ident) *Param {
-	return &Param{Type: ParamRegular, AbiTy: abiTy, Ident: ident}
+func NewParamRegular(loc lexer.Location, abiTy AbiTy, ident Ident) *Param {
+	return &Param{Loc: loc, Type: ParamRegular, AbiTy: abiTy, Ident: ident}
 }
 
-func NewParamEnv(ident Ident) *Param {
-	return &Param{Type: ParamEnv, Ident: ident}
+func NewParamEnv(loc lexer.Location, ident Ident) *Param {
+	return &Param{Loc: loc, Type: ParamEnv, Ident: ident}
 }
 
-func NewParamVariadic() *Param {
-	return &Param{Type: ParamVariadic}
+func NewParamVariadic(loc lexer.Location) *Param {
+	return &Param{Loc: loc, Type: ParamVariadic}
 }
 
 type ParamType string
@@ -471,18 +485,62 @@ const (
 )
 
 type Block struct {
+	Loc          lexer.Location
 	Label        string
 	Instructions []Instruction
+}
+
+func NewBlock(loc lexer.Location, label string, instructions []Instruction) Block {
+	return Block{
+		Loc:          loc,
+		Label:        label,
+		Instructions: instructions,
+	}
 }
 
 // Instruction is a marker interface for all instruction types.
 type Instruction interface {
 	isInstruction()
 	Accept(visitor Visitor) string
+	Location() lexer.Location
+}
+
+var _ = []Instruction{
+	(*Label)(nil),
+	(*Ret)(nil),
+	(*Call)(nil),
+	(*Binop)(nil),
+	(*Jmp)(nil),
+	(*Jnz)(nil),
+	(*Load)(nil),
+	(*Store)(nil),
+	(*Convert)(nil),
+	(*Alloc)(nil),
+}
+
+// Label represents an SSA label.
+type Label struct {
+	Loc  lexer.Location
+	Name string
+}
+
+func NewLabel(loc lexer.Location, name string) *Label {
+	return &Label{Loc: loc, Name: name}
+}
+
+func (l *Label) isInstruction() {}
+
+func (l *Label) Accept(visitor Visitor) string {
+	return visitor.VisitLabel(l)
+}
+
+func (l *Label) Location() lexer.Location {
+	return l.Loc
 }
 
 // Ret represents an SSA return instruction.
 type Ret struct {
+	Loc lexer.Location
 	Val *Val
 }
 
@@ -492,7 +550,11 @@ func (r *Ret) Accept(visitor Visitor) string {
 	return visitor.VisitRet(r)
 }
 
-func NewRet(val ...*Val) *Ret {
+func (r *Ret) Location() lexer.Location {
+	return r.Loc
+}
+
+func NewRet(loc lexer.Location, val ...*Val) *Ret {
 	if len(val) > 1 {
 		panic("NewRet accepts at most one value")
 	}
@@ -501,11 +563,12 @@ func NewRet(val ...*Val) *Ret {
 		return &Ret{}
 	}
 
-	return &Ret{Val: val[0]}
+	return &Ret{Loc: loc, Val: val[0]}
 }
 
 // Call represents an SSA call instruction.
 type Call struct {
+	Loc   lexer.Location
 	LHS   *Ident
 	RetTy *AbiTy
 	Val   *Val
@@ -518,8 +581,12 @@ func (c *Call) Accept(visitor Visitor) string {
 	return visitor.VisitCall(c)
 }
 
-func NewCall(val *Val, args ...Arg) *Call {
-	return &Call{Val: val, Args: args}
+func (c *Call) Location() lexer.Location {
+	return c.Loc
+}
+
+func NewCall(loc lexer.Location, val *Val, args ...Arg) *Call {
+	return &Call{Loc: loc, Val: val, Args: args}
 }
 
 func (c *Call) WithRet(lhs Ident, retTy AbiTy) *Call {
@@ -551,9 +618,14 @@ const (
 
 // Binop represents an SSA binary operation instruction (add, sub, etc).
 type Binop struct {
+	Loc      lexer.Location
 	Op       BinOpKind
 	Lhs, Rhs *Val
 	Ret      *Val
+}
+
+func NewBinop(loc lexer.Location, op BinOpKind, ret, lhs, rhs *Val) *Binop {
+	return &Binop{Loc: loc, Op: op, Lhs: lhs, Rhs: rhs, Ret: ret}
 }
 
 func (b *Binop) isInstruction() {}
@@ -562,25 +634,26 @@ func (b *Binop) Accept(visitor Visitor) string {
 	return visitor.VisitBinop(b)
 }
 
-func NewBinop(op BinOpKind, ret, lhs, rhs *Val) *Binop {
-	return &Binop{Op: op, Lhs: lhs, Rhs: rhs, Ret: ret}
+func (b *Binop) Location() lexer.Location {
+	return b.Loc
 }
 
 type Arg struct {
+	Loc  lexer.Location
 	Type ArgType
 	Val  *Val
 }
 
-func NewArgRegular(val *Val) Arg {
-	return Arg{Type: ArgRegular, Val: val}
+func NewArgRegular(loc lexer.Location, val *Val) Arg {
+	return Arg{Loc: loc, Type: ArgRegular, Val: val}
 }
 
-func NewArgEnv(val *Val) Arg {
-	return Arg{Type: ArgEnv, Val: val}
+func NewArgEnv(loc lexer.Location, val *Val) Arg {
+	return Arg{Loc: loc, Type: ArgEnv, Val: val}
 }
 
-func NewArgVariadic() Arg {
-	return Arg{Type: ArgVariadic}
+func NewArgVariadic(loc lexer.Location) Arg {
+	return Arg{Loc: loc, Type: ArgVariadic}
 }
 
 type ArgType string
@@ -592,11 +665,12 @@ const (
 )
 
 type Jmp struct {
+	Loc   lexer.Location
 	Label string
 }
 
-func NewJmp(label string) *Jmp {
-	return &Jmp{Label: label}
+func NewJmp(loc lexer.Location, label string) *Jmp {
+	return &Jmp{Loc: loc, Label: label}
 }
 
 func (j *Jmp) isInstruction() {}
@@ -605,14 +679,19 @@ func (j *Jmp) Accept(visitor Visitor) string {
 	return visitor.VisitJmp(j)
 }
 
+func (j *Jmp) Location() lexer.Location {
+	return j.Loc
+}
+
 type Jnz struct {
+	Loc   lexer.Location
 	Cond  *Val
 	True  string
 	False string
 }
 
-func NewJnz(cond *Val, trueLabel, falseLabel string) *Jnz {
-	return &Jnz{Cond: cond, True: trueLabel, False: falseLabel}
+func NewJnz(loc lexer.Location, cond *Val, trueLabel, falseLabel string) *Jnz {
+	return &Jnz{Loc: loc, Cond: cond, True: trueLabel, False: falseLabel}
 }
 
 func (j *Jnz) isInstruction() {}
@@ -621,14 +700,19 @@ func (j *Jnz) Accept(visitor Visitor) string {
 	return visitor.VisitJnz(j)
 }
 
+func (j *Jnz) Location() lexer.Location {
+	return j.Loc
+}
+
 // Load represents a load from memory (e.g., x = p^)
 type Load struct {
+	Loc  lexer.Location
 	Ret  *Val // destination (SSA temp)
 	Addr *Val // address to load from
 }
 
-func NewLoad(ret, addr *Val) *Load {
-	return &Load{Ret: ret, Addr: addr}
+func NewLoad(loc lexer.Location, ret, addr *Val) *Load {
+	return &Load{Loc: loc, Ret: ret, Addr: addr}
 }
 
 func (l *Load) isInstruction() {}
@@ -637,14 +721,19 @@ func (l *Load) Accept(visitor Visitor) string {
 	return visitor.VisitLoad(l)
 }
 
+func (l *Load) Location() lexer.Location {
+	return l.Loc
+}
+
 // Store represents a store to memory (e.g., p^ = x)
 type Store struct {
+	Loc  lexer.Location
 	Addr *Val // address to store to
 	Val  *Val // value to store
 }
 
-func NewStore(addr, val *Val) *Store {
-	return &Store{Addr: addr, Val: val}
+func NewStore(loc lexer.Location, addr, val *Val) *Store {
+	return &Store{Loc: loc, Addr: addr, Val: val}
 }
 
 func (s *Store) isInstruction() {}
@@ -653,13 +742,19 @@ func (s *Store) Accept(visitor Visitor) string {
 	return visitor.VisitStore(s)
 }
 
+func (s *Store) Location() lexer.Location {
+	return s.Loc
+}
+
+// Convert represents a type conversion instruction (e.g., int to float)
 type Convert struct {
+	Loc lexer.Location
 	Ret *Val // destination (SSA temp)
 	Val *Val // value to convert
 }
 
-func NewConvert(ret, val *Val) *Convert {
-	return &Convert{Ret: ret, Val: val}
+func NewConvert(loc lexer.Location, ret, val *Val) *Convert {
+	return &Convert{Loc: loc, Ret: ret, Val: val}
 }
 
 func (c *Convert) isInstruction() {}
@@ -668,18 +763,27 @@ func (c *Convert) Accept(visitor Visitor) string {
 	return visitor.VisitConvert(c)
 }
 
+func (c *Convert) Location() lexer.Location {
+	return c.Loc
+}
+
 // Alloc represents stack allocation (e.g., for arrays or structs)
 type Alloc struct {
+	Loc  lexer.Location
 	Ret  *Val // destination (SSA temp)
 	Size *Val // size in bytes (word or long)
 }
 
-func NewAlloc(ret, size *Val) *Alloc {
-	return &Alloc{Ret: ret, Size: size}
+func NewAlloc(loc lexer.Location, ret, size *Val) *Alloc {
+	return &Alloc{Loc: loc, Ret: ret, Size: size}
 }
 
 func (a *Alloc) isInstruction() {}
 
 func (a *Alloc) Accept(visitor Visitor) string {
 	return visitor.VisitAlloc(a)
+}
+
+func (a *Alloc) Location() lexer.Location {
+	return a.Loc
 }

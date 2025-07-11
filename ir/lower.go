@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/corani/cubit/ast"
+	"github.com/corani/cubit/lexer"
 )
 
 func Lower(unit *ast.CompilationUnit) (*CompilationUnit, error) {
@@ -32,6 +33,8 @@ func newVisitor() *visitor {
 }
 
 func (v *visitor) VisitCompilationUnit(cu *ast.CompilationUnit) {
+	v.unit.WithPackage(cu.Ident, cu.Location())
+
 	// Lower types
 	for i := range cu.Types {
 		cu.Types[i].Accept(v)
@@ -71,7 +74,7 @@ func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
 		}
 	}
 
-	irFunc := NewFuncDef(Ident(fd.Ident), params...)
+	irFunc := NewFuncDef(fd.Location(), Ident(fd.Ident), params...)
 
 	if v, ok := fd.Attributes[ast.AttrKeyLinkname]; ok {
 		if v.Type() != ast.AttrStringType {
@@ -87,24 +90,22 @@ func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
 
 	// Set linkage to export if the function has the export attribute
 	if _, ok := fd.Attributes[ast.AttrKeyExport]; ok {
-		irFunc = irFunc.WithLinkage(NewLinkageExport())
+		irFunc = irFunc.WithLinkage(NewLinkageExport(fd.Location()))
 	}
 
 	// Lower function body (blocks)
 	if fd.Body != nil {
 		fd.Body.Accept(v)
 
-		irFunc = irFunc.WithBlocks(Block{
-			Label:        "start",
-			Instructions: v.lastInstructions,
-		})
+		irFunc = irFunc.WithBlocks(
+			NewBlock(fd.Body.Location(), "start", v.lastInstructions))
 	}
 
 	v.unit.FuncDefs = append(v.unit.FuncDefs, irFunc)
 }
 
 func (v *visitor) VisitFuncParam(fp *ast.FuncParam) {
-	v.lastParam = NewParamRegular(v.mapTypeToAbiTy(fp.Type), Ident(fp.Ident))
+	v.lastParam = NewParamRegular(fp.Location(), v.mapTypeToAbiTy(fp.Type), Ident(fp.Ident))
 }
 
 func (v *visitor) VisitBody(b *ast.Body) {
@@ -131,14 +132,14 @@ func (v *visitor) VisitDeclare(d *ast.Declare) {
 		eleSize := int64(4)
 		totalBytes := size * eleSize
 
-		sizeVal := NewValInteger(totalBytes, NewAbiTyBase(BaseLong))
-		retVal := NewValIdent(Ident(d.Ident), NewAbiTyBase(BaseLong))
-		v.appendInstruction(NewAlloc(retVal, sizeVal))
+		sizeVal := NewValInteger(d.Location(), totalBytes, NewAbiTyBase(BaseLong))
+		retVal := NewValIdent(d.Location(), Ident(d.Ident), NewAbiTyBase(BaseLong))
+		v.appendInstruction(NewAlloc(d.Location(), retVal, sizeVal))
 
 		// Zero-initialize the allocated memory
 		// TODO(daniel): this should probably be optional, like in JAI. Or maybe we should use
 		// an explicit `zeroed()` like in Rust.
-		v.zeroInitialize(retVal, sizeVal)
+		v.zeroInitialize(d.Location(), retVal, sizeVal)
 
 		v.lastVal = retVal
 		v.lastType = d.Type
@@ -148,7 +149,7 @@ func (v *visitor) VisitDeclare(d *ast.Declare) {
 }
 
 // zeroInitialize emits IR to zero out a memory region [addr, addr+size)
-func (v *visitor) zeroInitialize(addr *Val, size *Val) {
+func (v *visitor) zeroInitialize(loc lexer.Location, addr *Val, size *Val) {
 	// We'll emit a simple loop:
 	//   i = 0
 	//   loop:
@@ -158,34 +159,34 @@ func (v *visitor) zeroInitialize(addr *Val, size *Val) {
 	//     goto loop
 	//   end:
 
-	idx := NewValIdent(v.nextIdent("zi_idx"), NewAbiTyBase(BaseLong))
-	zero := NewValInteger(0, NewAbiTyBase(BaseWord))
-	step := NewValInteger(4, NewAbiTyBase(BaseLong))
+	idx := NewValIdent(loc, v.nextIdent("zi_idx"), NewAbiTyBase(BaseLong))
+	zero := NewValInteger(loc, 0, NewAbiTyBase(BaseWord))
+	step := NewValInteger(loc, 4, NewAbiTyBase(BaseLong))
 
 	loopLabel := v.nextLabel("zi_loop")
 	endLabel := v.nextLabel("zi_end")
 	falseLabel := v.nextLabel("zi_tmp")
 
 	// i = 0
-	v.appendInstruction(NewBinop(BinOpAdd, idx, zero, NewValInteger(0, NewAbiTyBase(BaseLong))))
+	v.appendInstruction(NewBinop(loc, BinOpAdd, idx, zero, NewValInteger(loc, 0, NewAbiTyBase(BaseLong))))
 	// loop:
-	v.appendInstruction(NewLabel(loopLabel))
+	v.appendInstruction(NewLabel(loc, loopLabel))
 	// if i >= size goto end
-	cmp := NewValIdent(v.nextIdent("zi_cmp"), NewAbiTyBase(BaseWord))
-	v.appendInstruction(NewBinop(BinOpGe, cmp, idx, size))
-	v.appendInstruction(NewJnz(cmp, endLabel, falseLabel))
-	v.appendInstruction(NewLabel(falseLabel))
+	cmp := NewValIdent(loc, v.nextIdent("zi_cmp"), NewAbiTyBase(BaseWord))
+	v.appendInstruction(NewBinop(loc, BinOpGe, cmp, idx, size))
+	v.appendInstruction(NewJnz(loc, cmp, endLabel, falseLabel))
+	v.appendInstruction(NewLabel(loc, falseLabel))
 	// addr + i
-	addrPlusIdx := NewValIdent(v.nextIdent("zi_addr"), NewAbiTyBase(BaseLong))
-	v.appendInstruction(NewBinop(BinOpAdd, addrPlusIdx, addr, idx))
+	addrPlusIdx := NewValIdent(loc, v.nextIdent("zi_addr"), NewAbiTyBase(BaseLong))
+	v.appendInstruction(NewBinop(loc, BinOpAdd, addrPlusIdx, addr, idx))
 	// storew 0, addr + i
-	v.appendInstruction(NewStore(addrPlusIdx, zero))
+	v.appendInstruction(NewStore(loc, addrPlusIdx, zero))
 	// i += 4
-	v.appendInstruction(NewBinop(BinOpAdd, idx, idx, step))
+	v.appendInstruction(NewBinop(loc, BinOpAdd, idx, idx, step))
 	// goto loop
-	v.appendInstruction(NewJmp(loopLabel))
+	v.appendInstruction(NewJmp(loc, loopLabel))
 	// end:
-	v.appendInstruction(NewLabel(endLabel))
+	v.appendInstruction(NewLabel(loc, endLabel))
 }
 
 func (v *visitor) VisitAssign(a *ast.Assign) {
@@ -202,7 +203,7 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 		lhs.Expr.Accept(v)
 		addr := v.lastVal
 		// Store: storew val, addr
-		v.appendInstruction(NewStore(addr, val))
+		v.appendInstruction(NewStore(lhs.Location(), addr, val))
 	case *ast.ArrayIndex:
 		// Lower the array expression
 		lhs.Array.Accept(v)
@@ -212,24 +213,24 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 		index := v.lastVal
 		// Convert the index to long if necessary
 		if index.AbiTy.BaseTy != BaseLong {
-			tmp := NewValIdent(v.nextIdent("idx"), NewAbiTyBase(BaseLong))
-			v.appendInstruction(NewConvert(tmp, index))
+			tmp := NewValIdent(lhs.Location(), v.nextIdent("idx"), NewAbiTyBase(BaseLong))
+			v.appendInstruction(NewConvert(lhs.Location(), tmp, index))
 			index = tmp
 		}
 		// Scale the index by the element size (assume 4 bytes for int)
 		elemSize := int64(4)
-		tmpScaled := NewValIdent(v.nextIdent("idx"), index.AbiTy)
-		v.appendInstruction(NewBinop(BinOpMul, tmpScaled, index, NewValInteger(elemSize, index.AbiTy)))
+		tmpScaled := NewValIdent(lhs.Location(), v.nextIdent("idx"), index.AbiTy)
+		v.appendInstruction(NewBinop(lhs.Location(), BinOpMul, tmpScaled, index, NewValInteger(lhs.Location(), elemSize, index.AbiTy)))
 		// Compute the address: addr = arrayAddr + index * elemSize
-		v.appendInstruction(NewBinop(BinOpAdd, tmpScaled, tmpScaled, arrayAddr))
+		v.appendInstruction(NewBinop(lhs.Location(), BinOpAdd, tmpScaled, tmpScaled, arrayAddr))
 		// Store: storew val, addr
-		v.appendInstruction(NewStore(tmpScaled, val))
+		v.appendInstruction(NewStore(lhs.Location(), tmpScaled, val))
 	case *ast.VariableRef:
 		lhs.Accept(v)
 		lhsVal := v.lastVal
 		// For assignment, use Binop with add as a stand-in for move
-		zero := NewValInteger(0, val.AbiTy)
-		binopInstr := NewBinop(BinOpAdd, lhsVal, val, zero)
+		zero := NewValInteger(lhs.Location(), 0, val.AbiTy)
+		binopInstr := NewBinop(lhs.Location(), BinOpAdd, lhsVal, val, zero)
 		v.appendInstruction(binopInstr)
 	default:
 		panic("unsupported LHS in assignment")
@@ -248,7 +249,7 @@ func (v *visitor) VisitCall(c *ast.Call) {
 		}
 	}
 
-	calleeVal := NewValGlobal(ident, v.mapTypeToAbiTy(c.Type))
+	calleeVal := NewValGlobal(c.Location(), ident, v.mapTypeToAbiTy(c.Type))
 
 	// Lower arguments
 	var args []Arg
@@ -256,14 +257,14 @@ func (v *visitor) VisitCall(c *ast.Call) {
 	for _, arg := range c.Args {
 		v.lastVal = nil
 		arg.Value.Accept(v)
-		args = append(args, NewArgRegular(v.lastVal))
+		args = append(args, NewArgRegular(arg.Location(), v.lastVal))
 	}
 
 	// Create a temporary for the return value
-	retVal := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(c.Type))
+	retVal := NewValIdent(c.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(c.Type))
 
 	// Emit the Call instruction
-	call := NewCall(calleeVal, args...)
+	call := NewCall(c.Location(), calleeVal, args...)
 
 	if c.Type != nil && c.Type.Kind != ast.TypeVoid {
 		call.WithRet(retVal.Ident, v.mapTypeToAbiTy(c.Type))
@@ -276,13 +277,13 @@ func (v *visitor) VisitCall(c *ast.Call) {
 
 func (v *visitor) VisitReturn(r *ast.Return) {
 	if r.Value == nil {
-		v.appendInstruction(NewRet())
+		v.appendInstruction(NewRet(r.Location()))
 	} else {
 		v.lastVal = nil
 		r.Value.Accept(v)
 		val := v.lastVal
 
-		v.appendInstruction(NewRet(val))
+		v.appendInstruction(NewRet(r.Location(), val))
 	}
 }
 
@@ -293,18 +294,18 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 
 	switch l.Type.Kind {
 	case ast.TypeInt:
-		v.lastVal = NewValInteger(int64(l.IntValue), v.mapTypeToAbiTy(l.Type))
+		v.lastVal = NewValInteger(l.Location(), int64(l.IntValue), v.mapTypeToAbiTy(l.Type))
 	case ast.TypeBool:
 		if l.BoolValue {
-			v.lastVal = NewValInteger(1, v.mapTypeToAbiTy(l.Type))
+			v.lastVal = NewValInteger(l.Location(), 1, v.mapTypeToAbiTy(l.Type))
 		} else {
-			v.lastVal = NewValInteger(0, v.mapTypeToAbiTy(l.Type))
+			v.lastVal = NewValInteger(l.Location(), 0, v.mapTypeToAbiTy(l.Type))
 		}
 	case ast.TypeString:
 		// TODO(daniel): This does not deduplicate identical string literals. Consider interning/deduplicating.
 		ident := v.nextIdent("str")
-		v.unit.DataDefs = append(v.unit.DataDefs, NewDataDefStringZ(ident, l.StringValue))
-		v.lastVal = NewValGlobal(ident, v.mapTypeToAbiTy(l.Type))
+		v.unit.DataDefs = append(v.unit.DataDefs, NewDataDefStringZ(l.Location(), ident, l.StringValue))
+		v.lastVal = NewValGlobal(l.Location(), ident, v.mapTypeToAbiTy(l.Type))
 	default:
 		panic("unsupported literal type: " + l.Type.String())
 	}
@@ -319,7 +320,7 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 	left, leftType := v.lastVal, v.lastType
 
 	// Create a new temporary for the result
-	result := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(b.Type))
+	result := NewValIdent(b.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(b.Type))
 
 	// Handle logical operations separately using compare and jump.
 	switch b.Operation {
@@ -386,17 +387,17 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 
 			// TODO: handle other element types
 			if elemSize != 1 {
-				tmpScaled := NewValIdent(v.nextIdent("idx"), intSide.AbiTy)
-				v.appendInstruction(NewBinop(BinOpMul, tmpScaled, intSide, NewValInteger(elemSize, intSide.AbiTy)))
+				tmpScaled := NewValIdent(b.Location(), v.nextIdent("idx"), intSide.AbiTy)
+				v.appendInstruction(NewBinop(b.Location(), BinOpMul, tmpScaled, intSide, NewValInteger(b.Location(), elemSize, intSide.AbiTy)))
 				// Convert word to long
 				if tmpScaled.AbiTy.BaseTy != BaseLong {
-					tmpLong := NewValIdent(v.nextIdent("tmp"), NewAbiTyBase(BaseLong))
-					v.appendInstruction(NewConvert(tmpLong, tmpScaled))
+					tmpLong := NewValIdent(b.Location(), v.nextIdent("tmp"), NewAbiTyBase(BaseLong))
+					v.appendInstruction(NewConvert(b.Location(), tmpLong, tmpScaled))
 					tmpScaled = tmpLong
 				}
 
 				// Perform the pointer arithmetic
-				v.appendInstruction(NewBinop(irOp, result, ptrSide, tmpScaled))
+				v.appendInstruction(NewBinop(b.Location(), irOp, result, ptrSide, tmpScaled))
 				v.lastVal = result
 				v.lastType = b.Type
 				return
@@ -408,13 +409,13 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 		// If types differ, we need to extend the small one
 		if leftType.Kind == ast.TypeInt && rightType.Kind == ast.TypePointer {
 			// Extend int to pointer
-			tmp := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(rightType))
-			v.appendInstruction(NewConvert(tmp, left))
+			tmp := NewValIdent(b.Lhs.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(rightType))
+			v.appendInstruction(NewConvert(b.Lhs.Location(), tmp, left))
 			left = tmp
 			leftType = rightType // now both are pointer
 		} else if leftType.Kind == ast.TypePointer && rightType.Kind == ast.TypeInt {
-			tmp := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(leftType))
-			v.appendInstruction(NewConvert(tmp, right))
+			tmp := NewValIdent(b.Lhs.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(leftType))
+			v.appendInstruction(NewConvert(b.Rhs.Location(), tmp, right))
 			right = tmp
 			rightType = leftType // now both are pointer
 		} else {
@@ -422,7 +423,7 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 		}
 	}
 
-	v.appendInstruction(NewBinop(irOp, result, left, right))
+	v.appendInstruction(NewBinop(b.Location(), irOp, result, left, right))
 	v.lastVal = result
 	v.lastType = b.Type
 }
@@ -442,18 +443,18 @@ func (v *visitor) visitBinOpLogAnd(left *Val, b *ast.Binop, result *Val) {
 	falseLabel := v.nextLabel("false")
 	endLabel := v.nextLabel("end")
 
-	v.appendInstruction(NewJnz(left, trueLabel, falseLabel))
+	v.appendInstruction(NewJnz(b.Location(), left, trueLabel, falseLabel))
 	// @false:
-	v.appendInstruction(NewLabel(falseLabel))
-	v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0, left.AbiTy)))
-	v.appendInstruction(NewJmp(endLabel))
+	v.appendInstruction(NewLabel(b.Location(), falseLabel))
+	v.appendInstruction(NewBinop(b.Location(), BinOpAdd, result, left, NewValInteger(b.Location(), 0, left.AbiTy)))
+	v.appendInstruction(NewJmp(b.Location(), endLabel))
 	// @true:
-	v.appendInstruction(NewLabel(trueLabel))
+	v.appendInstruction(NewLabel(b.Location(), trueLabel))
 	b.Rhs.Accept(v)
 	right := v.lastVal
-	v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0, right.AbiTy)))
+	v.appendInstruction(NewBinop(b.Location(), BinOpAdd, result, right, NewValInteger(b.Location(), 0, right.AbiTy)))
 	// @end:
-	v.appendInstruction(NewLabel(endLabel))
+	v.appendInstruction(NewLabel(b.Location(), endLabel))
 }
 
 func (v *visitor) visitBinOpLogOr(left *Val, b *ast.Binop, result *Val) {
@@ -471,18 +472,18 @@ func (v *visitor) visitBinOpLogOr(left *Val, b *ast.Binop, result *Val) {
 	falseLabel := v.nextLabel("false")
 	endLabel := v.nextLabel("end")
 
-	v.appendInstruction(NewJnz(left, trueLabel, falseLabel))
+	v.appendInstruction(NewJnz(b.Location(), left, trueLabel, falseLabel))
 	// @true:
-	v.appendInstruction(NewLabel(trueLabel))
-	v.appendInstruction(NewBinop(BinOpAdd, result, left, NewValInteger(0, left.AbiTy)))
-	v.appendInstruction(NewJmp(endLabel))
+	v.appendInstruction(NewLabel(b.Location(), trueLabel))
+	v.appendInstruction(NewBinop(b.Location(), BinOpAdd, result, left, NewValInteger(b.Location(), 0, left.AbiTy)))
+	v.appendInstruction(NewJmp(b.Location(), endLabel))
 	// @false:
-	v.appendInstruction(NewLabel(falseLabel))
+	v.appendInstruction(NewLabel(b.Location(), falseLabel))
 	b.Rhs.Accept(v)
 	right := v.lastVal
-	v.appendInstruction(NewBinop(BinOpAdd, result, right, NewValInteger(0, right.AbiTy)))
+	v.appendInstruction(NewBinop(b.Location(), BinOpAdd, result, right, NewValInteger(b.Location(), 0, right.AbiTy)))
 	// @end:
-	v.appendInstruction(NewLabel(endLabel))
+	v.appendInstruction(NewLabel(b.Location(), endLabel))
 }
 
 func (v *visitor) VisitUnaryOp(u *ast.UnaryOp) {
@@ -494,9 +495,9 @@ func (v *visitor) VisitUnaryOp(u *ast.UnaryOp) {
 	case ast.UnaryOpMinus:
 		// Only support int for now
 		if operandType != nil && operandType.Kind == ast.TypeInt {
-			result := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(operandType))
-			zero := NewValInteger(0, v.mapTypeToAbiTy(operandType))
-			v.appendInstruction(NewBinop(BinOpSub, result, zero, operand))
+			result := NewValIdent(u.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(operandType))
+			zero := NewValInteger(u.Location(), 0, v.mapTypeToAbiTy(operandType))
+			v.appendInstruction(NewBinop(u.Location(), BinOpSub, result, zero, operand))
 			v.lastVal = result
 			v.lastType = operandType
 		} else {
@@ -529,21 +530,23 @@ func (v *visitor) VisitIf(iff *ast.If) {
 	// Lower the condition
 	iff.Cond.Accept(v)
 	condVal := v.lastVal
-	v.appendInstruction(NewJnz(condVal, trueLabel, falseLabel))
+	v.appendInstruction(NewJnz(iff.Cond.Location(), condVal, trueLabel, falseLabel))
 
 	// Lower the 'then' block
-	v.appendInstruction(NewLabel(trueLabel))
+	v.appendInstruction(NewLabel(iff.Then.Location(), trueLabel))
 	iff.Then.Accept(v)
-	v.appendInstruction(NewJmp(endLabel))
+	v.appendInstruction(NewJmp(iff.Then.Location(), endLabel))
 
 	// Lower the 'else' block if present
-	v.appendInstruction(NewLabel(falseLabel))
-	if iff.Else != nil {
+	if iff.Else == nil {
+		v.appendInstruction(NewLabel(iff.Location(), falseLabel))
+	} else {
+		v.appendInstruction(NewLabel(iff.Else.Location(), falseLabel))
 		iff.Else.Accept(v)
 	}
 
 	// End label for the If statement
-	v.appendInstruction(NewLabel(endLabel))
+	v.appendInstruction(NewLabel(iff.Location(), endLabel))
 }
 
 func (v *visitor) VisitFor(f *ast.For) {
@@ -569,15 +572,15 @@ func (v *visitor) VisitFor(f *ast.For) {
 
 	// Lower the condition
 	{
-		v.appendInstruction(NewLabel(startLabel))
+		v.appendInstruction(NewLabel(f.Cond.Location(), startLabel))
 		f.Cond.Accept(v)
 		condVal := v.lastVal
-		v.appendInstruction(NewJnz(condVal, bodyLabel, endLabel))
+		v.appendInstruction(NewJnz(f.Cond.Location(), condVal, bodyLabel, endLabel))
 	}
 
 	// Lower the loop body
 	{
-		v.appendInstruction(NewLabel(bodyLabel))
+		v.appendInstruction(NewLabel(f.Body.Location(), bodyLabel))
 		f.Body.Accept(v)
 
 		// Lower the post-conditions if present
@@ -585,16 +588,16 @@ func (v *visitor) VisitFor(f *ast.For) {
 			post.Accept(v)
 		}
 
-		v.appendInstruction(NewJmp(startLabel))
+		v.appendInstruction(NewJmp(f.Body.Location(), startLabel))
 	}
 
 	// End label for the For loop
-	v.appendInstruction(NewLabel(endLabel))
+	v.appendInstruction(NewLabel(f.Location(), endLabel))
 }
 
 func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {
 	// Lower a variable reference to an identifier value
-	v.lastVal = NewValIdent(Ident(vr.Ident), v.mapTypeToAbiTy(vr.Type))
+	v.lastVal = NewValIdent(vr.Location(), Ident(vr.Ident), v.mapTypeToAbiTy(vr.Type))
 	v.lastType = vr.Type
 }
 
@@ -605,8 +608,8 @@ func (v *visitor) VisitDeref(d *ast.Deref) {
 	addr := v.lastVal
 
 	// Load: %tmp =w loadw addr
-	tmp := NewValIdent(v.nextIdent("tmp"), v.mapTypeToAbiTy(d.Type))
-	v.appendInstruction(NewLoad(tmp, addr))
+	tmp := NewValIdent(d.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(d.Type))
+	v.appendInstruction(NewLoad(d.Location(), tmp, addr))
 
 	v.lastVal = tmp
 	v.lastType = d.Type
@@ -633,24 +636,24 @@ func (v *visitor) VisitArrayIndex(a *ast.ArrayIndex) {
 	}
 
 	// 4. Compute offset: idx * eleSize
-	tmpMul := NewValIdent(v.nextIdent("idx"), idx.AbiTy)
-	v.appendInstruction(NewBinop(BinOpMul, tmpMul, idx, NewValInteger(eleSize, idx.AbiTy)))
+	tmpMul := NewValIdent(a.Location(), v.nextIdent("idx"), idx.AbiTy)
+	v.appendInstruction(NewBinop(a.Location(), BinOpMul, tmpMul, idx, NewValInteger(a.Location(), eleSize, idx.AbiTy)))
 
 	// 5. Convert offset to long if needed
 	offset := tmpMul
 	if tmpMul.AbiTy.BaseTy != BaseLong {
-		tmpLong := NewValIdent(v.nextIdent("tmp"), NewAbiTyBase(BaseLong))
-		v.appendInstruction(NewConvert(tmpLong, tmpMul))
+		tmpLong := NewValIdent(a.Location(), v.nextIdent("tmp"), NewAbiTyBase(BaseLong))
+		v.appendInstruction(NewConvert(a.Location(), tmpLong, tmpMul))
 		offset = tmpLong
 	}
 
 	// 6. Compute address: base + offset
-	addr := NewValIdent(v.nextIdent("addr"), NewAbiTyBase(BaseLong))
-	v.appendInstruction(NewBinop(BinOpAdd, addr, base, offset))
+	addr := NewValIdent(a.Location(), v.nextIdent("addr"), NewAbiTyBase(BaseLong))
+	v.appendInstruction(NewBinop(a.Location(), BinOpAdd, addr, base, offset))
 
 	// 7. For r-value: load from address
-	result := NewValIdent(v.nextIdent("tmp"), NewAbiTyBase(BaseWord))
-	v.appendInstruction(NewLoad(result, addr))
+	result := NewValIdent(a.Location(), v.nextIdent("tmp"), NewAbiTyBase(BaseWord))
+	v.appendInstruction(NewLoad(a.Location(), result, addr))
 	v.lastVal = result
 	v.lastType = baseType.Elem
 }
@@ -664,10 +667,10 @@ func (v *visitor) appendInstruction(instr Instruction) {
 
 	// If the previous instruction was a Ret, we need to add a label for the new block
 	if len(v.lastInstructions) > 0 {
-		if _, ok := v.lastInstructions[len(v.lastInstructions)-1].(*Ret); ok {
+		if ret, ok := v.lastInstructions[len(v.lastInstructions)-1].(*Ret); ok {
 			// Append a label to separate instructions
 			label := v.nextLabel("block")
-			v.lastInstructions = append(v.lastInstructions, NewLabel(label))
+			v.lastInstructions = append(v.lastInstructions, NewLabel(ret.Location(), label))
 		}
 	}
 

@@ -1,10 +1,7 @@
 package analyzer
 
 import (
-	"fmt"
-
 	"github.com/corani/cubit/ast"
-	"github.com/corani/cubit/lexer"
 )
 
 // TypeChecker implements a visitor for type checking the AST.
@@ -30,10 +27,6 @@ func Check(unit *ast.CompilationUnit) error {
 
 	// TODO(daniel): improve error reporting
 	if len(tc.errors) > 0 {
-		for _, err := range tc.errors {
-			fmt.Println("Type error:", err)
-		}
-
 		return tc.errors[0] // Return the first error for now
 	}
 
@@ -98,7 +91,7 @@ func (tc *TypeChecker) VisitFuncParam(fn *ast.FuncParam) {
 		} else {
 			// Case 2: arg : int = 1 (check match)
 			if !tc.typeEqual(valueType, fn.Type) {
-				tc.errorf(fn.Location(), "type error: parameter '%s' declared as %s but default value is %s",
+				fn.Location().Errorf("parameter '%s' declared as %s but default value is %s",
 					fn.Ident, fn.Type, valueType)
 			}
 		}
@@ -134,7 +127,7 @@ func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
 	if lvalSymbol != nil {
 		if lvalSymbol.Type.Kind == ast.TypeUnknown {
 			if err := lvalSymbol.UpdateType(valType); err != nil {
-				tc.errorf(a.Location(), "type error: %s", err)
+				a.Location().Errorf("type error: %s", err)
 			}
 
 			// If LHS is a variable, we can set its type now
@@ -143,13 +136,13 @@ func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
 				lvalue.Type = lvalSymbol.Type
 			}
 		} else if !tc.typeEqual(lvalType, valType) {
-			tc.errorf(a.Location(), "type error: variable '%s' declared as %s but assigned %s",
+			a.Location().Errorf("variable '%s' declared as %s but assigned %s",
 				lvalSymbol.Name, lvalSymbol.Type, valType)
 		}
 	} else {
 		// TODO: handle pointer deref, array index, etc.
 		if lvalType != nil && lvalType.Kind != ast.TypeUnknown && !tc.typeEqual(lvalType, valType) {
-			tc.errorf(a.Location(), "type error: lvalue type %s but assigned %s", lvalType, valType)
+			a.Location().Errorf("lvalue type %s but assigned %s", lvalType, valType)
 		}
 	}
 
@@ -161,8 +154,7 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 	// Look up the function definition
 	sym, ok := tc.lookupSymbol(call.Ident)
 	if !ok || !sym.IsFunc || sym.FuncDef == nil {
-		tc.errorf(call.Location(), "call to undefined function '%s'",
-			call.Ident)
+		call.Location().Errorf("call to undefined function '%s'", call.Ident)
 		tc.lastType = &ast.Type{Kind: ast.TypeUnknown}
 
 		return
@@ -172,7 +164,7 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 
 	// Check argument count
 	if len(call.Args) != len(fnDef.Params) {
-		tc.errorf(call.Location(), "call to '%s' expects %d arguments, got %d",
+		call.Location().Errorf("call to '%s' expects %d arguments, got %d",
 			call.Ident, len(fnDef.Params), len(call.Args))
 		tc.lastType = sym.Type
 
@@ -187,7 +179,7 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 		call.Args[i].Type = argType // Set the type of the argument
 
 		if paramType != nil && paramType.Kind != ast.TypeUnknown && !tc.typeEqual(argType, paramType) {
-			tc.errorf(arg.Location(), "call to '%s': argument %d type mismatch: expected %s, got %s",
+			arg.Location().Errorf("call to '%s': argument %d type mismatch: expected %s, got %s",
 				call.Ident, i+1, paramType, argType)
 		}
 	}
@@ -220,7 +212,7 @@ func (tc *TypeChecker) VisitVariableRef(ref *ast.VariableRef) {
 		tc.lastType = sym.Type
 		tc.lastSymbol = sym
 	} else {
-		tc.errorf(ref.Location(), "undefined variable '%s'", ref.Ident)
+		ref.Location().Errorf("undefined variable '%s'", ref.Ident)
 		ref.Type = &ast.Type{Kind: ast.TypeUnknown}
 		tc.lastType = ref.Type
 		tc.lastSymbol = nil
@@ -233,7 +225,7 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 
 	unknown := func(msg string, args ...any) *ast.Type {
 		binop.Type = &ast.Type{Kind: ast.TypeUnknown}
-		tc.errorf(binop.Location(), msg, args...)
+		binop.Location().Errorf(msg, args...)
 		return binop.Type
 	}
 
@@ -311,8 +303,7 @@ func (tc *TypeChecker) VisitBinop(binop *ast.Binop) {
 				lhsType, binop.Operation, rhsType)
 		}
 	default:
-		tc.errorf(binop.Location(), "unknown binary operation: %s", binop.Operation)
-		binop.Type = &ast.Type{Kind: ast.TypeUnknown}
+		unknown("unknown binary operation: %s", binop.Operation)
 	}
 
 	tc.lastType = binop.Type
@@ -325,11 +316,11 @@ func (tc *TypeChecker) VisitUnaryOp(u *ast.UnaryOp) {
 	switch u.Operation {
 	case ast.UnaryOpMinus:
 		if u.Type == nil || u.Type.Kind != ast.TypeInt {
-			tc.errorf(u.Location(), "unary minus requires int type, got %s", u.Type)
+			u.Location().Errorf("unary minus requires int type, got %s", u.Type)
 			u.Type = &ast.Type{Kind: ast.TypeUnknown}
 		}
 	default:
-		tc.errorf(u.Location(), "unknown unary operation: %s", u.Operation)
+		u.Location().Errorf("unknown unary operation: %s", u.Operation)
 		u.Type = &ast.Type{Kind: ast.TypeUnknown}
 	}
 
@@ -347,7 +338,7 @@ func (tc *TypeChecker) VisitIf(iff *ast.If) {
 		// Type check the condition
 		condType, _ := tc.visitNode(iff.Cond)
 		if condType == nil || condType.Kind != ast.TypeBool {
-			tc.errorf(iff.Location(), "if condition must be bool, got %s", condType)
+			iff.Location().Errorf("if condition must be bool, got %s", condType)
 		}
 
 		// Type check the 'then' branch
@@ -373,7 +364,7 @@ func (tc *TypeChecker) VisitFor(f *ast.For) {
 		// Type check the condition
 		condType, _ := tc.visitNode(f.Cond)
 		if condType == nil || condType.Kind != ast.TypeBool {
-			tc.errorf(f.Location(), "for condition must be bool, got %s", condType)
+			f.Location().Errorf("for condition must be bool, got %s", condType)
 		}
 
 		// Type check the body
@@ -395,7 +386,7 @@ func (tc *TypeChecker) VisitDeref(d *ast.Deref) {
 	// Dereference does not change the type, just returns the type of the dereferenced expression
 	ref, _ := tc.visitNode(d.Expr)
 	if ref == nil || ref.Kind != ast.TypePointer {
-		tc.errorf(d.Location(), "dereference requires pointer type, got %s", ref)
+		d.Location().Errorf("dereference requires pointer type, got %s", ref)
 		d.Type = &ast.Type{Kind: ast.TypeUnknown}
 	} else {
 		d.Type = ref.Elem // Dereference returns the element type
@@ -411,14 +402,14 @@ func (tc *TypeChecker) VisitArrayIndex(a *ast.ArrayIndex) {
 	indexType, _ := tc.visitNode(a.Index)
 
 	if arrayType == nil || arrayType.Kind != ast.TypeArray {
-		tc.errorf(a.Location(), "type error: cannot index non-array type %s", arrayType)
+		a.Location().Errorf("cannot index non-array type %s", arrayType)
 		a.Type = &ast.Type{Kind: ast.TypeUnknown}
 		tc.lastType = a.Type
 		return
 	}
 
 	if indexType == nil || indexType.Kind != ast.TypeInt {
-		tc.errorf(a.Location(), "type error: array index must be int, got %s", indexType)
+		a.Location().Errorf("array index must be int, got %s", indexType)
 	}
 
 	a.Type = arrayType.Elem
@@ -448,16 +439,4 @@ func (tc *TypeChecker) typeEqual(a, b *ast.Type) bool {
 		return tc.typeEqual(a.Elem, b.Elem)
 	}
 	return true
-}
-
-// Helper to record errors
-func (tc *TypeChecker) errorf(location lexer.Location, format string, args ...any) {
-	fmt.Printf("%s: [ERRO] "+format+"\n", append([]any{location}, args...)...)
-
-	err := fmt.Errorf("%s: "+format, append([]any{location}, args...)...)
-	tc.errors = append(tc.errors, err)
-}
-
-func (tc *TypeChecker) infof(location lexer.Location, format string, args ...any) {
-	fmt.Printf("%s: [INFO] "+format+"\n", append([]any{location}, args...)...)
 }

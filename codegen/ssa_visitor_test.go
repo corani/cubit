@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/corani/cubit/ir"
+	"github.com/corani/cubit/lexer"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,42 +17,54 @@ func TestSSAVisitor_CompilationUnit(t *testing.T) {
 func TestAST_CompilationUnit(t *testing.T) {
 	t.Parallel()
 
+	loc := lexer.Location{
+		Line:     1,
+		Column:   1,
+		Filename: "test.in",
+	}
+
 	unit := ir.NewCompilationUnit()
+	unit.WithPackage("test", loc)
 
 	unit.WithDataDefs(
-		ir.NewDataDefStringZ(ir.Ident("data_hello0"), `Hello from test-%d!\n`))
+		ir.NewDataDefStringZ(loc, ir.Ident("data_hello0"), `Hello from test-%d!\n`))
 
 	unit.WithFuncDefs(
-		ir.NewFuncDef(ir.Ident("hello"),
-			ir.NewParamRegular(ir.NewAbiTyBase(ir.BaseWord), ir.Ident("arg")),
+		ir.NewFuncDef(loc, ir.Ident("hello"),
+			ir.NewParamRegular(loc, ir.NewAbiTyBase(ir.BaseWord), ir.Ident("arg")),
 		).
 			WithBlocks(ir.Block{
 				Label: "start",
 				Instructions: []ir.Instruction{
-					ir.NewCall(ir.NewValGlobal(ir.Ident("printf"), ir.NewAbiTyBase(ir.BaseLong)),
-						ir.NewArgRegular(ir.NewValGlobal(ir.Ident("data_hello0"), ir.NewAbiTyBase(ir.BaseLong))),
-						ir.NewArgRegular(ir.NewValIdent(ir.Ident("arg"), ir.NewAbiTyBase(ir.BaseWord)))),
-					ir.NewRet(),
+					ir.NewCall(loc, ir.NewValGlobal(loc, ir.Ident("printf"), ir.NewAbiTyBase(ir.BaseLong)),
+						ir.NewArgRegular(loc, ir.NewValGlobal(loc, ir.Ident("data_hello0"), ir.NewAbiTyBase(ir.BaseLong))),
+						ir.NewArgRegular(loc, ir.NewValIdent(loc, ir.Ident("arg"), ir.NewAbiTyBase(ir.BaseWord)))),
+					ir.NewRet(loc),
 				},
 			}),
-		ir.NewFuncDef(ir.Ident("main")).
-			WithLinkage(ir.NewLinkageExport()).
+		ir.NewFuncDef(loc, ir.Ident("main")).
+			WithLinkage(ir.NewLinkageExport(loc)).
 			WithRetTy(ir.NewAbiTyBase(ir.BaseWord)).
 			WithBlocks(ir.Block{
 				Label: "start",
 				Instructions: []ir.Instruction{
-					ir.NewCall(ir.NewValGlobal(ir.Ident("hello"), ir.NewAbiTyBase(ir.BaseWord)),
-						ir.NewArgRegular(ir.NewValInteger(33, ir.NewAbiTyBase(ir.BaseWord)))),
-					ir.NewRet(ir.NewValInteger(0, ir.NewAbiTyBase(ir.BaseWord))),
+					ir.NewCall(loc, ir.NewValGlobal(loc, ir.Ident("hello"), ir.NewAbiTyBase(ir.BaseWord)),
+						ir.NewArgRegular(loc, ir.NewValInteger(loc, 33, ir.NewAbiTyBase(ir.BaseWord)))),
+					ir.NewRet(loc, ir.NewValInteger(loc, 0, ir.NewAbiTyBase(ir.BaseWord))),
 				},
 			}),
 	)
 
-	expected := `function $hello(w %arg) {
+	expected := `# package test (test.in:1:1)
+
+# test.in:1:1
+function $hello(w %arg) {
 @start
 	call $printf(l $data_hello0, w %arg)
 	ret
 }
+
+# test.in:1:1
 export function w $main() {
 @start
 	call $hello(w 33)
@@ -69,6 +82,12 @@ data $data_hello0 = { b "Hello from test-%d!\n", b 0 }
 func TestAST_TypeDef(t *testing.T) {
 	t.Parallel()
 
+	loc := lexer.Location{
+		Line:     1,
+		Column:   1,
+		Filename: "test.in",
+	}
+
 	tt := []struct {
 		name     string
 		input    ir.TypeDef
@@ -76,7 +95,7 @@ func TestAST_TypeDef(t *testing.T) {
 	}{
 		{
 			name: "four floats",
-			input: ir.NewTypeDefRegular(ir.Ident("fourfloats"),
+			input: ir.NewTypeDefRegular(loc, ir.Ident("fourfloats"),
 				ir.NewSubTyExtSize(ir.ExtSingle, 1),
 				ir.NewSubTyExtSize(ir.ExtSingle, 1),
 				ir.NewSubTyExtSize(ir.ExtDouble, 1),
@@ -86,7 +105,7 @@ func TestAST_TypeDef(t *testing.T) {
 		},
 		{
 			name: "onebytemanywords",
-			input: ir.NewTypeDefRegular(ir.Ident("onebytemanywords"),
+			input: ir.NewTypeDefRegular(loc, ir.Ident("onebytemanywords"),
 				ir.NewSubTyExtSize(ir.ExtByte, 1),
 				ir.NewSubTyExtSize(ir.ExtWord, 100),
 			),
@@ -94,7 +113,7 @@ func TestAST_TypeDef(t *testing.T) {
 		},
 		{
 			name: "cryptovector",
-			input: ir.NewTypeDefRegular(ir.Ident("cryptovector"),
+			input: ir.NewTypeDefRegular(loc, ir.Ident("cryptovector"),
 				ir.NewSubTyExtSize(ir.ExtWord, 4),
 			).
 				WithAlign(16),
@@ -102,7 +121,7 @@ func TestAST_TypeDef(t *testing.T) {
 		},
 		{
 			name: "union",
-			input: ir.NewTypeDefUnion(ir.Ident("union"),
+			input: ir.NewTypeDefUnion(loc, ir.Ident("union"),
 				[]ir.SubTySize{ir.NewSubTyExtSize(ir.ExtByte, 1)},
 				[]ir.SubTySize{ir.NewSubTyExtSize(ir.ExtSingle, 1)},
 			),
@@ -110,7 +129,7 @@ func TestAST_TypeDef(t *testing.T) {
 		},
 		{
 			name: "opaque",
-			input: ir.NewTypeDefOpaque(ir.Ident("opaque"), 32).
+			input: ir.NewTypeDefOpaque(loc, ir.Ident("opaque"), 32).
 				WithAlign(16),
 			expected: "type :opaque = align 16 { 32 }",
 		},
@@ -131,6 +150,12 @@ func TestAST_TypeDef(t *testing.T) {
 func TestAST_DataDef(t *testing.T) {
 	t.Parallel()
 
+	loc := lexer.Location{
+		Line:     1,
+		Column:   1,
+		Filename: "test.in",
+	}
+
 	tt := []struct {
 		name     string
 		input    ir.DataDef
@@ -138,30 +163,30 @@ func TestAST_DataDef(t *testing.T) {
 	}{
 		{
 			name: "three words and a byte",
-			input: ir.NewDataDef(ir.Ident("a"),
-				ir.NewDataInitExt(ir.ExtWord,
-					ir.NewDataItemConst(ir.NewConstInteger(1)),
-					ir.NewDataItemConst(ir.NewConstInteger(2)),
-					ir.NewDataItemConst(ir.NewConstInteger(3))),
-				ir.NewDataInitExt(ir.ExtByte,
-					ir.NewDataItemConst(ir.NewConstInteger(0))),
+			input: ir.NewDataDef(loc, ir.Ident("a"),
+				ir.NewDataInitExt(loc, ir.ExtWord,
+					ir.NewDataItemConst(loc, ir.NewConstInteger(loc, 1)),
+					ir.NewDataItemConst(loc, ir.NewConstInteger(loc, 2)),
+					ir.NewDataItemConst(loc, ir.NewConstInteger(loc, 3))),
+				ir.NewDataInitExt(loc, ir.ExtByte,
+					ir.NewDataItemConst(loc, ir.NewConstInteger(loc, 0))),
 			),
 			expected: "data $a = { w 1 2 3, b 0 }",
 		},
 		{
 			name: "a thousand zero initialized bytes",
-			input: ir.NewDataDef(ir.Ident("b"),
-				ir.NewDataInitZero(1000),
+			input: ir.NewDataDef(loc, ir.Ident("b"),
+				ir.NewDataInitZero(loc, 1000),
 			),
 			expected: "data $b = { z 1000 }",
 		},
 		{
 			name: "an object pointing to itself",
-			input: ir.NewDataDef(ir.Ident("c"),
-				ir.NewDataInitExt(ir.ExtLong,
-					ir.NewDataItemConst(ir.NewConstInteger(-1))),
-				ir.NewDataInitExt(ir.ExtLong,
-					ir.NewDataItemSymbol(ir.Ident("c"), 0)),
+			input: ir.NewDataDef(loc, ir.Ident("c"),
+				ir.NewDataInitExt(loc, ir.ExtLong,
+					ir.NewDataItemConst(loc, ir.NewConstInteger(loc, -1))),
+				ir.NewDataInitExt(loc, ir.ExtLong,
+					ir.NewDataItemSymbol(loc, ir.Ident("c"), 0)),
 			),
 			expected: "data $c = { l -1, l $c }",
 		},
@@ -182,6 +207,12 @@ func TestAST_DataDef(t *testing.T) {
 func TestAST_FuncDef(t *testing.T) {
 	t.Parallel()
 
+	loc := lexer.Location{
+		Line:     1,
+		Column:   1,
+		Filename: "test.in",
+	}
+
 	tt := []struct {
 		name     string
 		input    ir.FuncDef
@@ -189,23 +220,23 @@ func TestAST_FuncDef(t *testing.T) {
 	}{
 		{
 			name: "add",
-			input: ir.NewFuncDef(ir.Ident("addbyte"),
-				ir.NewParamRegular(ir.NewAbiTyBase(ir.BaseWord), ir.Ident("a")),
-				ir.NewParamRegular(ir.NewAbiTySubW(ir.SubWSB), ir.Ident("b")),
+			input: ir.NewFuncDef(loc, ir.Ident("addbyte"),
+				ir.NewParamRegular(loc, ir.NewAbiTyBase(ir.BaseWord), ir.Ident("a")),
+				ir.NewParamRegular(loc, ir.NewAbiTySubW(ir.SubWSB), ir.Ident("b")),
 			).
 				WithRetTy(ir.NewAbiTyBase(ir.BaseWord)),
-			expected: "function w $addbyte(w %a, sb %b) {}",
+			expected: "\n# test.in:1:1\nfunction w $addbyte(w %a, sb %b) {}",
 		},
 		{
 			name: "addenv",
-			input: ir.NewFuncDef(ir.Ident("add"),
-				ir.NewParamEnv(ir.Ident("e")),
-				ir.NewParamRegular(ir.NewAbiTyBase(ir.BaseWord), ir.Ident("a")),
-				ir.NewParamRegular(ir.NewAbiTyBase(ir.BaseWord), ir.Ident("b")),
+			input: ir.NewFuncDef(loc, ir.Ident("add"),
+				ir.NewParamEnv(loc, ir.Ident("e")),
+				ir.NewParamRegular(loc, ir.NewAbiTyBase(ir.BaseWord), ir.Ident("a")),
+				ir.NewParamRegular(loc, ir.NewAbiTyBase(ir.BaseWord), ir.Ident("b")),
 			).
 				WithRetTy(ir.NewAbiTyBase(ir.BaseWord)).
-				WithLinkage(ir.NewLinkageExport()),
-			expected: "export function w $add(env %e, w %a, w %b) {}",
+				WithLinkage(ir.NewLinkageExport(loc)),
+			expected: "\n# test.in:1:1\nexport function w $add(env %e, w %a, w %b) {}",
 		},
 	}
 
