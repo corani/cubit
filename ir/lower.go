@@ -25,6 +25,7 @@ type visitor struct {
 	tmpCounter       int           // for unique temp and string literal names
 	labelCounter     int
 	localSlots       map[string]*Val // variable/param name -> stack slot (function-local)
+	lvalue           bool
 }
 
 func newVisitor() *visitor {
@@ -212,48 +213,8 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 	// Lower the right-hand side expression
 	v.lastVal = nil
 	a.Value.Accept(v)
-	val := v.lastVal
 
-	// Lower the left-hand side lvalue (result in v.lastVal)
-	v.lastVal = nil
-	switch lhs := a.LHS.(type) {
-	case *ast.Deref:
-		// Lower the pointer expression
-		lhs.Expr.Accept(v)
-		addr := v.lastVal
-		// Store: storew val, addr
-		v.appendInstruction(NewStore(lhs.Location(), addr, val))
-	case *ast.ArrayIndex:
-		// Lower the array expression
-		lhs.Array.Accept(v)
-		arrayAddr := v.lastVal
-		// Compute the offset for the array index
-		lhs.Index.Accept(v)
-		index := v.lastVal
-		// Convert the index to long if necessary
-		if index.AbiTy.BaseTy != BaseLong {
-			tmp := NewValIdent(lhs.Location(), v.nextIdent("idx"), NewAbiTyBase(BaseLong))
-			v.appendInstruction(NewConvert(lhs.Location(), tmp, index))
-			index = tmp
-		}
-		// Scale the index by the element size (assume 4 bytes for int)
-		elemSize := int64(4)
-		tmpScaled := NewValIdent(lhs.Location(), v.nextIdent("idx"), index.AbiTy)
-		v.appendInstruction(NewBinop(lhs.Location(), BinOpMul, tmpScaled, index, NewValInteger(lhs.Location(), elemSize, index.AbiTy)))
-		// Compute the address: addr = arrayAddr + index * elemSize
-		v.appendInstruction(NewBinop(lhs.Location(), BinOpAdd, tmpScaled, tmpScaled, arrayAddr))
-		// Store: storew val, addr
-		v.appendInstruction(NewStore(lhs.Location(), tmpScaled, val))
-	case *ast.VariableRef:
-		// Assignment to a variable or parameter: always store to its slot
-		if slot, ok := v.localSlots[lhs.Ident]; ok {
-			v.appendInstruction(NewStore(lhs.Location(), slot, val))
-			return
-		}
-		panic("assignment to undeclared variable: " + lhs.Ident)
-	default:
-		panic("unsupported LHS in assignment")
-	}
+	v.acceptLValue(a.LHS)
 }
 
 func (v *visitor) VisitCall(c *ast.Call) {
@@ -635,73 +596,134 @@ func (v *visitor) VisitFor(f *ast.For) {
 }
 
 func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {
-	// Always load from the stack slot for both parameters and locals
-	if slot, ok := v.localSlots[vr.Ident]; ok {
-		// Load the value from the slot
-		tmp := NewValIdent(vr.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(vr.Type))
-		v.appendInstruction(NewLoad(vr.Location(), tmp, slot))
-		v.lastVal = tmp
-		v.lastType = vr.Type
-		return
+	if v.lvalue {
+		val := v.lastVal
+		v.lvalue = false
+
+		// Assignment to a variable or parameter: always store to its slot
+		if slot, ok := v.localSlots[vr.Ident]; ok {
+			v.appendInstruction(NewStore(vr.Location(), slot, val))
+			return
+		}
+
+		panic("assignment to undeclared variable: " + vr.Ident)
+	} else {
+		// Always load from the stack slot for both parameters and locals
+		if slot, ok := v.localSlots[vr.Ident]; ok {
+			// Load the value from the slot
+			tmp := NewValIdent(vr.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(vr.Type))
+			v.appendInstruction(NewLoad(vr.Location(), tmp, slot))
+			v.lastVal = tmp
+			v.lastType = vr.Type
+			return
+		}
+
+		panic("reference to undeclared variable: " + vr.Ident)
 	}
-	panic("reference to undeclared variable: " + vr.Ident)
 }
 
 // VisitDeref handles pointer dereference expressions
 func (v *visitor) VisitDeref(d *ast.Deref) {
-	// Lower the pointer expression
-	d.Expr.Accept(v)
-	addr := v.lastVal
+	if v.lvalue {
+		val := v.lastVal
+		v.lvalue = false // can't have lvalue in the expression
 
-	// Load: %tmp =w loadw addr
-	tmp := NewValIdent(d.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(d.Type))
-	v.appendInstruction(NewLoad(d.Location(), tmp, addr))
+		// Lower the pointer expression
+		d.Expr.Accept(v)
+		addr := v.lastVal
 
-	v.lastVal = tmp
-	v.lastType = d.Type
+		// Store: storew val, addr
+		v.appendInstruction(NewStore(d.Location(), addr, val))
+	} else {
+		// Lower the pointer expression
+		d.Expr.Accept(v)
+		addr := v.lastVal
+
+		// Load: %tmp =w loadw addr
+		tmp := NewValIdent(d.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(d.Type))
+		v.appendInstruction(NewLoad(d.Location(), tmp, addr))
+
+		v.lastVal = tmp
+		v.lastType = d.Type
+	}
 }
 
 func (v *visitor) VisitArrayIndex(a *ast.ArrayIndex) {
-	// Lower array indexing: compute address and load value
-	// 1. Lower base (array) expression
-	a.Array.Accept(v)
-	base := v.lastVal
-	baseType := v.lastType
+	if v.lvalue {
+		val := v.lastVal
+		v.lvalue = false // can't have lvalue in the array index
 
-	// 2. Lower index expression
-	a.Index.Accept(v)
-	idx := v.lastVal
+		// Lower the array expression
+		a.Array.Accept(v)
+		arrayAddr := v.lastVal
 
-	// 3. Compute element size
-	eleSize := int64(4) // default to 4 for int
-	if baseType != nil && baseType.Kind == ast.TypeArray && baseType.Elem != nil {
-		if baseType.Elem.Kind == ast.TypeInt {
-			eleSize = 4
+		// Compute the offset for the array index
+		a.Index.Accept(v)
+		index := v.lastVal
+
+		// Convert the index to long if necessary
+		if index.AbiTy.BaseTy != BaseLong {
+			tmp := NewValIdent(a.Location(), v.nextIdent("idx"), NewAbiTyBase(BaseLong))
+			v.appendInstruction(NewConvert(a.Location(), tmp, index))
+			index = tmp
 		}
-		// TODO: handle other element types
+
+		// Scale the index by the element size (assume 4 bytes for int)
+		elemSize := int64(4)
+		tmpScaled := NewValIdent(a.Location(), v.nextIdent("idx"), index.AbiTy)
+		v.appendInstruction(NewBinop(a.Location(), BinOpMul, tmpScaled, index, NewValInteger(a.Location(), elemSize, index.AbiTy)))
+		// Compute the address: addr = arrayAddr + index * elemSize
+		v.appendInstruction(NewBinop(a.Location(), BinOpAdd, tmpScaled, tmpScaled, arrayAddr))
+		// Store: storew val, addr
+		v.appendInstruction(NewStore(a.Location(), tmpScaled, val))
+	} else {
+		// Lower array indexing: compute address and load value
+		// 1. Lower base (array) expression
+		a.Array.Accept(v)
+		base := v.lastVal
+		baseType := v.lastType
+
+		// 2. Lower index expression
+		a.Index.Accept(v)
+		idx := v.lastVal
+
+		// 3. Compute element size
+		eleSize := int64(4) // default to 4 for int
+		if baseType != nil && baseType.Kind == ast.TypeArray && baseType.Elem != nil {
+			if baseType.Elem.Kind == ast.TypeInt {
+				eleSize = 4
+			}
+			// TODO: handle other element types
+		}
+
+		// 4. Compute offset: idx * eleSize
+		tmpMul := NewValIdent(a.Location(), v.nextIdent("idx"), idx.AbiTy)
+		v.appendInstruction(NewBinop(a.Location(), BinOpMul, tmpMul, idx, NewValInteger(a.Location(), eleSize, idx.AbiTy)))
+
+		// 5. Convert offset to long if needed
+		offset := tmpMul
+		if tmpMul.AbiTy.BaseTy != BaseLong {
+			tmpLong := NewValIdent(a.Location(), v.nextIdent("tmp"), NewAbiTyBase(BaseLong))
+			v.appendInstruction(NewConvert(a.Location(), tmpLong, tmpMul))
+			offset = tmpLong
+		}
+
+		// 6. Compute address: base + offset
+		addr := NewValIdent(a.Location(), v.nextIdent("addr"), NewAbiTyBase(BaseLong))
+		v.appendInstruction(NewBinop(a.Location(), BinOpAdd, addr, base, offset))
+
+		// 7. For r-value: load from address
+		result := NewValIdent(a.Location(), v.nextIdent("tmp"), NewAbiTyBase(BaseWord))
+		v.appendInstruction(NewLoad(a.Location(), result, addr))
+		v.lastVal = result
+		v.lastType = baseType.Elem
 	}
+}
 
-	// 4. Compute offset: idx * eleSize
-	tmpMul := NewValIdent(a.Location(), v.nextIdent("idx"), idx.AbiTy)
-	v.appendInstruction(NewBinop(a.Location(), BinOpMul, tmpMul, idx, NewValInteger(a.Location(), eleSize, idx.AbiTy)))
-
-	// 5. Convert offset to long if needed
-	offset := tmpMul
-	if tmpMul.AbiTy.BaseTy != BaseLong {
-		tmpLong := NewValIdent(a.Location(), v.nextIdent("tmp"), NewAbiTyBase(BaseLong))
-		v.appendInstruction(NewConvert(a.Location(), tmpLong, tmpMul))
-		offset = tmpLong
-	}
-
-	// 6. Compute address: base + offset
-	addr := NewValIdent(a.Location(), v.nextIdent("addr"), NewAbiTyBase(BaseLong))
-	v.appendInstruction(NewBinop(a.Location(), BinOpAdd, addr, base, offset))
-
-	// 7. For r-value: load from address
-	result := NewValIdent(a.Location(), v.nextIdent("tmp"), NewAbiTyBase(BaseWord))
-	v.appendInstruction(NewLoad(a.Location(), result, addr))
-	v.lastVal = result
-	v.lastType = baseType.Elem
+func (v *visitor) acceptLValue(node interface{ Accept(ast.Visitor) }) {
+	v.lvalue = true
+	node.Accept(v)
+	v.lvalue = false
 }
 
 func (v *visitor) appendInstruction(instr Instruction) {
