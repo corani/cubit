@@ -353,24 +353,61 @@ func (v *SsaGen) VisitJnz(j *ir.Jnz) string {
 
 // Implements QBE-style load: %ret =w loadw %addr
 func (v *SsaGen) VisitLoad(l *ir.Load) string {
-	// For now, always use 'w' (word) as the type suffix. Adjust as needed for other types.
-	// QBE: %ret =w loadw %addr
+	// QBE: %ret =<type> load<suffix> %addr
 	ret := v.VisitVal(l.Ret)
 	addr := v.VisitVal(l.Addr)
+	typeStr := v.VisitAbiTy(l.Ret.AbiTy)
 
-	// TODO(daniel): generate correct type, for now we assume 'w' (word) for the loaded value.
-	return fmt.Sprintf("%s =%s loadw %s", ret, v.VisitAbiTy(l.Ret.AbiTy), addr)
+	// Determine the correct load instruction suffix based on the type
+	loadInstr := "loadw" // default
+	switch typeStr {
+	case "w":
+		loadInstr = "loadw"
+	case "l":
+		loadInstr = "loadl"
+	case "s":
+		loadInstr = "loads"
+	case "d":
+		loadInstr = "loadd"
+	case "sb":
+		loadInstr = "loadsb"
+	case "ub":
+		loadInstr = "loadub"
+	case "sh":
+		loadInstr = "loadsh"
+	case "uh":
+		loadInstr = "loaduh"
+		// Add more as needed for other types
+	}
+
+	return fmt.Sprintf("%s =%s %s %s", ret, typeStr, loadInstr, addr)
 }
 
 // Implements QBE-style store: storew %val, %addr
 func (v *SsaGen) VisitStore(s *ir.Store) string {
-	// For now, always use 'w' (word) as the type suffix. Adjust as needed for other types.
-	// QBE: storew %val, %addr
+	// QBE: store<suffix> %val, %addr
 	val := v.VisitVal(s.Val)
 	addr := v.VisitVal(s.Addr)
+	typeStr := v.VisitAbiTy(s.Val.AbiTy)
 
-	// TODO(daniel): generate correct type, for now we assume 'w' (word) for the loaded value.
-	return fmt.Sprintf("storew %s, %s", val, addr)
+	storeInstr := "storew" // default
+	switch typeStr {
+	case "w":
+		storeInstr = "storew"
+	case "l":
+		storeInstr = "storel"
+	case "s":
+		storeInstr = "stores"
+	case "d":
+		storeInstr = "stored"
+	case "sb", "ub":
+		storeInstr = "storeb"
+	case "sh", "uh":
+		storeInstr = "storeh"
+		// Add more as needed for other types
+	}
+
+	return fmt.Sprintf("%s %s, %s", storeInstr, val, addr)
 }
 
 func (v *SsaGen) VisitConvert(c *ir.Convert) string {
@@ -383,10 +420,35 @@ func (v *SsaGen) VisitConvert(c *ir.Convert) string {
 }
 
 func (v *SsaGen) VisitAlloc(a *ir.Alloc) string {
-	// Dummy implementation for Alloc; QBE: %ret =l alloc4 %size
-	// TODO: implement correct type and size handling
+	// QBE: %ret =l allocN size, where N is the alignment, and result is always a pointer (long)
 	ret := v.VisitVal(a.Ret)
 	size := v.VisitVal(a.Size)
+	align := 4 // default alignment
 
-	return fmt.Sprintf("%s =l alloc4 %s", ret, size)
+	// Determine alignment based on the AbiTy of the allocated type
+	switch t := a.Ret.AbiTy; t.Type {
+	case ir.AbiTyBase:
+		switch t.BaseTy {
+		case ir.BaseWord:
+			align = 4
+		case ir.BaseLong:
+			align = 8
+		case ir.BaseSingle:
+			align = 4
+		case ir.BaseDouble:
+			align = 8
+		}
+	case ir.AbiTySubW:
+		switch t.SubWTy {
+		case "sb", "ub":
+			align = 1
+		case "sh", "uh":
+			align = 2
+		case "sw", "uw":
+			align = 4
+		}
+		// Add more cases as needed for other types
+	}
+
+	return fmt.Sprintf("%s =l alloc%d %s", ret, align, size)
 }
