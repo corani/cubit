@@ -414,9 +414,67 @@ func (v *SsaGen) VisitConvert(c *ir.Convert) string {
 	ret := v.VisitVal(c.Ret)
 	val := v.VisitVal(c.Val)
 
-	// TODO(daniel): generate correct type, for now we assume 'l' (long) for the result, and
-	// 'sw' (signed word) for the input value.
-	return fmt.Sprintf("%s =l extsw %s", ret, val)
+	// Determine the correct conversion instruction based on the result and input types
+	retType := v.VisitAbiTy(c.Ret.AbiTy)
+	valType := v.VisitAbiTy(c.Val.AbiTy)
+
+	convertInstr := "" // e.g., extsw, extub, truncd, etc.
+
+	// Handle integer sign/zero extension and truncation
+	switch {
+	// Sign-extend subword to word/long
+	case retType == "l" && valType == "w":
+		convertInstr = "extsw"
+	case retType == "l" && valType == "sb":
+		convertInstr = "extsb"
+	case retType == "l" && valType == "ub":
+		convertInstr = "extub"
+	case retType == "l" && valType == "sh":
+		convertInstr = "extsh"
+	case retType == "l" && valType == "uh":
+		convertInstr = "extuh"
+	// Truncate double to single
+	case retType == "s" && valType == "d":
+		convertInstr = "truncd"
+	// Extend single to double
+	case retType == "d" && valType == "s":
+		convertInstr = "exts"
+	// Integer to float/double
+	case (retType == "s" || retType == "d") && (valType == "w" || valType == "l"):
+		if retType == "s" {
+			if valType == "w" {
+				convertInstr = "swtof"
+			} else {
+				convertInstr = "sltof"
+			}
+		} else {
+			if valType == "w" {
+				convertInstr = "uwtof"
+			} else {
+				convertInstr = "ultof"
+			}
+		}
+	// Float/double to integer
+	case (retType == "w" || retType == "l") && (valType == "s" || valType == "d"):
+		if valType == "s" {
+			if retType == "w" {
+				convertInstr = "stosi"
+			} else {
+				convertInstr = "stoui"
+			}
+		} else {
+			if retType == "w" {
+				convertInstr = "dtosi"
+			} else {
+				convertInstr = "dtoui"
+			}
+		}
+	// Default: sign-extend word to long
+	default:
+		convertInstr = "extsw"
+	}
+
+	return fmt.Sprintf("%s =%s %s %s", ret, retType, convertInstr, val)
 }
 
 func (v *SsaGen) VisitAlloc(a *ir.Alloc) string {
