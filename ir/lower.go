@@ -24,6 +24,7 @@ type visitor struct {
 	lastInstructions []Instruction // holds the result of lowering a body
 	tmpCounter       int           // for unique temp and string literal names
 	labelCounter     int
+	localSlots       map[string]*Val // variable/param name -> stack slot (function-local)
 }
 
 func newVisitor() *visitor {
@@ -65,6 +66,7 @@ func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
 
 	// Lower parameters using VisitFuncParam
 	var params []*Param
+	v.localSlots = make(map[string]*Val) // function-local slot map
 
 	for _, param := range fd.Params {
 		v.lastParam = nil
@@ -93,12 +95,36 @@ func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
 		irFunc = irFunc.WithLinkage(NewLinkageExport(fd.Location()))
 	}
 
+	// --- Stack-allocate all parameters at function entry ---
+	var paramInitInstrs []Instruction
+	for _, param := range params {
+		// Create a stack slot for the parameter
+		slotName := Ident(string(param.Ident) + "_slot")
+		slotVal := NewValIdent(param.Loc, slotName, NewAbiTyBase(BaseLong))
+		// Assume 4 bytes for int/bool, 8 for long/pointer
+		var size int64 = 4
+		switch param.AbiTy.BaseTy {
+		case BaseLong:
+			size = 8
+		case BaseWord:
+			size = 4
+			// Add more cases as needed
+		}
+		sizeVal := NewValInteger(param.Loc, size, NewAbiTyBase(BaseLong))
+		paramInitInstrs = append(paramInitInstrs, NewAlloc(param.Loc, slotVal, sizeVal))
+		// Store the incoming parameter value into the slot
+		paramVal := NewValIdent(param.Loc, param.Ident, param.AbiTy)
+		paramInitInstrs = append(paramInitInstrs, NewStore(param.Loc, slotVal, paramVal))
+		v.localSlots[string(param.Ident)] = slotVal
+	}
+
 	// Lower function body (blocks)
 	if fd.Body != nil {
 		fd.Body.Accept(v)
-
+		// Prepend paramInitInstrs to the function's instructions
+		allInstrs := append(paramInitInstrs, v.lastInstructions...)
 		irFunc = irFunc.WithBlocks(
-			NewBlock(fd.Body.Location(), "start", v.lastInstructions))
+			NewBlock(fd.Body.Location(), "start", allInstrs))
 	}
 
 	v.unit.FuncDefs = append(v.unit.FuncDefs, irFunc)
@@ -116,9 +142,11 @@ func (v *visitor) VisitBody(b *ast.Body) {
 
 // VisitDeclare handles variable declarations (no IR emitted, but needed for IR lowering).
 func (v *visitor) VisitDeclare(d *ast.Declare) {
-	// Lower array declarations to stack allocation if type is array
+	// Stack-allocate all locals (scalars and arrays)
+	var size int64 = 4
+	abiTy := v.mapTypeToAbiTy(d.Type)
 	if d.Type != nil && d.Type.Kind == ast.TypeArray {
-		size := int64(1)
+		size = 1
 		tmpType := d.Type
 		for tmpType != nil && tmpType.Kind == ast.TypeArray {
 			size *= int64(tmpType.Size)
@@ -126,16 +154,17 @@ func (v *visitor) VisitDeclare(d *ast.Declare) {
 		}
 		// Assume only int arrays for now (4 bytes per int)
 		eleSize := int64(4)
-		totalBytes := size * eleSize
-		sizeVal := NewValInteger(d.Location(), totalBytes, NewAbiTyBase(BaseLong))
-		retVal := NewValIdent(d.Location(), Ident(d.Ident), NewAbiTyBase(BaseLong))
-		v.appendInstruction(NewAlloc(d.Location(), retVal, sizeVal))
-		// No zero-initialization here; handled by VisitLiteral if needed
-		v.lastVal = retVal
-		v.lastType = d.Type
-	} else {
-		// No IR emitted for non-array declarations (handled by Assign if initialized)
+		size *= eleSize
+	} else if abiTy.BaseTy == BaseLong {
+		size = 8
 	}
+	sizeVal := NewValInteger(d.Location(), size, NewAbiTyBase(BaseLong))
+	slotName := Ident(string(d.Ident) + "_slot")
+	slotVal := NewValIdent(d.Location(), slotName, NewAbiTyBase(BaseLong))
+	v.appendInstruction(NewAlloc(d.Location(), slotVal, sizeVal))
+	v.localSlots[string(d.Ident)] = slotVal
+	v.lastVal = slotVal
+	v.lastType = d.Type
 }
 
 // zeroInitialize emits IR to zero out a memory region [addr, addr+size)
@@ -216,12 +245,12 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 		// Store: storew val, addr
 		v.appendInstruction(NewStore(lhs.Location(), tmpScaled, val))
 	case *ast.VariableRef:
-		lhs.Accept(v)
-		lhsVal := v.lastVal
-		// For assignment, use Binop with add as a stand-in for move
-		zero := NewValInteger(lhs.Location(), 0, val.AbiTy)
-		binopInstr := NewBinop(lhs.Location(), BinOpAdd, lhsVal, val, zero)
-		v.appendInstruction(binopInstr)
+		// Assignment to a variable or parameter: always store to its slot
+		if slot, ok := v.localSlots[lhs.Ident]; ok {
+			v.appendInstruction(NewStore(lhs.Location(), slot, val))
+			return
+		}
+		panic("assignment to undeclared variable: " + lhs.Ident)
 	default:
 		panic("unsupported LHS in assignment")
 	}
@@ -606,9 +635,16 @@ func (v *visitor) VisitFor(f *ast.For) {
 }
 
 func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {
-	// Lower a variable reference to an identifier value
-	v.lastVal = NewValIdent(vr.Location(), Ident(vr.Ident), v.mapTypeToAbiTy(vr.Type))
-	v.lastType = vr.Type
+	// Always load from the stack slot for both parameters and locals
+	if slot, ok := v.localSlots[vr.Ident]; ok {
+		// Load the value from the slot
+		tmp := NewValIdent(vr.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(vr.Type))
+		v.appendInstruction(NewLoad(vr.Location(), tmp, slot))
+		v.lastVal = tmp
+		v.lastType = vr.Type
+		return
+	}
+	panic("reference to undeclared variable: " + vr.Ident)
 }
 
 // VisitDeref handles pointer dereference expressions
