@@ -23,7 +23,7 @@ const (
 type Type struct {
 	Kind TypeKind
 	Elem *Type // non-nil if Kind == TypePointer or TypeArray
-	Size int   // if TypeArray
+	Size *Size // if TypeArray
 	Loc  lexer.Location
 }
 
@@ -31,7 +31,7 @@ func NewType(kind TypeKind, location lexer.Location) *Type {
 	return &Type{
 		Kind: kind,
 		Elem: nil,
-		Size: 0,
+		Size: nil,
 		Loc:  location,
 	}
 }
@@ -41,7 +41,7 @@ func NewPointerType(elem *Type, depth int, location lexer.Location) *Type {
 		elem = &Type{
 			Kind: TypePointer,
 			Elem: elem,
-			Size: 0,
+			Size: nil,
 			Loc:  location,
 		}
 	}
@@ -49,7 +49,7 @@ func NewPointerType(elem *Type, depth int, location lexer.Location) *Type {
 	return elem
 }
 
-func NewArrayType(elem *Type, size int, location lexer.Location) *Type {
+func NewArrayType(elem *Type, size *Size, location lexer.Location) *Type {
 	return &Type{
 		Kind: TypeArray,
 		Elem: elem,
@@ -79,7 +79,49 @@ func (t *Type) String() string {
 	case TypePointer:
 		return fmt.Sprintf("^%s", t.Elem)
 	case TypeArray:
-		return fmt.Sprintf("[%d]%s", t.Size, t.Elem)
+		return fmt.Sprintf("[%s]%s", t.Size, t.Elem)
+	default:
+		return "unknown"
+	}
+}
+
+type SizeKind int
+
+const (
+	SizeLiteral SizeKind = iota
+	SizeSymbol
+)
+
+type Size struct {
+	Kind   SizeKind
+	Value  int    // for SizeLiteral
+	Symbol string // for SizeSymbol
+}
+
+func NewSizeLiteral(value int) *Size {
+	return &Size{
+		Kind:  SizeLiteral,
+		Value: value,
+	}
+}
+
+func NewSizeSymbol(symbol string) *Size {
+	return &Size{
+		Kind:   SizeSymbol,
+		Symbol: symbol,
+	}
+}
+
+func (s *Size) String() string {
+	if s == nil {
+		return "<nil>"
+	}
+
+	switch s.Kind {
+	case SizeLiteral:
+		return fmt.Sprintf("%d", s.Value)
+	case SizeSymbol:
+		return s.Symbol
 	default:
 		return "unknown"
 	}

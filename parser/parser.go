@@ -522,7 +522,7 @@ func (p *Parser) parseType() *ast.Type {
 			loc := tok.Location // TODO(daniel): I think this is not needed?
 			size := sizeTok.NumberVal
 			typeModifier = append(typeModifier, func(inner *ast.Type) *ast.Type {
-				return ast.NewArrayType(inner, size, loc)
+				return ast.NewArrayType(inner, ast.NewSizeLiteral(size), loc)
 			})
 
 			continue

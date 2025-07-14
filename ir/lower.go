@@ -150,7 +150,12 @@ func (v *visitor) VisitDeclare(d *ast.Declare) {
 		size = 1
 		tmpType := d.Type
 		for tmpType != nil && tmpType.Kind == ast.TypeArray {
-			size *= int64(tmpType.Size)
+			// TODO: support symbolic sizes?
+			if tmpType.Size.Kind != ast.SizeLiteral {
+				panic("array size must be a literal")
+			}
+
+			size *= int64(tmpType.Size.Value)
 			tmpType = tmpType.Elem
 		}
 		// Assume only int arrays for now (4 bytes per int)
@@ -294,7 +299,12 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 		size := int64(1)
 		tmpType := l.Type
 		for tmpType != nil && tmpType.Kind == ast.TypeArray {
-			size *= int64(tmpType.Size)
+			// TODO: support symbolic sizes?
+			if tmpType.Size.Kind != ast.SizeLiteral {
+				panic("array size must be a literal")
+			}
+
+			size *= int64(tmpType.Size.Value)
 			tmpType = tmpType.Elem
 		}
 		// Assume only int arrays for now (4 bytes per int)

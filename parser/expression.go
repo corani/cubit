@@ -288,7 +288,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 			sizeLit = ast.NewIntLiteral(0, start.Location)
 		}
 
-		arrType := ast.NewArrayType(elemType, sizeLit.IntValue, start.Location)
+		arrType := ast.NewArrayType(elemType, ast.NewSizeLiteral(sizeLit.IntValue), start.Location)
 		expr = ast.NewArrayLiteral(arrType, elements, start.Location)
 	default:
 		start.Location.Errorf("unexpected token %s in expression", start.StringVal)
