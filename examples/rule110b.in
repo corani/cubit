@@ -11,6 +11,13 @@ len :: func(row: [128]int) -> int {
     return 128
 }
 
+// Future library function for array length, using generics:
+// 
+// @(pure)
+// len :: func(arr: [$N/int]$T) -> int {
+//     return N
+// }
+
 display :: func(row: [128]int) {
     for i := 0; i < len(row); i = i + 1 {
         if row[i] == 1 {

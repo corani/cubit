@@ -69,6 +69,14 @@ func (s *stringer) VisitFuncDef(fd *FuncDef) {
 	s.writef("\n\t(func %s %q\n", fd.ReturnType, fd.Ident)
 	s.writeIndented(func() {
 		s.writef("\t%s\n\t(params", fd.Attributes)
+		if len(fd.GenericParams) > 0 {
+			s.writeIndented(func() {
+				for _, param := range fd.GenericParams {
+					s.write("\n\t")
+					param.Accept(s)
+				}
+			})
+		}
 		if len(fd.Params) > 0 {
 			s.writeIndented(func() {
 				for _, param := range fd.Params {
@@ -83,6 +91,10 @@ func (s *stringer) VisitFuncDef(fd *FuncDef) {
 		s.write(")\n")
 	})
 	s.write("\t)")
+}
+
+func (s *stringer) VisitGenericParam(gp *GenericParam) {
+	s.writef("(generic %s)", gp)
 }
 
 func (s *stringer) VisitFuncParam(fp *FuncParam) {

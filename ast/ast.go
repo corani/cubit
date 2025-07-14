@@ -12,6 +12,7 @@ type Visitor interface {
 	VisitTypeDef(*TypeDef)
 	VisitDataDef(*DataDef)
 	VisitFuncDef(*FuncDef)
+	VisitGenericParam(*GenericParam)
 	VisitFuncParam(*FuncParam)
 	VisitBody(*Body)
 	VisitCall(*Call)
@@ -111,12 +112,13 @@ func (dd *DataDef) Accept(v Visitor) {
 }
 
 type FuncDef struct {
-	Ident      string // function name
-	Params     []*FuncParam
-	ReturnType *Type
-	Body       *Body
-	Attributes Attributes
-	Loc        lexer.Location
+	Ident         string          // function name
+	GenericParams []*GenericParam // generic parameters, if any
+	Params        []*FuncParam    // function parameters
+	ReturnType    *Type           // return type
+	Body          *Body           // function body
+	Attributes    Attributes      // function attributes
+	Loc           lexer.Location  // location information
 }
 
 func NewFuncDef(ident string, attributes Attributes, location lexer.Location) *FuncDef {

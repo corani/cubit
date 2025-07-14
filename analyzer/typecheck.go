@@ -81,6 +81,10 @@ func (tc *TypeChecker) VisitFuncDef(fn *ast.FuncDef) {
 	})
 }
 
+func (tc *TypeChecker) VisitGenericParam(gp *ast.GenericParam) {
+	// TODO: implementation
+}
+
 func (tc *TypeChecker) VisitFuncParam(fn *ast.FuncParam) {
 	if fn.Value != nil {
 		valueType, _ := tc.visitNode(fn.Value)

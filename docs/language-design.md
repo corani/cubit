@@ -93,19 +93,58 @@ none : Option(int) = Option.None()  // can't infer the type parameter here
 
 ---
 
+
 ## 5. Generics (Parametric Polymorphism)
 
+Generics in this language support both type and value (compile-time constant) parameters. Type parameters are written as `$T`, and value parameters must always specify their type as `$N/int`, `$FLAG/bool`, `$MODE/MyEnum`, etc. This makes parsing unambiguous and usage explicit.
+
+### Generic Structs
+
 ```odin
-// Generic struct
+// Type parameter
 Stack :: struct($T) { data: []T, len: int }
 
-// Generic function (type parameters inferred from arguments)
+// Type and value parameters
+Matrix :: struct($T, $ROWS/int, $COLS/int) {
+    data: [$ROWS][$COLS]$T
+}
+```
+
+### Generic Functions
+
+```odin
+// Type parameters
 pair :: func(a: $A, b: $B) = (a, b)
 
-// Usage with type inference
-a_stack := Stack(data: []int{1,2,3}, len: 3)
-p := pair(1, "foo") // $A=int, $B=string
+// Value parameter (array size)
+len :: func(arr: [$N/int]$T) -> int {
+    return N
+}
 ```
+
+### Usage
+
+Type and value parameters are inferred from arguments:
+
+```odin
+a_stack := Stack{data: []int{1,2,3}, len: 3}
+p := pair{1, "foo"} // $A=int, $B=string
+```
+
+You can also specify them explicitly if needed:
+
+```odin
+a_stack := Stack(int){}                 // explicit type parameter, zero-initialized
+mat := Matrix(int, 3, 3){}              // positional type and value parameters
+mat := Matrix(int, $ROWS=3, $COLS=3){}  // parameters can optionally be named
+
+len(arr: [3]int{1,2,3})     // type and value parameters inferred
+```
+
+### Notes
+- Value parameters must specify their type (e.g., `$N/int`), omitting the type is not allowed.
+- Type parameters do not have a type annotation (e.g., `$T`).
+- You can't explicitly specify type parameters for function calls, they are always inferred.
 
 ---
 

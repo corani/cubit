@@ -126,3 +126,47 @@ func (s *Size) String() string {
 		return "unknown"
 	}
 }
+
+type GenericParamKind int
+
+const (
+	GenericType GenericParamKind = iota
+	GenericValue
+)
+
+// Generic parameter struct
+type GenericParam struct {
+	Kind   GenericParamKind // GenericType or GenericValue
+	Symbol string           // without '$' prefix
+	Type   *Type            // for Kind == GenericValue
+}
+
+func (gp *GenericParam) Accept(v Visitor) {
+	v.VisitGenericParam(gp)
+}
+
+func (gp *GenericParam) String() string {
+	switch gp.Kind {
+	case GenericType:
+		return fmt.Sprintf("type $%s", gp.Symbol)
+	case GenericValue:
+		return fmt.Sprintf("value %s $%s", gp.Type, gp.Symbol)
+	default:
+		return "unknown"
+	}
+}
+
+func NewGenericParamType(symbol string) *GenericParam {
+	return &GenericParam{
+		Symbol: symbol,
+		Kind:   GenericType,
+	}
+}
+
+func NewGenericParamValue(symbol string, ty *Type) *GenericParam {
+	return &GenericParam{
+		Symbol: symbol,
+		Kind:   GenericValue,
+		Type:   ty,
+	}
+}

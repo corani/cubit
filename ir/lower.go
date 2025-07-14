@@ -131,6 +131,10 @@ func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
 	v.unit.FuncDefs = append(v.unit.FuncDefs, irFunc)
 }
 
+func (v *visitor) VisitGenericParam(gp *ast.GenericParam) {
+	// TODO: implementation
+}
+
 func (v *visitor) VisitFuncParam(fp *ast.FuncParam) {
 	v.lastParam = NewParamRegular(fp.Location(), v.mapTypeToAbiTy(fp.Type), Ident(fp.Ident))
 }
