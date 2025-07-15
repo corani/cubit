@@ -12,6 +12,7 @@ type AttrKey string
 const (
 	AttrKeyExport   AttrKey = "export"
 	AttrKeyExtern   AttrKey = "extern"
+	AttrKeyBuiltin  AttrKey = "builtin"
 	AttrKeyPrivate  AttrKey = "private"
 	AttrKeyPure     AttrKey = "pure"
 	AttrKeyLinkname AttrKey = "link_name"
@@ -21,6 +22,7 @@ const (
 var attrKeys = []AttrKey{
 	AttrKeyExport,
 	AttrKeyExtern,
+	AttrKeyBuiltin,
 	AttrKeyPrivate,
 	AttrKeyPure,
 	AttrKeyLinkname,
@@ -46,6 +48,7 @@ type AttrValueType int
 const (
 	AttrStringType AttrValueType = iota
 	AttrIntType
+	AttrBoolType
 )
 
 type AttrString string
@@ -58,6 +61,12 @@ type AttrInt int
 
 func (AttrInt) Type() AttrValueType {
 	return AttrIntType
+}
+
+type AttrBool bool
+
+func (AttrBool) Type() AttrValueType {
+	return AttrBoolType
 }
 
 type Attributes map[AttrKey]AttrValue
@@ -75,8 +84,10 @@ func (a Attributes) String() string {
 			attrs = append(attrs, fmt.Sprintf("%s=%q", k, v))
 		case AttrInt:
 			attrs = append(attrs, fmt.Sprintf("%s=%d", k, v))
+		case AttrBool:
+			attrs = append(attrs, fmt.Sprintf("%s=%t", k, v))
 		default:
-			attrs = append(attrs, string(k))
+			panic(fmt.Sprintf("unknown attribute value type: %T", v))
 		}
 	}
 

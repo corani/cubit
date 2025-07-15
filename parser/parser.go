@@ -158,7 +158,7 @@ func (p *Parser) parseAttributes(atToken lexer.Token) error {
 			tok.Location.Errorf("invalid attribute key: %s", tok.StringVal)
 		}
 
-		var value ast.AttrValue
+		value := ast.AttrValue(ast.AttrBool(true))
 
 		next, err := p.expectType(lexer.TypeAssign, lexer.TypeComma, lexer.TypeRparen)
 		if err != nil {
