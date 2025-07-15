@@ -76,7 +76,7 @@ for example in "${!examples[@]}"; do
   echo -e "${YELLOW}==> Running $example...${NC}"
 
   # Run the command with the example input
-  run_cmd ./bin/cubit -ast -ssa -tok -run "$example"
+  run_cmd ./bin/cubit -ast -ssa -run "$example"
   actual_exit_code=$?
 
   # Check the exit code

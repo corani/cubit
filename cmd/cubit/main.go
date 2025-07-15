@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/corani/cubit/analyzer"
 	"github.com/corani/cubit/codegen"
@@ -29,9 +28,8 @@ func withExt(filename, ext string) string {
 }
 
 func main() {
-	var writeTokens, writeAST, writeSSA, run, help bool
+	var writeAST, writeSSA, run, help bool
 
-	flag.BoolVar(&writeTokens, "tok", false, "write tokens to file")
 	flag.BoolVar(&writeAST, "ast", false, "write AST to file")
 	flag.BoolVar(&writeSSA, "ssa", false, "write SSA code to file")
 	flag.BoolVar(&run, "run", false, "run the compiled code")
@@ -65,7 +63,6 @@ func main() {
 		panic(fmt.Sprintf("failed to create output directory: %v", err))
 	}
 
-	tokFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".tok"))
 	astuFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".astu"))
 	asttFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".astt"))
 	ssaFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".ssa"))
@@ -88,18 +85,6 @@ func main() {
 	tokens, err := tokenizer.Tokens()
 	if err != nil {
 		panic(fmt.Sprintf("failed to tokenize: %v", err))
-	}
-
-	if writeTokens {
-		var sb strings.Builder
-
-		for _, token := range tokens {
-			fmt.Fprintln(&sb, token)
-		}
-
-		if err := os.WriteFile(tokFile, []byte(sb.String()), 0644); err != nil {
-			panic(err)
-		}
 	}
 
 	pr := parserpkg.New(tokens)
