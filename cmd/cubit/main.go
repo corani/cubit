@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,8 +11,7 @@ import (
 	"github.com/corani/cubit/analyzer"
 	"github.com/corani/cubit/codegen"
 	"github.com/corani/cubit/ir"
-	"github.com/corani/cubit/lexer"
-	parserpkg "github.com/corani/cubit/parser"
+	"github.com/corani/cubit/loader"
 )
 
 func withExt(filename, ext string) string {
@@ -69,29 +67,11 @@ func main() {
 	asmFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ".s"))
 	binFile := filepath.Join(outDir, withExt(filepath.Base(srcFile), ""))
 
-	reader, err := os.Open(srcFile)
+	ldr := loader.NewLoader()
+
+	unit, err := ldr.Load(srcFile)
 	if err != nil {
-		panic(err)
-	}
-	defer reader.Close()
-
-	scanner, err := lexer.NewScanner(srcFile, reader)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create scanner: %v", err))
-	}
-
-	tokenizer := lexer.NewLexer(scanner)
-
-	tokens, err := tokenizer.Tokens()
-	if err != nil {
-		panic(fmt.Sprintf("failed to tokenize: %v", err))
-	}
-
-	pr := parserpkg.New(tokens)
-
-	unit, err := pr.Parse()
-	if err != nil && !errors.Is(err, io.EOF) {
-		panic(fmt.Sprintf("failed to parse: %v", err))
+		panic(fmt.Sprintf("failed to load source and imports: %v", err))
 	}
 
 	if writeAST {

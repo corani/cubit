@@ -1,0 +1,7 @@
+package core
+
+@(extern)
+printf :: func(msg: string)
+
+@(builtin)
+len :: func(row: [128]int) -> int

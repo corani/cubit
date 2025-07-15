@@ -1,11 +1,7 @@
 // rule-110 implementation using arrays
 package main
 
-@(extern)
-printf :: func(msg: string)
-
-@(builtin)
-len :: func(row: [128]int) -> int
+import "core"
 
 display :: func(row: [128]int) {
     for i := 0; i < len(row); i = i + 1 {
