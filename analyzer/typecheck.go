@@ -164,12 +164,12 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 		return
 	}
 
-	fnDef := sym.FuncDef
+	call.FuncDef = sym.FuncDef
 
 	// Check argument count
-	if len(call.Args) != len(fnDef.Params) {
+	if len(call.Args) != len(call.FuncDef.Params) {
 		call.Location().Errorf("call to '%s' expects %d arguments, got %d",
-			call.Ident, len(fnDef.Params), len(call.Args))
+			call.Ident, len(call.FuncDef.Params), len(call.Args))
 		tc.lastType = sym.Type
 
 		return
@@ -178,7 +178,7 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 	// Check argument types
 	for i, arg := range call.Args {
 		argType, _ := tc.visitNode(arg.Value)
-		paramType := fnDef.Params[i].Type
+		paramType := call.FuncDef.Params[i].Type
 
 		call.Args[i].Type = argType // Set the type of the argument
 
@@ -189,7 +189,7 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 	}
 
 	// Set the type of the call to the function's return type
-	call.Type = fnDef.ReturnType
+	call.Type = call.FuncDef.ReturnType
 	tc.lastType = call.Type
 }
 

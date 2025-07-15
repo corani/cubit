@@ -320,10 +320,11 @@ func (f *For) Accept(v Visitor) {
 func (*For) isInstruction() {}
 
 type Call struct {
-	Ident string // function name
-	Type  *Type  // return type, if any
-	Args  []Arg
-	Loc   lexer.Location
+	Ident   string   // function name
+	Type    *Type    // return type, if any
+	FuncDef *FuncDef // set during type checking
+	Args    []Arg
+	Loc     lexer.Location
 }
 
 func NewCall(location lexer.Location, ident string, args ...Arg) *Call {
