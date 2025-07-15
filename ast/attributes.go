@@ -71,6 +71,11 @@ func (AttrBool) Type() AttrValueType {
 
 type Attributes map[AttrKey]AttrValue
 
+func (a Attributes) Has(key AttrKey) bool {
+	_, exists := a[key]
+	return exists
+}
+
 func (a Attributes) String() string {
 	if len(a) == 0 {
 		return "(attr)"

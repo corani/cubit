@@ -4,19 +4,8 @@ package main
 @(extern)
 printf :: func(msg: string)
 
-// Dummy len function so we don't yet have to provide a built-in or
-// library function for array length.
-@(pure)
-len :: func(row: [128]int) -> int {
-    return 128
-}
-
-// Future library function for array length, using generics:
-// 
-// @(pure)
-// len :: func(arr: [$N/int]$T) -> int {
-//     return N
-// }
+@(builtin)
+len :: func(row: [128]int) -> int
 
 display :: func(row: [128]int) {
     for i := 0; i < len(row); i = i + 1 {

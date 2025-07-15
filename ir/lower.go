@@ -227,6 +227,12 @@ func (v *visitor) VisitAssign(a *ast.Assign) {
 }
 
 func (v *visitor) VisitCall(c *ast.Call) {
+	if c.FuncDef.Attributes.Has(ast.AttrKeyBuiltin) {
+		v.visitBuiltinCall(c)
+
+		return
+	}
+
 	// Lower the callee (function name)
 	ident := Ident(c.Ident)
 

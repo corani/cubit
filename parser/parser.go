@@ -243,8 +243,9 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 	p.currentRetType = retType
 	def.ReturnType = retType
 
-	// If the function is not `extern`, we expect a body.
-	if _, ok := def.Attributes["extern"]; !ok {
+	if def.Attributes.Has(ast.AttrKeyExtern) || def.Attributes.Has(ast.AttrKeyBuiltin) {
+		// If the function is extern or builtin, we don't parse the body.
+	} else {
 		lbrace, err := p.expectType(lexer.TypeLbrace)
 		if err != nil {
 			return err // EOF
