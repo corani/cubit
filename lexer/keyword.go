@@ -22,6 +22,7 @@ const (
 	KeywordStruct   Keyword = "struct"
 	KeywordEnum     Keyword = "enum"
 	KeywordImport   Keyword = "import"
+	KeywordAs       Keyword = "as"
 	KeywordSwitch   Keyword = "switch"
 	KeywordCase     Keyword = "case"
 	KeywordDefault  Keyword = "default"
@@ -47,6 +48,7 @@ var keywords = []Keyword{
 	KeywordStruct,
 	KeywordEnum,
 	KeywordImport,
+	KeywordAs,
 	KeywordSwitch,
 	KeywordCase,
 	KeywordDefault,

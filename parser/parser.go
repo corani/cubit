@@ -58,12 +58,16 @@ func (p *Parser) Parse() (*ast.CompilationUnit, error) {
 				if err := p.parsePackage(start); err != nil {
 					return p.unit, err // EOF
 				}
+			case lexer.KeywordImport:
+				if err := p.parseImport(start); err != nil {
+					return p.unit, err // EOF
+				}
 			default:
-				start.Location.Errorf("expected package keyword, got %s",
+				start.Location.Errorf("expected keyword 'package', got %s",
 					start.StringVal)
 
 				// TODO: error recovery
-				return p.unit, fmt.Errorf("expected package keyword at %s, got %s",
+				return p.unit, fmt.Errorf("expected keyword 'package' at %s, got %s",
 					start.Location, start.StringVal)
 			}
 		case lexer.TypeIdent:
@@ -92,6 +96,54 @@ func (p *Parser) Parse() (*ast.CompilationUnit, error) {
 			}
 		}
 	}
+}
+
+func (p *Parser) parseImport(start lexer.Token) error {
+	_ = start
+
+	if p.unit.Ident == "" {
+		start.Location.Errorf("package must be defined before imports")
+
+		// error recovery: just continue parsing
+	}
+
+	pkgName, err := p.expectType(lexer.TypeString)
+	if err != nil {
+		return err // EOF
+	}
+
+	alias := pkgName.StringVal
+
+	// parse optional "as as"
+	as, err := p.peekKeyword(lexer.KeywordAs)
+	if err != nil {
+		return err // EOF
+	}
+
+	if as.Keyword == lexer.KeywordAs {
+		name, err := p.expectType(lexer.TypeIdent)
+		if err != nil {
+			return err // EOF
+		}
+
+		alias = name.StringVal
+	}
+
+	if orig, ok := p.unit.Imports[alias]; ok {
+		start.Location.Errorf("import %s already defined as %s, cannot redefine",
+			alias, orig)
+		p.unit.Loc.Infof("previous definition was here")
+
+		// error recovery: just ignore the new import.
+	} else {
+		p.unit.Imports[alias] = pkgName.StringVal
+	}
+
+	if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
+		return err // EOF
+	}
+
+	return nil
 }
 
 // parsePackage parses a package declaration.
@@ -573,6 +625,33 @@ func (p *Parser) parseBaseType() *ast.Type {
 	}
 }
 
+func (p *Parser) peekKeyword(kws ...lexer.Keyword) (lexer.Token, error) {
+	tok, err := p.peekType(lexer.TypeKeyword)
+	if err != nil {
+		return tok, err
+	}
+
+	if tok.Type != lexer.TypeKeyword {
+		// Token was not consumed in peekType
+		return tok, err
+	}
+
+	var kwnames []string
+
+	for _, kw := range kws {
+		kwnames = append(kwnames, string(kw))
+
+		if tok.Keyword == kw {
+			return tok, nil
+		}
+	}
+
+	// If we reach here, the token is not one of the expected keywords. Unread it.
+	p.index--
+
+	return tok, nil
+}
+
 // expectKeyword checks if the next token is one of the expected keywords.
 // If it is, it consumes and returns the token. Otherwise it returns the first
 // expected keyword as a fallback and records an error.
@@ -627,10 +706,7 @@ func (p *Parser) peekType(tts ...lexer.TokenType) (lexer.Token, error) {
 		return token, err
 	}
 
-	var ttnames []string
-
 	for _, tt := range tts {
-		ttnames = append(ttnames, string(tt))
 		if token.Type == tt {
 			return token, nil
 		}

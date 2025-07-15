@@ -72,7 +72,7 @@ StringList :: []string
 Color :: enum { Red, Green, Blue }
 
 // Enums (with data)
-Result :: enum(int) {
+Result :: enum {
     Ok(value: int),
     Error(msg: string, code: int)
 }
@@ -253,8 +253,8 @@ InternalType :: struct { ... }
 Imports bring in complete packages. By default, the last element of the import path is used as the prefix. Use `as` to specify an alias in case of conflicts.
 
 ```odin
-import math
-import mylib/utils
+import "math"
+import "mylib/utils"
 
 x := math.sqrt(2)
 y := utils.do_something()
@@ -262,8 +262,8 @@ y := utils.do_something()
 
 
 ```odin
-import utils
-import mylib/utils as mu
+import "utils"
+import "mylib/utils" as mu
 
 x := utils.do_something()
 y := mu.do_something_else()
