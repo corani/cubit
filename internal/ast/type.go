@@ -3,7 +3,7 @@ package ast
 import (
 	"fmt"
 
-	"github.com/corani/cubit/lexer"
+	"github.com/corani/cubit/internal/lexer"
 )
 
 // TypeKind represents the basic types in the language for type checking.

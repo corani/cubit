@@ -1,8 +1,8 @@
 package parser
 
 import (
-	"github.com/corani/cubit/ast"
-	"github.com/corani/cubit/lexer"
+	"github.com/corani/cubit/internal/ast"
+	"github.com/corani/cubit/internal/lexer"
 )
 
 func (p *Parser) parseReturn(first lexer.Token) (ast.Instruction, error) {

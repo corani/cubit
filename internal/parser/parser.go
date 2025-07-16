@@ -6,8 +6,8 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/corani/cubit/ast"
-	"github.com/corani/cubit/lexer"
+	"github.com/corani/cubit/internal/ast"
+	"github.com/corani/cubit/internal/lexer"
 )
 
 type Parser struct {

@@ -1,7 +1,7 @@
 package analyzer
 
 import (
-	"github.com/corani/cubit/ast"
+	"github.com/corani/cubit/internal/ast"
 )
 
 // TypeChecker implements a visitor for type checking the AST.

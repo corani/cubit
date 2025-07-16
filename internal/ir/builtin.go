@@ -1,6 +1,6 @@
 package ir
 
-import "github.com/corani/cubit/ast"
+import "github.com/corani/cubit/internal/ast"
 
 func (v *visitor) visitBuiltinCall(c *ast.Call) {
 	switch c.Ident {

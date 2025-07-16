@@ -1,6 +1,6 @@
 package ir
 
-import "github.com/corani/cubit/lexer"
+import "github.com/corani/cubit/internal/lexer"
 
 // Visitor defines the visitor interface for SSA code generation.
 type Visitor interface {

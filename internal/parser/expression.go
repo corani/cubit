@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/corani/cubit/ast"
-	"github.com/corani/cubit/lexer"
+	"github.com/corani/cubit/internal/ast"
+	"github.com/corani/cubit/internal/lexer"
 )
 
 // Pratt parser operator info

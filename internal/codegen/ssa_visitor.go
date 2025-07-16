@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/corani/cubit/ir"
+	"github.com/corani/cubit/internal/ir"
 )
 
 // SsaGen implements ast.Visitor and generates SSA code.

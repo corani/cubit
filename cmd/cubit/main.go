@@ -8,10 +8,10 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/corani/cubit/analyzer"
-	"github.com/corani/cubit/codegen"
-	"github.com/corani/cubit/ir"
-	"github.com/corani/cubit/loader"
+	"github.com/corani/cubit/internal/analyzer"
+	"github.com/corani/cubit/internal/codegen"
+	"github.com/corani/cubit/internal/ir"
+	"github.com/corani/cubit/internal/loader"
 )
 
 func withExt(filename, ext string) string {

@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/corani/cubit/ast"
-	"github.com/corani/cubit/lexer"
-	"github.com/corani/cubit/parser"
+	"github.com/corani/cubit/internal/ast"
+	"github.com/corani/cubit/internal/lexer"
+	"github.com/corani/cubit/internal/parser"
 )
 
 type Loader struct {

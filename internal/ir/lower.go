@@ -3,8 +3,8 @@ package ir
 import (
 	"fmt"
 
-	"github.com/corani/cubit/ast"
-	"github.com/corani/cubit/lexer"
+	"github.com/corani/cubit/internal/ast"
+	"github.com/corani/cubit/internal/lexer"
 )
 
 func Lower(unit *ast.CompilationUnit) (*CompilationUnit, error) {
@@ -77,7 +77,11 @@ func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
 		}
 	}
 
-	irFunc := NewFuncDef(fd.Location(), Ident(fd.Ident), params...)
+	irFunc := NewFuncDef(lexer.Location{
+		Filename: fd.Loc.Filename,
+		Line:     fd.Loc.Line,
+		Column:   fd.Loc.Column,
+	}, Ident(fd.Ident), params...)
 
 	if v, ok := fd.Attributes[ast.AttrKeyLinkname]; ok {
 		if v.Type() != ast.AttrStringType {

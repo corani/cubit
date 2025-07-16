@@ -3,8 +3,8 @@ package codegen
 import (
 	"testing"
 
-	"github.com/corani/cubit/ir"
-	"github.com/corani/cubit/lexer"
+	"github.com/corani/cubit/internal/ir"
+	"github.com/corani/cubit/internal/lexer"
 	"github.com/stretchr/testify/require"
 )
 

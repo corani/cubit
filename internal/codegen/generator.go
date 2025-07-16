@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/corani/cubit/ir"
+	"github.com/corani/cubit/internal/ir"
 	"modernc.org/libqbe"
 )
 
