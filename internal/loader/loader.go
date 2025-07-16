@@ -62,7 +62,7 @@ func (l *Loader) Load(filename string) (*ast.CompilationUnit, error) {
 
 		// Special-case: import "core" brings in core.in into the global namespace
 		if importPath == "core" {
-			subCU, err := l.Load("examples/core.in")
+			subCU, err := l.Load("stdlib/core/core.in")
 			if err != nil {
 				return nil, err
 			}
