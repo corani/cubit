@@ -129,15 +129,18 @@ func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
 
 	// If the lvalue is a variable, lastSymbol will be set
 	if lvalSymbol != nil {
-		if lvalSymbol.Type.Kind == ast.TypeUnknown {
-			if err := lvalSymbol.UpdateType(valType); err != nil {
-				a.Location().Errorf("type error: %s", err)
-			}
-
-			// If LHS is a variable, we can set its type now
-			switch lvalue := a.LHS.(type) {
-			case *ast.VariableRef:
-				lvalue.Type = lvalSymbol.Type
+		// If the variable type is unknown or 'any', specialize it to the assigned value's type
+		if lvalSymbol.Type.Kind == ast.TypeUnknown || lvalSymbol.Type.Kind == ast.TypeAny {
+			// Only specialize if the assigned value's type is not 'any' or unknown
+			if valType.Kind != ast.TypeAny && valType.Kind != ast.TypeUnknown {
+				if err := lvalSymbol.UpdateType(valType); err != nil {
+					a.Location().Errorf("type error: %s", err)
+				}
+				// If LHS is a variable, we can set its type now
+				switch lvalue := a.LHS.(type) {
+				case *ast.VariableRef:
+					lvalue.Type = lvalSymbol.Type
+				}
 			}
 		} else if !tc.typeEqual(lvalType, valType) {
 			a.Location().Errorf("variable '%s' declared as %s but assigned %s",
@@ -442,6 +445,10 @@ func (tc *TypeChecker) visitNode(node interface{ Accept(visitor ast.Visitor) }) 
 func (tc *TypeChecker) typeEqual(a, b *ast.Type) bool {
 	if a == nil || b == nil {
 		return a == b
+	}
+	// 'any' matches any type
+	if a.Kind == ast.TypeAny || b.Kind == ast.TypeAny {
+		return true
 	}
 	if a.Kind != b.Kind {
 		return false

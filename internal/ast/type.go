@@ -17,6 +17,7 @@ const (
 	TypeVoid
 	TypePointer
 	TypeArray
+	TypeAny
 )
 
 // Type is a recursive type structure for basic and pointer types.
@@ -76,6 +77,8 @@ func (t *Type) String() string {
 		return "string"
 	case TypeVoid:
 		return "void"
+	case TypeAny:
+		return "any"
 	case TypePointer:
 		return fmt.Sprintf("^%s", t.Elem)
 	case TypeArray:

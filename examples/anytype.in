@@ -1,0 +1,15 @@
+package main
+
+@(extern)
+printf :: func(msg: string, arg: any)
+
+@(export)
+main :: func() -> int {
+    x: any 
+    x = 42
+    
+    printf("x: %d\n", x)
+    printf("int: %d\n", 42)
+    printf("string: %s\n", "hello")
+    return 0
+}

@@ -20,6 +20,7 @@ const (
 	TypeLBracket  TokenType = "LeftBracket"  // "["
 	TypeRBracket  TokenType = "RightBracket" // "]"
 	TypeDot       TokenType = "Dot"          // "."
+	TypeDotDot    TokenType = "DotDot"       // ".." (varargs)
 	TypeComma     TokenType = "Comma"        // ","
 	TypeArrow     TokenType = "Arrow"        // "->"
 	TypeColon     TokenType = "Colon"        // ":"
@@ -51,6 +52,7 @@ const (
 var symbols = map[string]TokenType{
 	"{":  TypeLbrace,
 	"}":  TypeRbrace,
+	"..": TypeDotDot, // varargs
 	".":  TypeDot,
 	",":  TypeComma,
 	":":  TypeColon,

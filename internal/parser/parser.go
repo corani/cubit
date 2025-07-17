@@ -617,6 +617,8 @@ func (p *Parser) parseBaseType() *ast.Type {
 		return ast.NewType(ast.TypeBool, tok.Location)
 	case lexer.KeywordVoid:
 		return ast.NewType(ast.TypeVoid, tok.Location)
+	case lexer.KeywordAny:
+		return ast.NewType(ast.TypeAny, tok.Location)
 	default:
 		tok.Location.Errorf("unexpected type keyword %s", tok.Keyword)
 

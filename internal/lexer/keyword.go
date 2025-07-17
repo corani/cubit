@@ -28,6 +28,7 @@ const (
 	KeywordDefault  Keyword = "default"
 	KeywordNil      Keyword = "nil"
 	KeywordBool     Keyword = "bool"
+	KeywordAny      Keyword = "any"
 )
 
 var keywords = []Keyword{
@@ -39,6 +40,7 @@ var keywords = []Keyword{
 	KeywordPackage,
 	KeywordFalse,
 	KeywordTrue,
+	KeywordAny,
 	KeywordFor,
 	KeywordIf,
 	KeywordElse,

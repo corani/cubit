@@ -3,7 +3,7 @@ package main
 
 // Declare an external function
 @(extern, link_name="printf")
-print :: func(msg: string, arg: int)
+print :: func(msg: string, arg: any)
 
 // Define a function that calls print
 hello :: func(arg: int) {

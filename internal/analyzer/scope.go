@@ -36,21 +36,30 @@ func NewSymbolVariable(name string, ty *ast.Type, decl *ast.Declare) *Symbol {
 }
 
 func (s *Symbol) UpdateType(ty *ast.Type) error {
+	// Allow specializing from 'any' to a more specific type
 	if s.Type != nil && s.Type.Kind != ast.TypeUnknown {
-		return fmt.Errorf("symbol %s already has a type: %s", s.Name, s.Type)
+		if s.Type.Kind == ast.TypeAny && ty != nil && ty.Kind != ast.TypeAny && ty.Kind != ast.TypeUnknown {
+			s.Type = ty
+		} else {
+			return fmt.Errorf("symbol %s already has a type: %s", s.Name, s.Type)
+		}
+	} else {
+		s.Type = ty
 	}
-
-	s.Type = ty
 
 	if s.Declaration == nil {
 		return nil
 	}
 
 	if s.Declaration.Type != nil && s.Declaration.Type.Kind != ast.TypeUnknown {
-		return fmt.Errorf("symbol %s already has a declaration type: %s", s.Name, s.Declaration.Type)
+		if s.Declaration.Type.Kind == ast.TypeAny && ty != nil && ty.Kind != ast.TypeAny && ty.Kind != ast.TypeUnknown {
+			s.Declaration.Type = ty
+		} else {
+			return fmt.Errorf("symbol %s already has a declaration type: %s", s.Name, s.Declaration.Type)
+		}
+	} else {
+		s.Declaration.Type = ty
 	}
-
-	s.Declaration.Type = ty
 
 	return nil
 }

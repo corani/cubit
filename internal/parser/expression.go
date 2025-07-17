@@ -229,6 +229,8 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 			elemType = ast.NewType(ast.TypeBool, typeTok.Location)
 		case lexer.KeywordString:
 			elemType = ast.NewType(ast.TypeString, typeTok.Location)
+		case lexer.KeywordAny:
+			elemType = ast.NewType(ast.TypeAny, typeTok.Location)
 		default:
 			typeTok.Location.Errorf("unexpected type %s in array literal", typeTok.StringVal)
 
