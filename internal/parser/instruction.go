@@ -140,22 +140,12 @@ func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
 			if err != nil {
 				return nil, err
 			}
-
-			// Expect semicolon
-			if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
-				return nil, err // EOF
-			}
 		} else if tok.Type == lexer.TypeAssign {
 			lvalue := ast.NewVariableRef(next.StringVal, ast.TypeUnknown, next.Location)
 
 			initInstrs, err = p.parseAssign(lvalue)
 			if err != nil {
 				return nil, err
-			}
-
-			// Expect semicolon
-			if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
-				return nil, err // EOF
 			}
 		} else {
 			// Not an initializer, roll back

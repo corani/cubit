@@ -1,18 +1,6 @@
 package main
 
-// NOTE(daniel): as we don't have an `any` type, or variadics yet, we have
-// to define two variants of `printf` for different argument types.
-@(extern, link_name="printf")
-printp :: func(msg: string, arg: ^int)
-
-@(extern, link_name="printf")
-printi :: func(msg: string, arg: int)
-
-@(extern)
-printf :: func(msg: string, arg: any)
-
-@(extern)
-calloc :: func(num: int, size: int) -> ^int
+import "core"
 
 update :: func(a: ^int, value: int) {
     // this becomes a store

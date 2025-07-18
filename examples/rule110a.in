@@ -1,11 +1,7 @@
 // rule-110 implementation using pointers
 package main
 
-@(extern)
-printf :: func(msg: string)
-
-@(extern)
-calloc :: func(count: int, size: int) -> ^int
+import "core"
 
 display :: func(row: ^int, len: int) {
     for ptr := row; ptr < row + len; ptr = ptr + 1 {

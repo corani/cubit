@@ -390,7 +390,7 @@ func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
 	var paramType *ast.Type
 
 	if equal.Type != lexer.TypeAssign {
-		paramType = p.parseType()
+		paramType = p.parseParamType()
 
 		equal, err = p.peekType(lexer.TypeAssign)
 		if err != nil {
@@ -412,6 +412,22 @@ func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
 
 	return ast.NewFuncParam(nextTok.StringVal, paramType, value,
 		attrs, nextTok.Location), nil
+}
+
+// parseParamType parses a parameter type, supporting varargs (..type)
+func (p *Parser) parseParamType() *ast.Type {
+	// Check for vararg prefix
+	dotdot, _ := p.peekType(lexer.TypeDotDot)
+
+	// Parse the actual type
+	ty := p.parseType()
+
+	if dotdot.Type == lexer.TypeDotDot {
+		return ast.NewVarargType(ty, ty.Location())
+	}
+
+	// If not vararg, just return the type
+	return ty
 }
 
 // parseFuncReturnType parses the return type of a function.

@@ -169,19 +169,44 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 
 	call.FuncDef = sym.FuncDef
 
-	// Check argument count
-	if len(call.Args) != len(call.FuncDef.Params) {
-		call.Location().Errorf("call to '%s' expects %d arguments, got %d",
-			call.Ident, len(call.FuncDef.Params), len(call.Args))
-		tc.lastType = sym.Type
+	// Collect the parameter types, taking into account varargs
+	paramTypes := []*ast.Type{}
+	paramIndex := 0
 
-		return
+	for range call.Args {
+		// We ran out of parameters, but the call has more arguments
+		if paramIndex >= len(call.FuncDef.Params) {
+			call.Location().Errorf("call to '%s' has too many arguments, expected %d, got %d",
+				call.Ident, len(call.FuncDef.Params), len(call.Args))
+			tc.lastType = &ast.Type{Kind: ast.TypeUnknown}
+			return
+		}
+
+		param := call.FuncDef.Params[paramIndex]
+
+		if param.Type.Kind == ast.TypeVararg {
+			paramTypes = append(paramTypes, param.Type.Elem)
+		} else {
+			paramTypes = append(paramTypes, param.Type)
+			paramIndex++
+		}
+	}
+
+	// If we still have parameters left, but no more arguments, it's a mismatch
+	if paramIndex < len(call.FuncDef.Params) {
+		// If the function has varargs, we can still call it with fewer arguments
+		if call.FuncDef.Params[paramIndex].Type.Kind != ast.TypeVararg {
+			call.Location().Errorf("call to '%s' has too few arguments, expected %d, got %d",
+				call.Ident, len(call.FuncDef.Params), len(call.Args))
+			tc.lastType = &ast.Type{Kind: ast.TypeUnknown}
+			return
+		}
 	}
 
 	// Check argument types
 	for i, arg := range call.Args {
 		argType, _ := tc.visitNode(arg.Value)
-		paramType := call.FuncDef.Params[i].Type
+		paramType := paramTypes[i]
 
 		call.Args[i].Type = argType // Set the type of the argument
 

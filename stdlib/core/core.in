@@ -1,7 +1,10 @@
 package core
 
 @(extern)
-printf :: func(msg: string)
+printf :: func(msg: string, args: ..any)
+
+@(extern)
+calloc :: func(count: int, size: int) -> ^int
 
 @(builtin)
 len :: func(row: [128]int) -> int

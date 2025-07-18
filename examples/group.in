@@ -1,7 +1,6 @@
 package main
 
-@(extern)
-printf :: func(msg: string, arg: int)
+import "core"
 
 @(export)
 main :: func() -> int {

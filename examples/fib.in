@@ -1,7 +1,6 @@
 package main 
 
-@(extern)
-printf :: func(msg: string, a: int, b: int)
+import "core"
 
 fib :: func(n: int) -> int {
     if n <= 1 {

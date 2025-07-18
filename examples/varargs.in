@@ -1,0 +1,17 @@
+package main
+
+@(extern)
+printf :: func(msg: string, args: ..any)
+
+@(export)
+main :: func() -> int {
+	x := 42
+	y := 7
+	s := "hello"
+
+	printf("x = %d, y = %d\n", x, y)
+	printf("s = %s, x = %d\n", s, x)
+	printf("no args\n")
+
+	return 0
+}
