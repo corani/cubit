@@ -102,22 +102,6 @@ func (t *Lexer) Next() (Token, error) {
 				t.prevToken = &Token{Type: TypeSlash, StringVal: "/", Location: start}
 				return *t.prevToken, nil
 			}
-		case c == '-':
-			c2, err := t.Scan.Next()
-			if err != nil { // EOF, we still want to return the token
-				t.prevToken = &Token{Type: TypeMinus, StringVal: "-", Location: start}
-				return *t.prevToken, nil
-			}
-
-			switch {
-			case c2 == '>':
-				t.prevToken = &Token{Type: TypeArrow, StringVal: "->", Location: start}
-				return *t.prevToken, nil
-			default:
-				t.Scan.Unread(1)
-				t.prevToken = &Token{Type: TypeMinus, StringVal: "-", Location: start}
-				return *t.prevToken, nil
-			}
 		case c == '\n':
 			// Only emit a semicolon if not inside parens or brackets
 			if t.shouldInsertSemicolon() {

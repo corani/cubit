@@ -491,6 +491,7 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 				instructions = append(instructions, inst)
 			}
 		case lexer.TypeIdent, lexer.TypeLparen:
+			// TODO(daniel): fix duplication of code here with parseAssignOrDeclare
 			// Try to parse a declaration (ident : ...)
 			if first.Type == lexer.TypeIdent {
 				next, err := p.peekType(lexer.TypeColon)
@@ -515,12 +516,29 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 
 			lvalueExpr, err := p.parseLValue()
 			if err == nil {
-				next, err := p.peekType(lexer.TypeAssign, lexer.TypePlusAssign, lexer.TypeAndAssign)
+				tokenToBinop := map[lexer.TokenType]ast.BinOpKind{
+					lexer.TypePlusAssign:    ast.BinOpAdd,
+					lexer.TypeMinusAssign:   ast.BinOpSub,
+					lexer.TypeStarAssign:    ast.BinOpMul,
+					lexer.TypeSlashAssign:   ast.BinOpDiv,
+					lexer.TypePercentAssign: ast.BinOpMod,
+					lexer.TypeAndAssign:     ast.BinOpAnd,
+					lexer.TypeOrAssign:      ast.BinOpOr,
+				}
+
+				acceptedTokens := []lexer.TokenType{lexer.TypeAssign}
+
+				for k := range tokenToBinop {
+					acceptedTokens = append(acceptedTokens, k)
+				}
+
+				next, err := p.peekType(acceptedTokens...)
 				if err != nil {
 					return nil, err // EOF
 				}
 
-				if next.Type == lexer.TypeAssign {
+				switch next.Type {
+				case lexer.TypeAssign:
 					instr, err := p.parseAssign(lvalueExpr)
 					if err != nil {
 						return nil, err
@@ -529,24 +547,18 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 					instructions = append(instructions, instr...)
 
 					continue
-				} else if next.Type == lexer.TypePlusAssign {
-					instr, err := p.parseAssignWithOp(lvalueExpr, ast.BinOpAdd)
-					if err != nil {
-						return nil, err
+				default:
+					if binop, ok := tokenToBinop[next.Type]; ok {
+						// If we have a binop assignment, parse it
+						instr, err := p.parseAssignWithOp(lvalueExpr, binop)
+						if err != nil {
+							return nil, err
+						}
+
+						instructions = append(instructions, instr...)
+
+						continue
 					}
-
-					instructions = append(instructions, instr...)
-
-					continue
-				} else if next.Type == lexer.TypeAndAssign {
-					instr, err := p.parseAssignWithOp(lvalueExpr, ast.BinOpAnd)
-					if err != nil {
-						return nil, err
-					}
-
-					instructions = append(instructions, instr...)
-
-					continue
 				}
 			}
 

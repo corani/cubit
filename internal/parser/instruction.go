@@ -65,6 +65,7 @@ func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 }
 
 func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction, bool, error) {
+	// TODO(daniel): fix duplication of code with parseBlock
 	first, err := p.expectType(lexer.TypeIdent)
 	if err != nil {
 		return nil, false, err // EOF
@@ -94,8 +95,13 @@ func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction,
 	}
 
 	tokenToBinop := map[lexer.TokenType]ast.BinOpKind{
-		lexer.TypePlusAssign: ast.BinOpAdd,
-		lexer.TypeAndAssign:  ast.BinOpAnd,
+		lexer.TypePlusAssign:    ast.BinOpAdd,
+		lexer.TypeMinusAssign:   ast.BinOpSub,
+		lexer.TypeStarAssign:    ast.BinOpMul,
+		lexer.TypeSlashAssign:   ast.BinOpDiv,
+		lexer.TypePercentAssign: ast.BinOpMod,
+		lexer.TypeAndAssign:     ast.BinOpAnd,
+		lexer.TypeOrAssign:      ast.BinOpOr,
 	}
 
 	acceptedTokens := []lexer.TokenType{lexer.TypeAssign}
@@ -113,6 +119,7 @@ func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction,
 	switch next.Type {
 	case lexer.TypeAssign:
 		lvalue := ast.NewVariableRef(first.StringVal, ast.TypeUnknown, first.Location)
+
 		instrs, err := p.parseAssign(lvalue)
 
 		return instrs, true, err
@@ -124,6 +131,7 @@ func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction,
 		}
 
 		lvalue := ast.NewVariableRef(first.StringVal, ast.TypeUnknown, first.Location)
+
 		instrs, err := p.parseAssignWithOp(lvalue, binop)
 
 		return instrs, true, err

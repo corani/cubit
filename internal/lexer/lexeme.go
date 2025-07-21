@@ -7,47 +7,52 @@ import (
 type TokenType string
 
 const (
-	TypeEOF        TokenType = "EOF"
-	TypeIdent      TokenType = "Identifier"
-	TypeKeyword    TokenType = "Keyword"
-	TypeNumber     TokenType = "Number"
-	TypeBool       TokenType = "Bool"         // "true" / "false"
-	TypeString     TokenType = "String"       // Double-quoted string
-	TypeLparen     TokenType = "LeftParen"    // "("
-	TypeRparen     TokenType = "RightParen"   // ")"
-	TypeLbrace     TokenType = "LeftBrace"    // "{"
-	TypeRbrace     TokenType = "RightBrace"   // "}"
-	TypeLBracket   TokenType = "LeftBracket"  // "["
-	TypeRBracket   TokenType = "RightBracket" // "]"
-	TypeDot        TokenType = "Dot"          // "."
-	TypeDotDot     TokenType = "DotDot"       // ".." (varargs)
-	TypeComma      TokenType = "Comma"        // ","
-	TypeArrow      TokenType = "Arrow"        // "->"
-	TypeColon      TokenType = "Colon"        // ":"
-	TypeSemicolon  TokenType = "Semicolon"    // ";"
-	TypeAt         TokenType = "At"           // "@"
-	TypeAssign     TokenType = "Assign"       // ":="
-	TypePlus       TokenType = "Plus"         // "+"
-	TypeMinus      TokenType = "Minus"        // "-"
-	TypeStar       TokenType = "Star"         // "*"
-	TypeSlash      TokenType = "Slash"        // "/"
-	TypePercent    TokenType = "Percent"      // "%"
-	TypePlusAssign TokenType = "PlusAssign"   // "+="
-	TypeAndAssign  TokenType = "AndAssign"    // "&="
-	TypeEq         TokenType = "Eq"           // "=="
-	TypeNe         TokenType = "Ne"           // "!="
-	TypeLt         TokenType = "Lt"           // "<"
-	TypeLe         TokenType = "Le"           // "<="
-	TypeGt         TokenType = "Gt"           // ">"
-	TypeGe         TokenType = "Ge"           // ">="
-	TypeDollar     TokenType = "Dollar"       // "$"
-	TypeCaret      TokenType = "Caret"        // "^"
-	TypeShl        TokenType = "ShiftLeft"    // "<<"
-	TypeShr        TokenType = "ShiftRight"   // ">>"
-	TypeBinAnd     TokenType = "BinaryAnd"    // "&"
-	TypeBinOr      TokenType = "BinaryOr"     // "|"
-	TypeLogAnd     TokenType = "LogicalAnd"   // "&&"
-	TypeLogOr      TokenType = "LogicalOr"    // "||"
+	TypeEOF           TokenType = "EOF"
+	TypeIdent         TokenType = "Identifier"
+	TypeKeyword       TokenType = "Keyword"
+	TypeNumber        TokenType = "Number"
+	TypeBool          TokenType = "Bool"          // "true" / "false"
+	TypeString        TokenType = "String"        // Double-quoted string
+	TypeLparen        TokenType = "LeftParen"     // "("
+	TypeRparen        TokenType = "RightParen"    // ")"
+	TypeLbrace        TokenType = "LeftBrace"     // "{"
+	TypeRbrace        TokenType = "RightBrace"    // "}"
+	TypeLBracket      TokenType = "LeftBracket"   // "["
+	TypeRBracket      TokenType = "RightBracket"  // "]"
+	TypeDot           TokenType = "Dot"           // "."
+	TypeDotDot        TokenType = "DotDot"        // ".." (varargs)
+	TypeComma         TokenType = "Comma"         // ","
+	TypeArrow         TokenType = "Arrow"         // "->"
+	TypeColon         TokenType = "Colon"         // ":"
+	TypeSemicolon     TokenType = "Semicolon"     // ";"
+	TypeAt            TokenType = "At"            // "@"
+	TypeAssign        TokenType = "Assign"        // ":="
+	TypePlus          TokenType = "Plus"          // "+"
+	TypeMinus         TokenType = "Minus"         // "-"
+	TypeStar          TokenType = "Star"          // "*"
+	TypeSlash         TokenType = "Slash"         // "/"
+	TypePercent       TokenType = "Percent"       // "%"
+	TypePlusAssign    TokenType = "PlusAssign"    // "+="
+	TypeMinusAssign   TokenType = "MinusAssign"   // "-="
+	TypeStarAssign    TokenType = "StarAssign"    // "*="
+	TypeSlashAssign   TokenType = "SlashAssign"   // "/="
+	TypePercentAssign TokenType = "PercentAssign" // "%="
+	TypeAndAssign     TokenType = "AndAssign"     // "&="
+	TypeOrAssign      TokenType = "OrAssign"      // "|="
+	TypeEq            TokenType = "Eq"            // "=="
+	TypeNe            TokenType = "Ne"            // "!="
+	TypeLt            TokenType = "Lt"            // "<"
+	TypeLe            TokenType = "Le"            // "<="
+	TypeGt            TokenType = "Gt"            // ">"
+	TypeGe            TokenType = "Ge"            // ">="
+	TypeDollar        TokenType = "Dollar"        // "$"
+	TypeCaret         TokenType = "Caret"         // "^"
+	TypeShl           TokenType = "ShiftLeft"     // "<<"
+	TypeShr           TokenType = "ShiftRight"    // ">>"
+	TypeBinAnd        TokenType = "BinaryAnd"     // "&"
+	TypeBinOr         TokenType = "BinaryOr"      // "|"
+	TypeLogAnd        TokenType = "LogicalAnd"    // "&&"
+	TypeLogOr         TokenType = "LogicalOr"     // "||"
 )
 
 // Symbols is a map of string to TokenType for maximal munch.
@@ -61,12 +66,19 @@ var symbols = map[string]TokenType{
 	";":  TypeSemicolon,
 	"@":  TypeAt,
 	"+":  TypePlus,
+	"-":  TypeMinus,
 	"*":  TypeStar,
 	"%":  TypePercent,
 	"$":  TypeDollar,
 	"^":  TypeCaret,
+	"->": TypeArrow,
 	"+=": TypePlusAssign,
+	"-=": TypeMinusAssign,
+	"*=": TypeStarAssign,
+	"/=": TypeSlashAssign,
+	"%=": TypePercentAssign,
 	"&=": TypeAndAssign,
+	"|=": TypeOrAssign,
 	"=":  TypeAssign,
 	"==": TypeEq,
 	"!=": TypeNe,
