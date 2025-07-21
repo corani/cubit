@@ -1,8 +1,6 @@
 package parser
 
 import (
-	"fmt"
-
 	"github.com/corani/cubit/internal/ast"
 	"github.com/corani/cubit/internal/lexer"
 )
@@ -67,13 +65,32 @@ func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 }
 
 func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction, bool, error) {
-	start, err := p.expectType(lexer.TypeIdent)
+	first, err := p.expectType(lexer.TypeIdent)
 	if err != nil {
 		return nil, false, err // EOF
 	}
 
-	if start.Type != lexer.TypeIdent {
-		return nil, false, fmt.Errorf("expected identifier, got %s", start.StringVal)
+	// If it's an identifier, it might be a declaration.
+	next, err := p.peekType(lexer.TypeColon)
+	if err != nil {
+		return nil, false, err // EOF
+	}
+
+	if next.Type == lexer.TypeColon {
+		if !allowDeclaration {
+			next.Location.Errorf("declarations not allowed here")
+
+			// error recovery: continue parsing.
+		}
+
+		// It's `v : type`, `v : type = expr` or `v := expr`, other assignments
+		// like `+=` are not allowed here.
+		instr, err := p.parseDeclare(first)
+		if err != nil {
+			return nil, false, err
+		}
+
+		return instr, true, nil
 	}
 
 	tokenToBinop := map[lexer.TokenType]ast.BinOpKind{
@@ -81,31 +98,21 @@ func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction,
 		lexer.TypeAndAssign:  ast.BinOpAnd,
 	}
 
-	acceptedTokens := []lexer.TokenType{lexer.TypeColon, lexer.TypeAssign}
+	acceptedTokens := []lexer.TokenType{lexer.TypeAssign}
 
 	for k := range tokenToBinop {
 		acceptedTokens = append(acceptedTokens, k)
 	}
 
 	// Peek for assignment operator
-	next, err := p.peekType(acceptedTokens...)
+	next, err = p.peekType(acceptedTokens...)
 	if err != nil {
 		return nil, false, nil
 	}
 
 	switch next.Type {
-	case lexer.TypeColon:
-		if !allowDeclaration {
-			next.Location.Errorf("declarations not allowed here")
-
-			// error recovery: continue parsing.
-		}
-
-		instrs, err := p.parseDeclare(start)
-
-		return instrs, true, err
 	case lexer.TypeAssign:
-		lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
+		lvalue := ast.NewVariableRef(first.StringVal, ast.TypeUnknown, first.Location)
 		instrs, err := p.parseAssign(lvalue)
 
 		return instrs, true, err
@@ -116,7 +123,7 @@ func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction,
 			return nil, false, nil
 		}
 
-		lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
+		lvalue := ast.NewVariableRef(first.StringVal, ast.TypeUnknown, first.Location)
 		instrs, err := p.parseAssignWithOp(lvalue, binop)
 
 		return instrs, true, err
