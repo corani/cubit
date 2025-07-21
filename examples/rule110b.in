@@ -22,7 +22,7 @@ update :: func(row: [128]int) {
     // based on the current state
     for i := 1; i < len(row); i += 1 {
         state = (state << 1) | row[i]
-        state = state & 7
+        state &= 7
 
         row[i-1] = (110 >> state) & 1
     }

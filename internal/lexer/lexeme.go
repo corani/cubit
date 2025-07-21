@@ -28,11 +28,12 @@ const (
 	TypeAt         TokenType = "At"           // "@"
 	TypeAssign     TokenType = "Assign"       // ":="
 	TypePlus       TokenType = "Plus"         // "+"
-	TypePlusAssign TokenType = "PlusAssign"   // "+="
 	TypeMinus      TokenType = "Minus"        // "-"
 	TypeStar       TokenType = "Star"         // "*"
 	TypeSlash      TokenType = "Slash"        // "/"
 	TypePercent    TokenType = "Percent"      // "%"
+	TypePlusAssign TokenType = "PlusAssign"   // "+="
+	TypeAndAssign  TokenType = "AndAssign"    // "&="
 	TypeEq         TokenType = "Eq"           // "=="
 	TypeNe         TokenType = "Ne"           // "!="
 	TypeLt         TokenType = "Lt"           // "<"
@@ -60,11 +61,12 @@ var symbols = map[string]TokenType{
 	";":  TypeSemicolon,
 	"@":  TypeAt,
 	"+":  TypePlus,
-	"+=": TypePlusAssign,
 	"*":  TypeStar,
 	"%":  TypePercent,
 	"$":  TypeDollar,
 	"^":  TypeCaret,
+	"+=": TypePlusAssign,
+	"&=": TypeAndAssign,
 	"=":  TypeAssign,
 	"==": TypeEq,
 	"!=": TypeNe,

@@ -78,6 +78,7 @@ func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction,
 
 	tokenToBinop := map[lexer.TokenType]ast.BinOpKind{
 		lexer.TypePlusAssign: ast.BinOpAdd,
+		lexer.TypeAndAssign:  ast.BinOpAnd,
 	}
 
 	acceptedTokens := []lexer.TokenType{lexer.TypeColon, lexer.TypeAssign}

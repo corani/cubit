@@ -20,7 +20,7 @@ update :: func(row: ^int, len: int) {
 
     for i := 1; i < len; i += 1 {
         state = (state << 1) | (row + i)^
-        state = state & 7
+        state &= 7
 
         (row + i - 1)^ = (110 >> state) & 1
     }
