@@ -515,13 +515,22 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 
 			lvalueExpr, err := p.parseLValue()
 			if err == nil {
-				next, err := p.peekType(lexer.TypeAssign)
+				next, err := p.peekType(lexer.TypeAssign, lexer.TypePlusAssign)
 				if err != nil {
 					return nil, err // EOF
 				}
 
 				if next.Type == lexer.TypeAssign {
 					instr, err := p.parseAssign(lvalueExpr)
+					if err != nil {
+						return nil, err
+					}
+
+					instructions = append(instructions, instr...)
+
+					continue
+				} else if next.Type == lexer.TypePlusAssign {
+					instr, err := p.parseAssignWithOp(lvalueExpr, ast.BinOpAdd)
 					if err != nil {
 						return nil, err
 					}

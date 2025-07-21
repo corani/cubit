@@ -4,7 +4,7 @@ package main
 import "core"
 
 display :: func(row: ^int, len: int) {
-    for ptr := row; ptr < row + len; ptr = ptr + 1 {
+    for ptr := row; ptr < row + len; ptr += 1 {
         if ptr^ == 1 {
             printf("#")
         } else {
@@ -18,7 +18,7 @@ display :: func(row: ^int, len: int) {
 update :: func(row: ^int, len: int) {
     state := row^
 
-    for i := 1; i < len; i = i + 1 {
+    for i := 1; i < len; i += 1 {
         state = (state << 1) | (row + i)^
         state = state & 7
 
@@ -34,7 +34,7 @@ main :: func() -> int {
     // Initialize the first cell
     (row + len - 2)^ = 1
 
-    for i := 0; i < len - 2; i = i + 1 {
+    for i := 0; i < len - 2; i += 1 {
         display(row, len)
         update(row, len)
     }

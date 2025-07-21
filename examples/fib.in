@@ -12,7 +12,7 @@ fib :: func(n: int) -> int {
 
 @(export)
 main :: func() -> int {
-    for n := 1; n <= 10; n = n + 1 {
+    for n := 1; n <= 10; n += 1 {
         printf("Fibonacci of %2d is: %2d\n", n, fib(n))
     }
 

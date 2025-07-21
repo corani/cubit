@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/corani/cubit/internal/ast"
 	"github.com/corani/cubit/internal/lexer"
 )
@@ -64,6 +66,62 @@ func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 	return instructions, nil
 }
 
+func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction, bool, error) {
+	start, err := p.expectType(lexer.TypeIdent)
+	if err != nil {
+		return nil, false, err // EOF
+	}
+
+	if start.Type != lexer.TypeIdent {
+		return nil, false, fmt.Errorf("expected identifier, got %s", start.StringVal)
+	}
+
+	tokenToBinop := map[lexer.TokenType]ast.BinOpKind{
+		lexer.TypePlusAssign: ast.BinOpAdd,
+	}
+
+	acceptedTokens := []lexer.TokenType{lexer.TypeColon, lexer.TypeAssign}
+
+	for k := range tokenToBinop {
+		acceptedTokens = append(acceptedTokens, k)
+	}
+
+	// Peek for assignment operator
+	next, err := p.peekType(acceptedTokens...)
+	if err != nil {
+		return nil, false, nil
+	}
+
+	switch next.Type {
+	case lexer.TypeColon:
+		if !allowDeclaration {
+			next.Location.Errorf("declarations not allowed here")
+
+			// error recovery: continue parsing.
+		}
+
+		instrs, err := p.parseDeclare(start)
+
+		return instrs, true, err
+	case lexer.TypeAssign:
+		lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
+		instrs, err := p.parseAssign(lvalue)
+
+		return instrs, true, err
+	default:
+		// Check for assignment with operator, e.g., +=, -=, etc.
+		binop, ok := tokenToBinop[next.Type]
+		if !ok {
+			return nil, false, nil
+		}
+
+		lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
+		instrs, err := p.parseAssignWithOp(lvalue, binop)
+
+		return instrs, true, err
+	}
+}
+
 // parseAssign now accepts an LValue (e.g., variable ref, deref, etc.)
 func (p *Parser) parseAssign(lhs ast.LValue) ([]ast.Instruction, error) {
 	// <lvalue> '=' or <lvalue> ':' <type> '=' or <lvalue> ':='
@@ -83,6 +141,24 @@ func (p *Parser) parseAssign(lhs ast.LValue) ([]ast.Instruction, error) {
 
 	instructions = append(instructions,
 		ast.NewAssign(lhs, expr, nil, lhs.Location()))
+
+	return instructions, nil
+}
+
+func (p *Parser) parseAssignWithOp(lhs ast.LValue, op ast.BinOpKind) ([]ast.Instruction, error) {
+	// <lvalue> op= <expr>
+	// have been consumed already.
+	var instructions []ast.Instruction
+
+	rhs, err := p.parseExpression(false)
+	if err != nil {
+		return nil, err
+	}
+
+	binop := ast.NewBinop(op, lhs, rhs, lhs.Location())
+	assign := ast.NewAssign(lhs, binop, nil, lhs.Location())
+
+	instructions = append(instructions, assign)
 
 	return instructions, nil
 }
@@ -129,30 +205,13 @@ func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
 	var initInstrs []ast.Instruction
 
 	// Check for optional initializer: ident : type = expr or ident = expr
-	next, err := p.expectType(lexer.TypeIdent)
-	if err == nil {
-		// Look ahead for colon or assign
-		if tok, err := p.peekType(lexer.TypeColon, lexer.TypeAssign); err != nil {
-			// Not an initializer, roll back
-			p.index--
-		} else if tok.Type == lexer.TypeColon {
-			initInstrs, err = p.parseDeclare(next)
-			if err != nil {
-				return nil, err
-			}
-		} else if tok.Type == lexer.TypeAssign {
-			lvalue := ast.NewVariableRef(next.StringVal, ast.TypeUnknown, next.Location)
-
-			initInstrs, err = p.parseAssign(lvalue)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			// Not an initializer, roll back
-			p.index--
-		}
+	instr, ok, err := p.parseAssignOrDeclare(true)
+	if err != nil {
+		return nil, err
+	} else if ok {
+		initInstrs = instr
 	} else {
-		// Rollback whatever token we got
+		// Not an initializer, roll back
 		p.index--
 	}
 
@@ -241,33 +300,13 @@ func (p *Parser) parseFor(first lexer.Token) (ast.Instruction, error) {
 	)
 
 	// Try to parse an initializer (for now only assignment or set)
-	start, err := p.expectType(lexer.TypeIdent)
-	if err == nil {
-		next, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
-		if err != nil {
-			// If we didn't parse an initializer, roll back the index and try
-			// to parse it as a condition.
-			p.index = index
-		} else if next.Type == lexer.TypeColon {
-			initInstrs, err = p.parseDeclare(start)
-			if err != nil {
-				return nil, err
-			}
-		} else if next.Type == lexer.TypeAssign {
-			lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
-
-			initInstrs, err = p.parseAssign(lvalue)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			// If we didn't parse an initializer, roll back the index and try
-			// to parse it as a condition.
-			p.index = index
-		}
+	instr, ok, err := p.parseAssignOrDeclare(true)
+	if err != nil {
+		return nil, err
+	} else if ok {
+		initInstrs = instr
 	} else {
-		// If we didn't parse an initializer, roll back the index and try
-		// to parse it as a condition.
+		// Not an initializer, roll back
 		p.index = index
 	}
 
@@ -282,28 +321,14 @@ func (p *Parser) parseFor(first lexer.Token) (ast.Instruction, error) {
 	}
 
 	if semi.Type == lexer.TypeSemicolon {
-		// If we found a semicolon, we expect another assignment
-		start, err := p.expectType(lexer.TypeIdent)
-		if err != nil {
-			return nil, err // EOF
-		}
-
-		next, err := p.peekType(lexer.TypeColon, lexer.TypeAssign)
+		// If we found a semicolon, we expect another assignment.
+		instr, ok, err := p.parseAssignOrDeclare(false)
 		if err != nil {
 			return nil, err
-		} else if next.Type == lexer.TypeColon {
-			postInstrs, err = p.parseDeclare(start)
-			if err != nil {
-				return nil, err // EOF
-			}
-		} else if next.Type == lexer.TypeAssign {
-			lvalue := ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
-
-			postInstrs, err = p.parseAssign(lvalue)
-			if err != nil {
-				return nil, err
-			}
+		} else if ok {
+			postInstrs = instr
 		} else {
+			// Not an assignment, roll back
 			p.index--
 		}
 	}
