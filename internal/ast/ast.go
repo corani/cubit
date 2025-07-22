@@ -31,7 +31,7 @@ type Visitor interface {
 
 type CompilationUnit struct {
 	Ident      string            // package name
-	Imports    map[string]string // imported packages (alias -> package name)
+	Imports    map[string]Import // imported packages (alias -> Import)
 	Types      []*TypeDef
 	Data       []*DataDef
 	Funcs      []*FuncDef
@@ -39,11 +39,16 @@ type CompilationUnit struct {
 	Loc        lexer.Location
 }
 
+type Import struct {
+	Name string           // The package name (as written in import "...")
+	Unit *CompilationUnit // The loaded AST, nil until loaded
+}
+
 // NewCompilationUnit creates a new, empty CompilationUnit.
 func NewCompilationUnit(location lexer.Location) *CompilationUnit {
 	return &CompilationUnit{
 		Ident:      "",
-		Imports:    make(map[string]string),
+		Imports:    make(map[string]Import),
 		Types:      nil,
 		Data:       nil,
 		Funcs:      nil,

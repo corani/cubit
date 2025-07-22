@@ -131,12 +131,15 @@ func (p *Parser) parseImport(start lexer.Token) error {
 
 	if orig, ok := p.unit.Imports[alias]; ok {
 		start.Location.Errorf("import %s already defined as %s, cannot redefine",
-			alias, orig)
+			alias, orig.Name)
 		p.unit.Loc.Infof("previous definition was here")
 
 		// error recovery: just ignore the new import.
 	} else {
-		p.unit.Imports[alias] = pkgName.StringVal
+		p.unit.Imports[alias] = ast.Import{
+			Name: pkgName.StringVal,
+			Unit: nil, // will be filled by loader
+		}
 	}
 
 	if _, err := p.expectType(lexer.TypeSemicolon); err != nil {
