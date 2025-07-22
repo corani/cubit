@@ -327,18 +327,21 @@ func (f *For) Accept(v Visitor) {
 func (*For) isInstruction() {}
 
 type Call struct {
-	Ident   string   // function name
-	Type    *Type    // return type, if any
-	FuncDef *FuncDef // set during type checking
-	Args    []Arg
-	Loc     lexer.Location
+	Namespace string   // optional namespace (e.g. "raylib")
+	Ident     string   // function name
+	Type      *Type    // return type, if any
+	FuncDef   *FuncDef // set during type checking
+	Args      []Arg
+	Loc       lexer.Location
 }
 
-func NewCall(location lexer.Location, ident string, args ...Arg) *Call {
+// NewCall creates a Call with a namespace.
+func NewCall(location lexer.Location, namespace, ident string, args ...Arg) *Call {
 	return &Call{
-		Ident: ident,
-		Args:  args,
-		Loc:   location,
+		Namespace: namespace,
+		Ident:     ident,
+		Args:      args,
+		Loc:       location,
 	}
 }
 
@@ -443,16 +446,19 @@ func (*Deref) isExpression() {}
 func (*Deref) isLValue()     {}
 
 type VariableRef struct {
-	Ident string
-	Type  *Type
-	Loc   lexer.Location
+	Namespace string // optional namespace (e.g. "raylib")
+	Ident     string
+	Type      *Type
+	Loc       lexer.Location
 }
 
-func NewVariableRef(ident string, ty TypeKind, location lexer.Location) *VariableRef {
+// NewVariableRef creates a VariableRef with a namespace.
+func NewVariableRef(namespace, ident string, ty TypeKind, location lexer.Location) *VariableRef {
 	return &VariableRef{
-		Ident: ident,
-		Type:  &Type{Kind: ty},
-		Loc:   location,
+		Namespace: namespace,
+		Ident:     ident,
+		Type:      &Type{Kind: ty},
+		Loc:       location,
 	}
 }
 

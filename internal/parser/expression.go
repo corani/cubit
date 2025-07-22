@@ -179,7 +179,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 				return nil, err
 			}
 		case lexer.TypeCaret:
-			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
+			expr = ast.NewVariableRef("", start.StringVal, ast.TypeUnknown, start.Location)
 			expr = ast.NewDeref(expr, next.Location)
 		case lexer.TypeLBracket:
 			size, err := p.parseExpression(false)
@@ -189,10 +189,10 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 			if _, err := p.expectType(lexer.TypeRBracket); err != nil {
 				return nil, err // EOF
 			}
-			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
+			expr = ast.NewVariableRef("", start.StringVal, ast.TypeUnknown, start.Location)
 			expr = ast.NewArrayIndex(expr, size, start.Location)
 		default:
-			expr = ast.NewVariableRef(start.StringVal, ast.TypeUnknown, start.Location)
+			expr = ast.NewVariableRef("", start.StringVal, ast.TypeUnknown, start.Location)
 		}
 	case lexer.TypeLparen:
 		// Parenthesized sub-expression

@@ -51,7 +51,7 @@ func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 
 	// optional assignment
 	if next.Type == lexer.TypeAssign {
-		lvalue := ast.NewVariableRef(ident.StringVal, declaredType.Kind, ident.Location)
+		lvalue := ast.NewVariableRef("", ident.StringVal, declaredType.Kind, ident.Location)
 
 		instr, err := p.parseAssign(lvalue)
 		if err != nil {
@@ -118,7 +118,7 @@ func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction,
 
 	switch next.Type {
 	case lexer.TypeAssign:
-		lvalue := ast.NewVariableRef(first.StringVal, ast.TypeUnknown, first.Location)
+		lvalue := ast.NewVariableRef("", first.StringVal, ast.TypeUnknown, first.Location)
 
 		instrs, err := p.parseAssign(lvalue)
 
@@ -130,7 +130,7 @@ func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction,
 			return nil, false, nil
 		}
 
-		lvalue := ast.NewVariableRef(first.StringVal, ast.TypeUnknown, first.Location)
+		lvalue := ast.NewVariableRef("", first.StringVal, ast.TypeUnknown, first.Location)
 
 		instrs, err := p.parseAssignWithOp(lvalue, binop)
 
@@ -212,7 +212,7 @@ func (p *Parser) parseCall(first lexer.Token) (*ast.Call, error) {
 		}
 	}
 
-	return ast.NewCall(first.Location, first.StringVal, args...), nil
+	return ast.NewCall(first.Location, "", first.StringVal, args...), nil
 }
 
 // parseIf parses an if/else statement.

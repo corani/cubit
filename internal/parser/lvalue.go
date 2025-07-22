@@ -22,7 +22,7 @@ func (p *Parser) parseLValue() (ast.LValue, error) {
 	case lexer.TypeIdent:
 		// Could be a variable, or a deref (ident^), or a chain
 		ident := first.StringVal
-		lv := ast.LValue(ast.NewVariableRef(ident, ast.TypeUnknown, first.Location))
+		lv := ast.LValue(ast.NewVariableRef("", ident, ast.TypeUnknown, first.Location))
 
 		next, err := p.peekType(lexer.TypeCaret, lexer.TypeLBracket)
 		if err != nil {

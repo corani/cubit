@@ -113,7 +113,11 @@ func (s *stringer) VisitBody(b *Body) {
 }
 
 func (s *stringer) VisitCall(c *Call) {
-	s.writef("(call %s %q\n", c.Type, c.Ident)
+	if c.Namespace != "" {
+		s.writef("(call %s %q.%q\n", c.Type, c.Namespace, c.Ident)
+	} else {
+		s.writef("(call %s %q\n", c.Type, c.Ident)
+	}
 	s.writeIndented(func() {
 		s.write("\t(args\n")
 		s.writeIndented(func() {
@@ -194,7 +198,11 @@ func (s *stringer) VisitUnaryOp(u *UnaryOp) {
 }
 
 func (s *stringer) VisitVariableRef(v *VariableRef) {
-	s.writef("(ref %s %q)", v.Type, v.Ident)
+	if v.Namespace != "" {
+		s.writef("(ref %s %q.%q)", v.Type, v.Namespace, v.Ident)
+	} else {
+		s.writef("(ref %s %q)", v.Type, v.Ident)
+	}
 }
 
 func (s *stringer) VisitDeref(d *Deref) {
