@@ -220,6 +220,8 @@ func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
 	// Expect 'if' keyword already consumed
 	var initInstrs []ast.Instruction
 
+	checkpoint := p.index
+
 	// Check for optional initializer: ident : type = expr or ident = expr
 	instr, ok, err := p.parseAssignOrDeclare(true)
 	if err != nil {
@@ -228,7 +230,7 @@ func (p *Parser) parseIf(first lexer.Token) (ast.Instruction, error) {
 		initInstrs = instr
 	} else {
 		// Not an initializer, roll back
-		p.index--
+		p.index = checkpoint
 	}
 
 	// Parse condition

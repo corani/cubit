@@ -89,6 +89,7 @@ func (p *Parser) parseExpressionPratt(optional bool, minPrec int) (ast.Expressio
 func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 	starters := []lexer.TokenType{
 		lexer.TypeMinus, // allow unary minus as a primary
+		lexer.TypeBang,  // allow logical not as a primary
 		lexer.TypeNumber,
 		lexer.TypeBool,
 		lexer.TypeString,
@@ -125,6 +126,16 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 			return nil, err
 		}
 		expr = ast.NewUnaryOp(ast.UnaryOpMinus, operand, start.Location)
+	case lexer.TypeBang:
+		operand, err := p.parsePrimary(false)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO(daniel): should we create a unary operator for logical not?
+		// Translate !expr to expr == false
+		expr = ast.NewBinop(ast.BinOpEq, operand,
+			ast.NewBoolLiteral(false, start.Location), start.Location)
 	case lexer.TypeKeyword:
 		switch start.Keyword {
 		case lexer.KeywordTrue:

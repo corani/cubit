@@ -53,6 +53,7 @@ const (
 	TypeBinOr         TokenType = "BinaryOr"      // "|"
 	TypeLogAnd        TokenType = "LogicalAnd"    // "&&"
 	TypeLogOr         TokenType = "LogicalOr"     // "||"
+	TypeBang          TokenType = "Bang"          // "!"
 )
 
 // Symbols is a map of string to TokenType for maximal munch.
@@ -92,6 +93,7 @@ var symbols = map[string]TokenType{
 	"&&": TypeLogAnd,
 	"|":  TypeBinOr,
 	"||": TypeLogOr,
+	"!":  TypeBang,
 }
 
 type Token struct {

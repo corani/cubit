@@ -2,6 +2,10 @@ package main
 
 import "core"
 
+yes :: func() -> bool {
+    return true
+}
+
 @(export)
 main :: func() -> int {
     for i := 0; i <= 1; i += 1 {
@@ -14,6 +18,18 @@ main :: func() -> int {
                 printf("Neither i nor j is true\n")
             }
         }
+    }
+
+    if yes() {
+        printf("This will always print because yes() returns true\n")
+    } else {
+        printf("This will never print\n")
+    }
+
+    if !yes() {
+        printf("This will never print because yes() returns true\n")
+    } else {
+        printf("This will always print\n")
     }
 
     return 0
