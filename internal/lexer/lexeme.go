@@ -114,14 +114,14 @@ func NewStringToken(val string, location Location) (Token, error) {
 }
 
 func NewNumberToken(val string, location Location) (Token, error) {
-	num, err := strconv.Atoi(string(val))
+	num, err := strconv.ParseInt(string(val), 0, 0)
 	if err != nil {
 		return Token{}, err
 	}
 
 	return Token{
 		Type:      TypeNumber,
-		NumberVal: num,
+		NumberVal: int(num),
 		StringVal: string(val),
 		Location:  location,
 	}, nil

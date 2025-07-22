@@ -138,20 +138,54 @@ func (t *Lexer) Next() (Token, error) {
 			t.prevToken = &tok
 			return tok, err
 		case isNumeric(c):
-			// Handle numeric literals
+			// Handle numeric literals, including 0x (hex), 0b (bin), 0o (octal)
 			buf = append(buf, c)
+			base := byte('d') // default to decimal
+
+			c2, err := t.Scan.Next()
+			if err != nil {
+				break // EOF, we still want to return the token
+			}
+
+			if buf[0] == '0' && (c2 == 'x' || c2 == 'b' || c2 == 'o') {
+				buf = append(buf, c2)
+				base = c2
+			} else {
+				t.Scan.Unread(1) // unread the second character
+			}
+
 			for {
 				c, err = t.Scan.Next()
 				if err != nil {
 					break // EOF, we still want to return the token
 				}
-				if isNumeric(c) {
+
+				if c == '_' {
+					// Skip underscores in numeric literals
+					continue
+				}
+
+				ok := false
+
+				switch base {
+				case 'd':
+					ok = (c >= '0' && c <= '9')
+				case 'x':
+					ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+				case 'b':
+					ok = (c == '0' || c == '1')
+				case 'o':
+					ok = (c >= '0' && c <= '7')
+				}
+
+				if ok {
 					buf = append(buf, c)
 				} else {
 					t.Scan.Unread(1)
 					break
 				}
 			}
+
 			tok, err := NewNumberToken(string(buf), start)
 			t.prevToken = &tok
 			return tok, err
