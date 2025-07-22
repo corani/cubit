@@ -165,6 +165,23 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 	case lexer.TypeString:
 		expr = ast.NewStringLiteral(start.StringVal, start.Location)
 	case lexer.TypeIdent:
+		// Check for namespaced reference: Identifier . Identifier
+		namespace := ""
+
+		dot, err := p.peekType(lexer.TypeDot)
+		if err != nil {
+			return nil, err // EOF
+		}
+
+		if dot.Type == lexer.TypeDot {
+			namespace = start.StringVal
+
+			start, err = p.expectType(lexer.TypeIdent)
+			if err != nil {
+				return nil, err // EOF
+			}
+		}
+
 		// Peek to see if this is a function call or dereference
 		next, err := p.peekType(lexer.TypeLparen, lexer.TypeCaret, lexer.TypeLBracket)
 		if err != nil {
@@ -174,12 +191,12 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		switch next.Type {
 		case lexer.TypeLparen:
 			// It's a function call
-			expr, err = p.parseCall(start)
+			expr, err = p.parseCall(namespace, start)
 			if err != nil {
 				return nil, err
 			}
 		case lexer.TypeCaret:
-			expr = ast.NewVariableRef("", start.StringVal, ast.TypeUnknown, start.Location)
+			expr = ast.NewVariableRef(namespace, start.StringVal, ast.TypeUnknown, start.Location)
 			expr = ast.NewDeref(expr, next.Location)
 		case lexer.TypeLBracket:
 			size, err := p.parseExpression(false)
@@ -189,10 +206,10 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 			if _, err := p.expectType(lexer.TypeRBracket); err != nil {
 				return nil, err // EOF
 			}
-			expr = ast.NewVariableRef("", start.StringVal, ast.TypeUnknown, start.Location)
+			expr = ast.NewVariableRef(namespace, start.StringVal, ast.TypeUnknown, start.Location)
 			expr = ast.NewArrayIndex(expr, size, start.Location)
 		default:
-			expr = ast.NewVariableRef("", start.StringVal, ast.TypeUnknown, start.Location)
+			expr = ast.NewVariableRef(namespace, start.StringVal, ast.TypeUnknown, start.Location)
 		}
 	case lexer.TypeLparen:
 		// Parenthesized sub-expression

@@ -58,8 +58,6 @@ func (l *Loader) Load(filename string) (*ast.CompilationUnit, error) {
 	l.visited[absPath] = cu
 
 	for alias, importPath := range cu.Imports {
-		_ = alias
-
 		// Special-case: import "core" brings in core.in into the global namespace
 		if importPath.Name == "core" {
 			subCU, err := l.Load("stdlib/core/core.in")
@@ -67,16 +65,23 @@ func (l *Loader) Load(filename string) (*ast.CompilationUnit, error) {
 				return nil, err
 			}
 
-			// Merge subCU's definitions into cu
+			// Merge subCU's definitions into global namespace
 			cu.Types = append(cu.Types, subCU.Types...)
 			cu.Data = append(cu.Data, subCU.Data...)
 			cu.Funcs = append(cu.Funcs, subCU.Funcs...)
 		} else {
-			// Report an error for now
-			return nil, errors.New("import handling not implemented: " + importPath.Name)
-		}
+			// For other imports, load the package and attach to import entry
+			importFile := filepath.Join("stdlib", importPath.Name, importPath.Name+".in")
+			subCU, err := l.Load(importFile)
+			if err != nil {
+				return nil, err
+			}
 
-		// In the future, handle other imports here
+			// Attach loaded unit to import entry
+			entry := importPath
+			entry.Unit = subCU
+			cu.Imports[alias] = entry
+		}
 	}
 
 	return cu, nil

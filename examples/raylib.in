@@ -2,49 +2,27 @@
 //                       -run ./examples/raylib.in
 package main
 
-@(extern,link_name="InitWindow")
-init_window :: func(width: int, height: int, title: string)
-
-@(extern,link_name="SetTargetFPS")
-set_target_fps :: func(fps: int)
-
-@(extern,link_name="WindowShouldClose")
-window_should_close :: func() -> bool
-
-@(extern,link_name="CloseWindow")
-close_window :: func()
-
-@(extern,link_name="BeginDrawing")
-begin_drawing :: func()
-
-@(extern,link_name="ClearBackground")
-clear_background :: func(color: int)
-
-@(extern,link_name="DrawText")
-draw_text :: func(text: string, pos_x: int, pos_y: int, font_size: int, color: int)
-
-@(extern,link_name="EndDrawing")
-end_drawing :: func()
+import "raylib" as rl
 
 @(export)
 main :: func() -> int {
-    init_window(800, 600, "Raylib Example")
-    set_target_fps(60)
+    rl.init_window(800, 600, "Raylib Example")
+    rl.set_target_fps(60)
 
     black := 4279769112 // 0xFF181818 (black-ish)
     white := 4293980400 // 0xFFF0F0F0 (white-ish)
 
-    for !window_should_close() {
-        begin_drawing()
-        clear_background(black)
+    for !rl.window_should_close() {
+        rl.begin_drawing()
+        rl.clear_background(black)
 
         // Draw some text
-        draw_text("Hello from Cubit!", 300, 290, 20, white)
+        rl.draw_text("Hello from Cubit!", 300, 290, 20, white)
 
-        end_drawing()
+        rl.end_drawing()
     }
 
-    close_window()
+    rl.close_window()
 
     return 0
 }

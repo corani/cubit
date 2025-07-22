@@ -9,13 +9,15 @@ type TypeChecker struct {
 	scopes     []map[string]*Symbol
 	errors     []error
 	lastType   *ast.Type
-	lastSymbol *Symbol // set by VisitVariableRef for lvalue assignment
+	lastSymbol *Symbol                 // set by VisitVariableRef for lvalue assignment
+	imports    map[string]*TypeChecker // alias -> TypeChecker for imported units
 }
 
 func NewTypeChecker() *TypeChecker {
 	return &TypeChecker{
-		scopes: nil,
-		errors: nil,
+		scopes:  nil,
+		errors:  nil,
+		imports: make(map[string]*TypeChecker),
 	}
 }
 
@@ -34,6 +36,15 @@ func Check(unit *ast.CompilationUnit) error {
 }
 
 func (tc *TypeChecker) VisitCompilationUnit(unit *ast.CompilationUnit) {
+	// Recursively typecheck all imported units first, each with its own TypeChecker
+	for alias, imp := range unit.Imports {
+		if imp.Unit != nil {
+			importTC := NewTypeChecker()
+			imp.Unit.Accept(importTC)
+			tc.imports[alias] = importTC
+		}
+	}
+
 	// Push global scope
 	tc.pushScope()
 
@@ -158,12 +169,28 @@ func (tc *TypeChecker) VisitAssign(a *ast.Assign) {
 }
 
 func (tc *TypeChecker) VisitCall(call *ast.Call) {
-	// Look up the function definition
-	sym, ok := tc.lookupSymbol(call.Ident)
+	// Look up the function definition, using namespace if present
+	var (
+		sym *Symbol
+		ok  bool
+	)
+
+	if call.Namespace != "" {
+		importTC, exists := tc.imports[call.Namespace]
+		if !exists {
+			call.Location().Errorf("unknown import namespace '%s'", call.Namespace)
+			tc.lastType = &ast.Type{Kind: ast.TypeUnknown}
+			return
+		}
+
+		sym, ok = importTC.lookupSymbol(call.Ident)
+	} else {
+		sym, ok = tc.lookupSymbol(call.Ident)
+	}
+
 	if !ok || !sym.IsFunc || sym.FuncDef == nil {
 		call.Location().Errorf("call to undefined function '%s'", call.Ident)
 		tc.lastType = &ast.Type{Kind: ast.TypeUnknown}
-
 		return
 	}
 
@@ -245,8 +272,23 @@ func (tc *TypeChecker) VisitLiteral(lit *ast.Literal) {
 }
 
 func (tc *TypeChecker) VisitVariableRef(ref *ast.VariableRef) {
-	// Look up the variable in the current scope stack
-	if sym, ok := tc.lookupSymbol(ref.Ident); ok && !sym.IsFunc {
+	// Look up the variable, using namespace if present
+	var sym *Symbol
+	var ok bool
+	if ref.Namespace != "" {
+		importTC, exists := tc.imports[ref.Namespace]
+		if !exists {
+			ref.Location().Errorf("unknown import namespace '%s'", ref.Namespace)
+			ref.Type = &ast.Type{Kind: ast.TypeUnknown}
+			tc.lastType = ref.Type
+			tc.lastSymbol = nil
+			return
+		}
+		sym, ok = importTC.lookupSymbol(ref.Ident)
+	} else {
+		sym, ok = tc.lookupSymbol(ref.Ident)
+	}
+	if ok && !sym.IsFunc {
 		ref.Type = sym.Type
 		tc.lastType = sym.Type
 		tc.lastSymbol = sym

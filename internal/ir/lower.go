@@ -240,12 +240,8 @@ func (v *visitor) VisitCall(c *ast.Call) {
 	// Lower the callee (function name)
 	ident := Ident(c.Ident)
 
-	for _, fd := range v.unit.FuncDefs {
-		if fd.Ident == ident && fd.LinkName != "" {
-			// If the function has a link name, use that instead
-			ident = fd.LinkName
-			break
-		}
+	if v, ok := c.FuncDef.Attributes.GetString(ast.AttrKeyLinkname); ok {
+		ident = Ident(v)
 	}
 
 	calleeVal := NewValGlobal(c.Location(), ident, v.mapTypeToAbiTy(c.Type))

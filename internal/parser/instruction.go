@@ -66,9 +66,15 @@ func (p *Parser) parseDeclare(ident lexer.Token) ([]ast.Instruction, error) {
 
 func (p *Parser) parseAssignOrDeclare(allowDeclaration bool) ([]ast.Instruction, bool, error) {
 	// TODO(daniel): fix duplication of code with parseBlock
-	first, err := p.expectType(lexer.TypeIdent)
+	first, err := p.expectType(lexer.TypeIdent, lexer.TypeBang)
 	if err != nil {
 		return nil, false, err // EOF
+	}
+
+	// TODO(daniel): this is a bit ugly, just to avoid the "expected Identifier, got Bang" when
+	// we speculatively enter the parseAssignOrDeclare function.
+	if first.Type != lexer.TypeIdent {
+		return nil, false, nil
 	}
 
 	// If it's an identifier, it might be a declaration.
@@ -182,7 +188,7 @@ func (p *Parser) parseAssignWithOp(lhs ast.LValue, op ast.BinOpKind) ([]ast.Inst
 // parseCall parses the argument list of a function call. It expects `first` to be the identifier
 // of the function being called. The left-parenthesis `(` should have already been consumed. It
 // parses a comma-separated list of expressions until it encounters a right-parenthesis `)`.
-func (p *Parser) parseCall(first lexer.Token) (*ast.Call, error) {
+func (p *Parser) parseCall(namespace string, first lexer.Token) (*ast.Call, error) {
 	var (
 		args []ast.Arg
 		next lexer.Token
@@ -212,7 +218,7 @@ func (p *Parser) parseCall(first lexer.Token) (*ast.Call, error) {
 		}
 	}
 
-	return ast.NewCall(first.Location, "", first.StringVal, args...), nil
+	return ast.NewCall(first.Location, namespace, first.StringVal, args...), nil
 }
 
 // parseIf parses an if/else statement.

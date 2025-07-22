@@ -439,7 +439,7 @@ func (p *Parser) parseParamType() *ast.Type {
 func (p *Parser) parseFuncReturnType() (*ast.Type, error) {
 	arrow, err := p.peekType(lexer.TypeArrow)
 	if err != nil {
-		return nil, err
+		return nil, nil // EOF is not an error here
 	}
 
 	if arrow.Type == lexer.TypeArrow {
@@ -567,13 +567,29 @@ func (p *Parser) parseBlock(start lexer.Token) ([]ast.Instruction, error) {
 
 			// If not assignment, try to parse as a function call (ident(...))
 			if first.Type == lexer.TypeIdent {
+				namespace := ""
+
+				dot, err := p.peekType(lexer.TypeDot)
+				if err != nil {
+					return nil, err // EOF
+				}
+
+				if dot.Type == lexer.TypeDot {
+					namespace = first.StringVal
+
+					first, err = p.expectType(lexer.TypeIdent)
+					if err != nil {
+						return nil, err // EOF
+					}
+				}
+
 				next, err := p.peekType(lexer.TypeLparen)
 				if err != nil {
 					return nil, err // EOF
 				}
 
 				if next.Type == lexer.TypeLparen {
-					inst, err := p.parseCall(first)
+					inst, err := p.parseCall(namespace, first)
 					if err != nil {
 						return nil, err
 					}

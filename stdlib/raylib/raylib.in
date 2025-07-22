@@ -1,0 +1,25 @@
+package raylib
+
+@(extern,link_name="InitWindow")
+init_window :: func(width: int, height: int, title: string)
+
+@(extern,link_name="SetTargetFPS")
+set_target_fps :: func(fps: int)
+
+@(extern,link_name="WindowShouldClose")
+window_should_close :: func() -> bool
+
+@(extern,link_name="CloseWindow")
+close_window :: func()
+
+@(extern,link_name="BeginDrawing")
+begin_drawing :: func()
+
+@(extern,link_name="ClearBackground")
+clear_background :: func(color: int)
+
+@(extern,link_name="DrawText")
+draw_text :: func(text: string, pos_x: int, pos_y: int, font_size: int, color: int)
+
+@(extern,link_name="EndDrawing")
+end_drawing :: func()

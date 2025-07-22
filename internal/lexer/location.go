@@ -1,6 +1,9 @@
 package lexer
 
-import "fmt"
+import (
+	"fmt"
+	"runtime"
+)
 
 type Location struct {
 	Filename     string
@@ -13,6 +16,20 @@ func (l Location) String() string {
 
 func (l Location) Errorf(format string, args ...any) error {
 	fmt.Printf("%s: [ERRO] "+format+"\n", append([]any{l}, args...)...)
+
+	// Print a stack trace
+	fmt.Println("Stack trace:")
+	for i := 1; ; i++ {
+		pc, file, line, ok := runtime.Caller(i)
+		if !ok {
+			break
+		}
+		fn := runtime.FuncForPC(pc)
+		if fn == nil {
+			continue
+		}
+		fmt.Printf("\t%s:%d: %s\n", file, line, fn.Name())
+	}
 
 	return fmt.Errorf("%s: "+format, append([]any{l}, args...)...)
 }

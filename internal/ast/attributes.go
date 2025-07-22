@@ -73,7 +73,18 @@ type Attributes map[AttrKey]AttrValue
 
 func (a Attributes) Has(key AttrKey) bool {
 	_, exists := a[key]
+
 	return exists
+}
+
+func (a Attributes) GetString(key AttrKey) (string, bool) {
+	if val, ok := a[key]; ok {
+		if strVal, ok := val.(AttrString); ok {
+			return string(strVal), true
+		}
+	}
+
+	return "", false
 }
 
 func (a Attributes) String() string {
