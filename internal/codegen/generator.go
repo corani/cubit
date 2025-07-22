@@ -3,6 +3,7 @@ package codegen
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -44,8 +45,12 @@ func GenerateAssembly(srcfile string, unit *ir.CompilationUnit, asmfile string) 
 	return os.WriteFile(asmfile, w.Bytes(), 0644)
 }
 
-func Compile(asm, bin string) error {
-	if out, err := exec.Command("cc", "-o", bin, asm).CombinedOutput(); err != nil {
+func Compile(asm, bin string, flags ...string) error {
+	args := append([]string{"-o", bin, asm}, flags...)
+
+	log.Printf("[CMD] cc %s", strings.Join(args, " "))
+
+	if out, err := exec.Command("cc", args...).CombinedOutput(); err != nil {
 		return fmt.Errorf("cc failed: %s: %w", string(out), err)
 	}
 

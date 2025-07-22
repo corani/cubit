@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/corani/cubit/internal/analyzer"
 	"github.com/corani/cubit/internal/codegen"
@@ -27,11 +28,13 @@ func withExt(filename, ext string) string {
 
 func main() {
 	var writeAST, writeSSA, run, help bool
+	var ldflagsStr string
 
 	flag.BoolVar(&writeAST, "ast", false, "write AST to file")
 	flag.BoolVar(&writeSSA, "ssa", false, "write SSA code to file")
 	flag.BoolVar(&run, "run", false, "run the compiled code")
 	flag.BoolVar(&help, "help", false, "show help message")
+	flag.StringVar(&ldflagsStr, "ldflags", "", "comma-separated linker flags (e.g. ./lib/libraylib.a,-lm)")
 
 	flag.Parse()
 
@@ -108,7 +111,13 @@ func main() {
 		panic(fmt.Sprintf("failed to generate assembly: %v", err))
 	}
 
-	if err := codegen.Compile(asmFile, binFile); err != nil {
+	var linkFlags []string
+
+	if ldflagsStr != "" {
+		linkFlags = strings.Split(ldflagsStr, ",")
+	}
+
+	if err := codegen.Compile(asmFile, binFile, linkFlags...); err != nil {
 		panic(fmt.Sprintf("failed to compile assembly: %v", err))
 	}
 
