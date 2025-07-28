@@ -446,13 +446,17 @@ Pointers provide low-level access to memory and are used for referencing, derefe
 
 ### Address-of Operator
 
-- Use `&` to take the address of a variable or value.
-  - Example: `p := &x` assigns `p` the address of `x`.
+- Use `&` to take the address of a variable or value. Examples:
+  - `p := &x` assigns `p` the address of `x`.
+  - `p := &42` assigns `p` the address of a temporary integer value.
+  - `p := &arr[3]` assigns `p` the address of the 4th element in an array.
 
 ### Dereferencing
 
 - Use postfix `^` to dereference a pointer.
   - Example: `val := p^` assigns the value pointed to by `p` to `val`.
+- When the intend is unambiguous, you can omit the `^`:
+  - Example: `val := p[3]` is equivalent to `val := p^[3]` if `p` is a pointer to an array.
 
 ### Pointer Arithmetic
 

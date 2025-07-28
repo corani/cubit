@@ -1,0 +1,20 @@
+package main
+
+import "core"
+
+@(export)
+main :: func() -> int {
+  // Address-of variable example
+  x := 42
+  px := &x
+  printf("Value at px: %d\n", px^)
+
+  // Address-of literal example
+  py := &33
+  printf("Value at py: %d\n", py^)
+
+  pz := &"Hello"
+  printf("Value at pz: %s\n", pz^)
+
+  return 0
+}

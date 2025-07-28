@@ -26,6 +26,7 @@ type visitor struct {
 	labelCounter     int
 	localSlots       map[string]*Val // variable/param name -> stack slot (function-local)
 	lvalue           bool
+	lastAddress      *Val // holds the address (slot) of the last lowered lvalue
 }
 
 func newVisitor() *visitor {
@@ -523,6 +524,18 @@ func (v *visitor) VisitUnaryOp(u *ast.UnaryOp) {
 		} else {
 			panic("unsupported type for unary minus in lowering")
 		}
+	case ast.UnaryOpAddrOf:
+		// If the operand is an lvalue, use its address
+		if _, ok := u.Expr.(ast.LValue); ok {
+			u.Expr.Accept(v)
+			v.lastVal = v.lastAddress
+			v.lastType = &ast.Type{Kind: ast.TypePointer, Elem: operandType}
+		} else {
+			// Not an lvalue: synthesize a temp, assign, and take its address
+			slot := v.nextTempVar(operandType, operand, u.Location())
+			v.lastVal = slot
+			v.lastType = &ast.Type{Kind: ast.TypePointer, Elem: operandType}
+		}
 	default:
 		panic("unsupported unary operator in lowering")
 	}
@@ -616,30 +629,23 @@ func (v *visitor) VisitFor(f *ast.For) {
 }
 
 func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {
-	if v.lvalue {
-		val := v.lastVal
-		v.lvalue = false
-
-		// Assignment to a variable or parameter: always store to its slot
-		if slot, ok := v.localSlots[vr.Ident]; ok {
+	if slot, ok := v.localSlots[vr.Ident]; ok {
+		v.lastAddress = slot
+		if v.lvalue {
+			val := v.lastVal
+			v.lvalue = false
 			v.appendInstruction(NewStore(vr.Location(), slot, val))
 			return
-		}
-
-		panic("assignment to undeclared variable: " + vr.Ident)
-	} else {
-		// Always load from the stack slot for both parameters and locals
-		if slot, ok := v.localSlots[vr.Ident]; ok {
-			// Load the value from the slot
+		} else {
+			// Always load from the stack slot for both parameters and locals
 			tmp := NewValIdent(vr.Location(), v.nextIdent("tmp"), v.mapTypeToAbiTy(vr.Type))
 			v.appendInstruction(NewLoad(vr.Location(), tmp, slot))
 			v.lastVal = tmp
 			v.lastType = vr.Type
 			return
 		}
-
-		panic("reference to undeclared variable: " + vr.Ident)
 	}
+	panic("reference to undeclared variable: " + vr.Ident)
 }
 
 // VisitDeref handles pointer dereference expressions
@@ -777,6 +783,27 @@ func (v *visitor) nextIdent(prefix string) Ident {
 	v.tmpCounter++
 
 	return Ident(fmt.Sprintf("_%s_%04d", prefix, v.tmpCounter))
+}
+
+// synthesizeTempVar creates a new temporary local variable, assigns the given value to it, and returns its identifier.
+// Used for lowering address-of on literals and non-addressable expressions.
+func (v *visitor) nextTempVar(ty *ast.Type, value *Val, loc lexer.Location) *Val {
+	tmpName := v.nextIdent("tmp")
+	abiTy := v.mapTypeToAbiTy(ty)
+	slot := NewValIdent(loc, tmpName, abiTy)
+	// Assume 4 bytes for int/bool, 8 for long/pointer
+	var size int64 = 4
+	switch abiTy.BaseTy {
+	case BaseLong:
+		size = 8
+	case BaseWord:
+		size = 4
+	}
+	sizeVal := NewValInteger(loc, size, abiTy)
+	v.lastInstructions = append(v.lastInstructions, NewAlloc(loc, slot, sizeVal))
+	v.lastInstructions = append(v.lastInstructions, NewStore(loc, slot, value))
+	v.localSlots[string(tmpName)] = slot
+	return slot
 }
 
 // mapTypeToAbiTy maps an *ast.Type to the appropriate AbiTy for IR lowering.

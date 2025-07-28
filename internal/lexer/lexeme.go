@@ -49,7 +49,7 @@ const (
 	TypeCaret         TokenType = "Caret"         // "^"
 	TypeShl           TokenType = "ShiftLeft"     // "<<"
 	TypeShr           TokenType = "ShiftRight"    // ">>"
-	TypeBinAnd        TokenType = "BinaryAnd"     // "&"
+	TypeAmpersand     TokenType = "BinaryAnd"     // "&"
 	TypeBinOr         TokenType = "BinaryOr"      // "|"
 	TypeLogAnd        TokenType = "LogicalAnd"    // "&&"
 	TypeLogOr         TokenType = "LogicalOr"     // "||"
@@ -89,7 +89,7 @@ var symbols = map[string]TokenType{
 	">":  TypeGt,
 	">=": TypeGe,
 	">>": TypeShr,
-	"&":  TypeBinAnd,
+	"&":  TypeAmpersand,
 	"&&": TypeLogAnd,
 	"|":  TypeBinOr,
 	"||": TypeLogOr,

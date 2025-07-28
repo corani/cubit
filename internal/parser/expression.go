@@ -16,23 +16,23 @@ type opInfo struct {
 }
 
 var opPrecedence = map[lexer.TokenType]opInfo{
-	lexer.TypePlus:    {precedence: 10, rightAssoc: false, kind: ast.BinOpAdd},
-	lexer.TypeMinus:   {precedence: 10, rightAssoc: false, kind: ast.BinOpSub},
-	lexer.TypeStar:    {precedence: 20, rightAssoc: false, kind: ast.BinOpMul},
-	lexer.TypeSlash:   {precedence: 20, rightAssoc: false, kind: ast.BinOpDiv},
-	lexer.TypePercent: {precedence: 20, rightAssoc: false, kind: ast.BinOpMod},
-	lexer.TypeShl:     {precedence: 15, rightAssoc: false, kind: ast.BinOpShl},
-	lexer.TypeShr:     {precedence: 15, rightAssoc: false, kind: ast.BinOpShr},
-	lexer.TypeBinAnd:  {precedence: 8, rightAssoc: false, kind: ast.BinOpAnd},
-	lexer.TypeBinOr:   {precedence: 6, rightAssoc: false, kind: ast.BinOpOr},
-	lexer.TypeLogAnd:  {precedence: 4, rightAssoc: false, kind: ast.BinOpLogAnd},
-	lexer.TypeLogOr:   {precedence: 3, rightAssoc: false, kind: ast.BinOpLogOr},
-	lexer.TypeEq:      {precedence: 5, rightAssoc: false, kind: ast.BinOpEq},
-	lexer.TypeNe:      {precedence: 5, rightAssoc: false, kind: ast.BinOpNe},
-	lexer.TypeLt:      {precedence: 7, rightAssoc: false, kind: ast.BinOpLt},
-	lexer.TypeLe:      {precedence: 7, rightAssoc: false, kind: ast.BinOpLe},
-	lexer.TypeGt:      {precedence: 7, rightAssoc: false, kind: ast.BinOpGt},
-	lexer.TypeGe:      {precedence: 7, rightAssoc: false, kind: ast.BinOpGe},
+	lexer.TypePlus:      {precedence: 10, rightAssoc: false, kind: ast.BinOpAdd},
+	lexer.TypeMinus:     {precedence: 10, rightAssoc: false, kind: ast.BinOpSub},
+	lexer.TypeStar:      {precedence: 20, rightAssoc: false, kind: ast.BinOpMul},
+	lexer.TypeSlash:     {precedence: 20, rightAssoc: false, kind: ast.BinOpDiv},
+	lexer.TypePercent:   {precedence: 20, rightAssoc: false, kind: ast.BinOpMod},
+	lexer.TypeShl:       {precedence: 15, rightAssoc: false, kind: ast.BinOpShl},
+	lexer.TypeShr:       {precedence: 15, rightAssoc: false, kind: ast.BinOpShr},
+	lexer.TypeAmpersand: {precedence: 8, rightAssoc: false, kind: ast.BinOpAnd},
+	lexer.TypeBinOr:     {precedence: 6, rightAssoc: false, kind: ast.BinOpOr},
+	lexer.TypeLogAnd:    {precedence: 4, rightAssoc: false, kind: ast.BinOpLogAnd},
+	lexer.TypeLogOr:     {precedence: 3, rightAssoc: false, kind: ast.BinOpLogOr},
+	lexer.TypeEq:        {precedence: 5, rightAssoc: false, kind: ast.BinOpEq},
+	lexer.TypeNe:        {precedence: 5, rightAssoc: false, kind: ast.BinOpNe},
+	lexer.TypeLt:        {precedence: 7, rightAssoc: false, kind: ast.BinOpLt},
+	lexer.TypeLe:        {precedence: 7, rightAssoc: false, kind: ast.BinOpLe},
+	lexer.TypeGt:        {precedence: 7, rightAssoc: false, kind: ast.BinOpGt},
+	lexer.TypeGe:        {precedence: 7, rightAssoc: false, kind: ast.BinOpGe},
 }
 
 func (p *Parser) parseExpression(optional bool) (ast.Expression, error) {
@@ -88,8 +88,9 @@ func (p *Parser) parseExpressionPratt(optional bool, minPrec int) (ast.Expressio
 
 func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 	starters := []lexer.TokenType{
-		lexer.TypeMinus, // allow unary minus as a primary
-		lexer.TypeBang,  // allow logical not as a primary
+		lexer.TypeMinus,     // allow unary minus as a primary
+		lexer.TypeBang,      // allow logical not as a primary
+		lexer.TypeAmpersand, // allow address-of as a primary
 		lexer.TypeNumber,
 		lexer.TypeBool,
 		lexer.TypeString,
@@ -126,6 +127,12 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 			return nil, err
 		}
 		expr = ast.NewUnaryOp(ast.UnaryOpMinus, operand, start.Location)
+	case lexer.TypeAmpersand:
+		operand, err := p.parsePrimary(false)
+		if err != nil {
+			return nil, err
+		}
+		expr = ast.NewUnaryOp(ast.UnaryOpAddrOf, operand, start.Location)
 	case lexer.TypeBang:
 		operand, err := p.parsePrimary(false)
 		if err != nil {

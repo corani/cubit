@@ -400,6 +400,14 @@ func (tc *TypeChecker) VisitUnaryOp(u *ast.UnaryOp) {
 			u.Location().Errorf("unary minus requires int type, got %s", u.Type)
 			u.Type = &ast.Type{Kind: ast.TypeUnknown}
 		}
+	case ast.UnaryOpAddrOf:
+		// Address-of: result is pointer to operand type
+		if u.Type == nil || u.Type.Kind == ast.TypeUnknown {
+			u.Location().Errorf("cannot take address of unknown type")
+			u.Type = &ast.Type{Kind: ast.TypeUnknown}
+		} else {
+			u.Type = ast.NewPointerType(u.Type, 1, u.Location())
+		}
 	default:
 		u.Location().Errorf("unknown unary operation: %s", u.Operation)
 		u.Type = &ast.Type{Kind: ast.TypeUnknown}

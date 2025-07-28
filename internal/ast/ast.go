@@ -606,7 +606,8 @@ func (*ArrayIndex) isLValue()     {}
 type UnaryOpKind string
 
 const (
-	UnaryOpMinus UnaryOpKind = "-"
+	UnaryOpMinus  UnaryOpKind = "-"
+	UnaryOpAddrOf UnaryOpKind = "&" // address-of operator
 )
 
 type UnaryOp struct {
