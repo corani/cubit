@@ -535,13 +535,30 @@ func (v *visitor) VisitUnaryOp(u *ast.UnaryOp) {
 			u.Location().Errorf("unary minus is only supported for int types, got: %s", operandType.String())
 		}
 	case ast.UnaryOpAddrOf:
-		// If the operand is an lvalue, use its address
-		if _, ok := u.Expr.(ast.LValue); ok {
-			u.Expr.Accept(v)
+		switch expr := u.Expr.(type) {
+		case ast.LValue:
+			// If the operand is an lvalue, use its address
 			v.lastVal = v.lastAddress
 			v.lastType = &ast.Type{Kind: ast.TypePointer, Elem: operandType}
-		} else {
-			// Not an lvalue: synthesize a temp, assign, and take its address
+		case *ast.Literal:
+			// Use deduplication helper for string/int literals
+			switch expr.Type.Kind {
+			// TODO(daniel): find out why this segfaults.
+			case ast.TypeInt:
+				global := getOrCreateLiteralGlobal(v, u.Location(), expr.Type.Kind, expr.IntValue)
+				v.lastVal = global
+				v.lastType = &ast.Type{Kind: ast.TypePointer, Elem: expr.Type}
+			case ast.TypeString:
+				// NOTE(daniel): string literals are already pointers.
+				fallthrough
+			default:
+				// Fallback: synthesize a temp local
+				slot := v.nextTempVar(operandType, operand, u.Location())
+				v.lastVal = slot
+				v.lastType = &ast.Type{Kind: ast.TypePointer, Elem: operandType}
+			}
+		default:
+			// Not an lvalue or literal: synthesize a temp, assign, and take its address
 			slot := v.nextTempVar(operandType, operand, u.Location())
 			v.lastVal = slot
 			v.lastType = &ast.Type{Kind: ast.TypePointer, Elem: operandType}

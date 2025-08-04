@@ -309,7 +309,13 @@ func NewDataDef(loc lexer.Location, ident Ident, initializer ...DataInit) DataDe
 func NewDataDefStringZ(loc lexer.Location, ident Ident, val string) DataDef {
 	return NewDataDef(loc, ident,
 		NewDataInitString(loc, val),
-		NewDataInitExt(loc, ExtByte, NewDataItemInteger(loc, 0)),
+		NewDataInitExt(loc, ExtByte, NewDataItemInteger(loc, 0)), // zero-termination
+	)
+}
+
+func NewDataDefInteger(loc lexer.Location, ident Ident, val int64) DataDef {
+	return NewDataDef(loc, ident,
+		NewDataInitExt(loc, ExtWord, NewDataItemInteger(loc, val)),
 	)
 }
 

@@ -38,6 +38,20 @@ func getOrCreateLiteralGlobal[T string | int](v *visitor, loc lexer.Location, ki
 		v.literalGlobals = append(v.literalGlobals, literalGlobal{kind, sval, global})
 
 		return global
+	case ast.TypeInt:
+		ival, ok := any(value).(int)
+		if !ok {
+			loc.Errorf("expected int literal, got %T", value)
+			return &Val{}
+		}
+
+		ident := v.nextIdent("int")
+		global := NewValGlobal(loc, ident, NewAbiTyBase(BaseLong))
+
+		v.unit.DataDefs = append(v.unit.DataDefs, NewDataDefInteger(loc, ident, int64(ival)))
+		v.literalGlobals = append(v.literalGlobals, literalGlobal{kind, ival, global})
+
+		return global
 	default:
 		loc.Errorf("unsupported literal type for global: %s", kind)
 

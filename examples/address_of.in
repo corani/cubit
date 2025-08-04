@@ -10,11 +10,11 @@ main :: func() -> int {
   printf("Value at px: %d\n", px^)
 
   // Address-of literal example
-  py := &33
-  printf("Value at py: %d\n", py^)
-
   pz := &"Hello"
   printf("Value at pz: %s\n", pz^)
+
+  py := &33
+  printf("Value at py: %d\n", py^)
 
   return 0
 }
