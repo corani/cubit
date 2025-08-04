@@ -5,20 +5,34 @@ import (
 	"strings"
 
 	"github.com/corani/cubit/internal/ir"
+	"github.com/corani/cubit/internal/lexer"
 )
 
 // SsaGen implements ast.Visitor and generates SSA code.
-type SsaGen struct{}
+type SsaGen struct {
+	prevLoc lexer.Location
+}
 
 // NewSSAVisitor returns a new SSAVisitor.
 func NewSSAVisitor() *SsaGen {
 	return &SsaGen{}
 }
 
+func (v *SsaGen) printLocation(sb *strings.Builder, loc lexer.Location, format string, args ...any) {
+	if loc.Filename == v.prevLoc.Filename && loc.Line == v.prevLoc.Line {
+		return
+	}
+
+	v.prevLoc = loc
+
+	sb.WriteString(fmt.Sprintf("# "+format+" (%s)\n", append(args, loc)...))
+}
+
 func (v *SsaGen) VisitCompilationUnit(cu *ir.CompilationUnit) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("# package %s (%s)\n", cu.Package, cu.Loc))
+	v.printLocation(&sb, cu.Loc, "package %s", cu.Package)
+	sb.WriteRune('\n')
 
 	for i := range cu.Types {
 		sb.WriteString(cu.Types[i].Accept(v))
@@ -104,10 +118,17 @@ func (v *SsaGen) VisitFuncDef(fd *ir.FuncDef) string {
 	for i, block := range fd.Blocks {
 		blocks[i] = v.VisitBlock(block)
 	}
-	return fmt.Sprintf("\n# %s\n%sfunction %s$%s(%s) {%s}",
-		fd.Loc, linkage, retTy, fd.Ident,
+
+	var sb strings.Builder
+
+	v.printLocation(&sb, fd.Loc, "function %s", fd.Ident)
+
+	sb.WriteString(fmt.Sprintf("%sfunction %s$%s(%s) {%s}",
+		linkage, retTy, fd.Ident,
 		strings.Join(params, ", "),
-		strings.Join(blocks, "\n"))
+		strings.Join(blocks, "\n")))
+
+	return sb.String()
 }
 
 // --- Helper visitor methods for nested types ---
@@ -223,24 +244,24 @@ func (v *SsaGen) VisitAbiTy(a ir.AbiTy) string {
 }
 
 func (v *SsaGen) VisitBlock(b ir.Block) string {
-	var label string
+	var sb strings.Builder
 
 	if b.Label != "" {
-		label = fmt.Sprintf("@%s\n", b.Label)
+		sb.WriteString(fmt.Sprintf("\n@%s\n", b.Label))
 	}
 
-	instructions := make([]string, len(b.Instructions))
+	for _, instr := range b.Instructions {
+		v.printLocation(&sb, instr.Location(), "")
 
-	for i, instr := range b.Instructions {
 		// TODO(daniel): we need something better for indentation...
 		if _, ok := instr.(*ir.Label); ok {
-			instructions[i] = instr.Accept(v)
+			sb.WriteString(instr.Accept(v) + "\n")
 		} else {
-			instructions[i] = "\t" + instr.Accept(v)
+			sb.WriteString("\t" + instr.Accept(v) + "\n")
 		}
 	}
 
-	return fmt.Sprintf("\n%s%s\n", label, strings.Join(instructions, "\n"))
+	return sb.String()
 }
 
 func (v *SsaGen) VisitLabel(l *ir.Label) string {

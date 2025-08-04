@@ -18,56 +18,65 @@ func TestAST_CompilationUnit(t *testing.T) {
 	t.Parallel()
 
 	loc := lexer.Location{
-		Line:     1,
+		Line:     0,
 		Column:   1,
 		Filename: "test.in",
 	}
 
+	nextLoc := func() lexer.Location {
+		loc.Line++
+
+		return loc
+	}
+
 	unit := ir.NewCompilationUnit()
-	unit.WithPackage("test", loc)
+	unit.WithPackage("test", nextLoc())
 
 	unit.WithDataDefs(
 		ir.NewDataDefStringZ(loc, ir.Ident("data_hello0"), `Hello from test-%d!\n`))
 
 	unit.WithFuncDefs(
-		ir.NewFuncDef(loc, ir.Ident("hello"),
+		ir.NewFuncDef(nextLoc(), ir.Ident("hello"),
 			ir.NewParamRegular(loc, ir.NewAbiTyBase(ir.BaseWord), ir.Ident("arg")),
 		).
 			WithBlocks(ir.Block{
 				Label: "start",
 				Instructions: []ir.Instruction{
-					ir.NewCall(loc, ir.NewValGlobal(loc, ir.Ident("printf"), ir.NewAbiTyBase(ir.BaseLong)),
+					ir.NewCall(nextLoc(), ir.NewValGlobal(loc, ir.Ident("printf"), ir.NewAbiTyBase(ir.BaseLong)),
 						ir.NewArgRegular(loc, ir.NewValGlobal(loc, ir.Ident("data_hello0"), ir.NewAbiTyBase(ir.BaseLong))),
 						ir.NewArgRegular(loc, ir.NewValIdent(loc, ir.Ident("arg"), ir.NewAbiTyBase(ir.BaseWord)))),
-					ir.NewRet(loc),
+					ir.NewRet(nextLoc()),
 				},
 			}),
-		ir.NewFuncDef(loc, ir.Ident("main")).
+		ir.NewFuncDef(nextLoc(), ir.Ident("main")).
 			WithLinkage(ir.NewLinkageExport(loc)).
 			WithRetTy(ir.NewAbiTyBase(ir.BaseWord)).
 			WithBlocks(ir.Block{
 				Label: "start",
 				Instructions: []ir.Instruction{
-					ir.NewCall(loc, ir.NewValGlobal(loc, ir.Ident("hello"), ir.NewAbiTyBase(ir.BaseWord)),
+					ir.NewCall(nextLoc(), ir.NewValGlobal(loc, ir.Ident("hello"), ir.NewAbiTyBase(ir.BaseWord)),
 						ir.NewArgRegular(loc, ir.NewValInteger(loc, 33, ir.NewAbiTyBase(ir.BaseWord)))),
-					ir.NewRet(loc, ir.NewValInteger(loc, 0, ir.NewAbiTyBase(ir.BaseWord))),
+					ir.NewRet(nextLoc(), ir.NewValInteger(loc, 0, ir.NewAbiTyBase(ir.BaseWord))),
 				},
 			}),
 	)
 
 	expected := `# package test (test.in:1:1)
 
-# test.in:1:1
+# function hello (test.in:2:1)
 function $hello(w %arg) {
 @start
+#  (test.in:3:1)
 	call $printf(l $data_hello0, w %arg)
+#  (test.in:4:1)
 	ret
 }
-
-# test.in:1:1
+# function main (test.in:5:1)
 export function w $main() {
 @start
+#  (test.in:6:1)
 	call $hello(w 33)
+#  (test.in:7:1)
 	ret 0
 }
 data $data_hello0 = { b "Hello from test-%d!\n", b 0 }
@@ -83,7 +92,7 @@ func TestAST_TypeDef(t *testing.T) {
 	t.Parallel()
 
 	loc := lexer.Location{
-		Line:     1,
+		Line:     0,
 		Column:   1,
 		Filename: "test.in",
 	}
@@ -225,7 +234,7 @@ func TestAST_FuncDef(t *testing.T) {
 				ir.NewParamRegular(loc, ir.NewAbiTySubW(ir.SubWSB), ir.Ident("b")),
 			).
 				WithRetTy(ir.NewAbiTyBase(ir.BaseWord)),
-			expected: "\n# test.in:1:1\nfunction w $addbyte(w %a, sb %b) {}",
+			expected: "# function addbyte (test.in:1:1)\nfunction w $addbyte(w %a, sb %b) {}",
 		},
 		{
 			name: "addenv",
@@ -236,7 +245,7 @@ func TestAST_FuncDef(t *testing.T) {
 			).
 				WithRetTy(ir.NewAbiTyBase(ir.BaseWord)).
 				WithLinkage(ir.NewLinkageExport(loc)),
-			expected: "\n# test.in:1:1\nexport function w $add(env %e, w %a, w %b) {}",
+			expected: "# function add (test.in:1:1)\nexport function w $add(env %e, w %a, w %b) {}",
 		},
 	}
 
