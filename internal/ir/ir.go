@@ -1,6 +1,8 @@
 package ir
 
-import "github.com/corani/cubit/internal/lexer"
+import (
+	"github.com/corani/cubit/internal/lexer"
+)
 
 // Visitor defines the visitor interface for SSA code generation.
 type Visitor interface {
@@ -555,15 +557,19 @@ func (r *Ret) Location() lexer.Location {
 }
 
 func NewRet(loc lexer.Location, val ...*Val) *Ret {
-	if len(val) > 1 {
-		panic("NewRet accepts at most one value")
+	var retVal *Val
+
+	switch len(val) {
+	case 0:
+		retVal = nil
+	case 1:
+		retVal = val[0]
+	default:
+		loc.Errorf("NewRet accepts at most one value, got %d", len(val))
+		retVal = val[0] // return the first value, ignore the rest
 	}
 
-	if len(val) == 0 {
-		return &Ret{}
-	}
-
-	return &Ret{Loc: loc, Val: val[0]}
+	return &Ret{Loc: loc, Val: retVal}
 }
 
 // Call represents an SSA call instruction.

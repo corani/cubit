@@ -383,14 +383,20 @@ type Return struct {
 }
 
 func NewReturn(location lexer.Location, ty *Type, val ...Expression) *Return {
+	var retVal Expression
+
 	switch len(val) {
 	case 0:
-		return &Return{Loc: location, Type: ty}
+		retVal = nil
 	case 1:
-		return &Return{Value: val[0], Loc: location, Type: ty}
+		retVal = val[0]
 	default:
-		panic("Return can only have one value")
+		location.Errorf("return can only have one value, got %d", len(val))
+
+		retVal = val[0] // return the first value, ignore the rest
 	}
+
+	return &Return{Value: retVal, Loc: location, Type: ty}
 }
 
 func (r *Return) Location() lexer.Location {

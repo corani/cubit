@@ -87,10 +87,10 @@ func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
 
 	if v, ok := fd.Attributes[ast.AttrKeyLinkname]; ok {
 		if v.Type() != ast.AttrStringType {
-			panic("link_name attribute must be a string")
+			fd.Location().Errorf("link_name attribute must be a string")
+		} else {
+			irFunc.LinkName = Ident(string(v.(ast.AttrString)))
 		}
-
-		irFunc.LinkName = Ident(string(v.(ast.AttrString)))
 	}
 
 	if fd.ReturnType != nil && fd.ReturnType.Kind != ast.TypeVoid {
@@ -104,10 +104,12 @@ func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
 
 	// --- Stack-allocate all parameters at function entry ---
 	var paramInitInstrs []Instruction
+
 	for _, param := range params {
 		// Create a stack slot for the parameter
 		slotName := Ident(string(param.Ident) + "_slot")
 		slotVal := NewValIdent(param.Loc, slotName, NewAbiTyBase(BaseLong))
+
 		// Assume 4 bytes for int/bool, 8 for long/pointer
 		var size int64 = 4
 		switch param.AbiTy.BaseTy {
@@ -117,8 +119,10 @@ func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
 			size = 4
 			// Add more cases as needed
 		}
+
 		sizeVal := NewValInteger(param.Loc, size, NewAbiTyBase(BaseLong))
 		paramInitInstrs = append(paramInitInstrs, NewAlloc(param.Loc, slotVal, sizeVal))
+
 		// Store the incoming parameter value into the slot
 		paramVal := NewValIdent(param.Loc, param.Ident, param.AbiTy)
 		paramInitInstrs = append(paramInitInstrs, NewStore(param.Loc, slotVal, paramVal))
@@ -162,22 +166,25 @@ func (v *visitor) VisitDeclare(d *ast.Declare) {
 		for tmpType != nil && tmpType.Kind == ast.TypeArray {
 			// TODO: support symbolic sizes?
 			if tmpType.Size.Kind != ast.SizeLiteral {
-				panic("array size must be a literal")
+				d.Location().Errorf("array size must be a literal")
+			} else {
+				size *= int64(tmpType.Size.Value)
+				tmpType = tmpType.Elem
 			}
-
-			size *= int64(tmpType.Size.Value)
-			tmpType = tmpType.Elem
 		}
+
 		// Assume only int arrays for now (4 bytes per int)
 		eleSize := int64(4)
 		size *= eleSize
 	} else if abiTy.BaseTy == BaseLong {
 		size = 8
 	}
+
 	sizeVal := NewValInteger(d.Location(), size, NewAbiTyBase(BaseLong))
 	slotName := Ident(string(d.Ident) + "_slot")
 	slotVal := NewValIdent(d.Location(), slotName, NewAbiTyBase(BaseLong))
 	v.appendInstruction(NewAlloc(d.Location(), slotVal, sizeVal))
+
 	v.localSlots[string(d.Ident)] = slotVal
 	v.lastVal = slotVal
 	v.lastType = d.Type
@@ -286,7 +293,9 @@ func (v *visitor) VisitReturn(r *ast.Return) {
 
 func (v *visitor) VisitLiteral(l *ast.Literal) {
 	if l.Type == nil {
-		panic("literal has nil type")
+		l.Location().Errorf("literal has nil type")
+
+		return
 	}
 
 	switch l.Type.Kind {
@@ -310,12 +319,13 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 		for tmpType != nil && tmpType.Kind == ast.TypeArray {
 			// TODO: support symbolic sizes?
 			if tmpType.Size.Kind != ast.SizeLiteral {
-				panic("array size must be a literal")
+				l.Location().Errorf("array size must be a literal")
+			} else {
+				size *= int64(tmpType.Size.Value)
+				tmpType = tmpType.Elem
 			}
-
-			size *= int64(tmpType.Size.Value)
-			tmpType = tmpType.Elem
 		}
+
 		// Assume only int arrays for now (4 bytes per int)
 		eleSize := int64(4)
 		totalBytes := size * eleSize
@@ -325,7 +335,7 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 		v.zeroInitialize(l.Location(), retVal, sizeVal)
 		v.lastVal = retVal
 	default:
-		panic("unsupported literal type: " + l.Type.String())
+		l.Location().Errorf("unsupported literal type: %s", l.Type.String())
 	}
 
 	v.lastType = l.Type
@@ -379,7 +389,9 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 
 	irOp, ok := binOpMap[b.Operation]
 	if !ok {
-		panic("unsupported binary operation: " + b.Operation)
+		b.Location().Errorf("unsupported binary operation: %s", b.Operation)
+
+		return
 	}
 
 	// Pointer arithmetic scaling
@@ -438,7 +450,7 @@ func (v *visitor) VisitBinop(b *ast.Binop) {
 			right = tmp
 			rightType = leftType // now both are pointer
 		} else {
-			panic("type mismatch in binary operation: " + leftType.String() + " vs " + rightType.String())
+			b.Location().Errorf("type mismatch in binary operation: %s vs %s", leftType.String(), rightType.String())
 		}
 	}
 
@@ -520,7 +532,7 @@ func (v *visitor) VisitUnaryOp(u *ast.UnaryOp) {
 			v.lastVal = result
 			v.lastType = operandType
 		} else {
-			panic("unsupported type for unary minus in lowering")
+			u.Location().Errorf("unary minus is only supported for int types, got: %s", operandType.String())
 		}
 	case ast.UnaryOpAddrOf:
 		// If the operand is an lvalue, use its address
@@ -535,7 +547,7 @@ func (v *visitor) VisitUnaryOp(u *ast.UnaryOp) {
 			v.lastType = &ast.Type{Kind: ast.TypePointer, Elem: operandType}
 		}
 	default:
-		panic("unsupported unary operator in lowering")
+		u.Location().Errorf("unsupported unary operator: %s", u.Operation)
 	}
 }
 
@@ -643,7 +655,9 @@ func (v *visitor) VisitVariableRef(vr *ast.VariableRef) {
 			return
 		}
 	}
-	panic("reference to undeclared variable: " + vr.Ident)
+
+	// If we reach here, the variable is not declared in the current scope
+	vr.Location().Errorf("reference to undeclared variable: %s", vr.Ident)
 }
 
 // VisitDeref handles pointer dereference expressions

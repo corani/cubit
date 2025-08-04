@@ -103,7 +103,7 @@ func (a Attributes) String() string {
 		case AttrBool:
 			attrs = append(attrs, fmt.Sprintf("%s=%t", k, v))
 		default:
-			panic(fmt.Sprintf("unknown attribute value type: %T", v))
+			attrs = append(attrs, fmt.Sprintf("%s=<unknown type: %T>", k, v))
 		}
 	}
 
