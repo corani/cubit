@@ -1,0 +1,15 @@
+package main
+
+import "core"
+
+foo :: func() {
+    printf("Hello, world!\n")
+}
+
+@(export)
+main :: func() -> int {
+    foo()
+    printf("Hello, world!\n")
+
+    return 0
+}

@@ -15,7 +15,6 @@ func Lower(unit *ast.CompilationUnit) (*CompilationUnit, error) {
 	return visitor.unit, nil
 }
 
-// visitor implements ast.Visitor and produces IR nodes.
 type visitor struct {
 	unit             *CompilationUnit
 	lastVal          *Val          // holds the result of lowering the last value (for expressions)
@@ -26,12 +25,14 @@ type visitor struct {
 	labelCounter     int
 	localSlots       map[string]*Val // variable/param name -> stack slot (function-local)
 	lvalue           bool
-	lastAddress      *Val // holds the address (slot) of the last lowered lvalue
+	lastAddress      *Val            // holds the address (slot) of the last lowered lvalue
+	literalGlobals   []literalGlobal // deduplication for literals
 }
 
 func newVisitor() *visitor {
 	return &visitor{
-		unit: NewCompilationUnit(),
+		unit:           NewCompilationUnit(),
+		literalGlobals: make([]literalGlobal, 0),
 	}
 }
 
@@ -298,10 +299,7 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 			v.lastVal = NewValInteger(l.Location(), 0, v.mapTypeToAbiTy(l.Type))
 		}
 	case ast.TypeString:
-		// TODO(daniel): This does not deduplicate identical string literals. Consider interning/deduplicating.
-		ident := v.nextIdent("str")
-		v.unit.DataDefs = append(v.unit.DataDefs, NewDataDefStringZ(l.Location(), ident, l.StringValue))
-		v.lastVal = NewValGlobal(l.Location(), ident, v.mapTypeToAbiTy(l.Type))
+		v.lastVal = getOrCreateLiteralGlobal(v, l.Location(), ast.TypeString, l.StringValue)
 	case ast.TypeArray:
 		// Only support zero-initialized array literals for now
 		if len(l.ArrayValue) != 0 {
