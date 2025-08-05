@@ -543,7 +543,6 @@ func (v *visitor) VisitUnaryOp(u *ast.UnaryOp) {
 		case *ast.Literal:
 			// Use deduplication helper for string/int literals
 			switch expr.Type.Kind {
-			// TODO(daniel): find out why this segfaults.
 			case ast.TypeInt:
 				global := getOrCreateLiteralGlobal(v, u.Location(), expr.Type.Kind, expr.IntValue)
 				v.lastVal = global
@@ -772,6 +771,7 @@ func (v *visitor) VisitArrayIndex(a *ast.ArrayIndex) {
 		v.appendInstruction(NewLoad(a.Location(), result, addr))
 		v.lastVal = result
 		v.lastType = baseType.Elem
+		v.lastAddress = addr
 	}
 }
 
