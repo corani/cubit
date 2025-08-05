@@ -310,10 +310,7 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 	case ast.TypeString:
 		v.lastVal = getOrCreateLiteralGlobal(v, l.Location(), ast.TypeString, l.StringValue)
 	case ast.TypeArray:
-		// Only support zero-initialized array literals for now
-		if len(l.ArrayValue) != 0 {
-			l.Location().Errorf("non-empty array literals are not supported in IR lowering yet")
-		}
+		// Compute array size
 		size := int64(1)
 		tmpType := l.Type
 		for tmpType != nil && tmpType.Kind == ast.TypeArray {
@@ -332,7 +329,30 @@ func (v *visitor) VisitLiteral(l *ast.Literal) {
 		sizeVal := NewValInteger(l.Location(), totalBytes, NewAbiTyBase(BaseLong))
 		retVal := NewValIdent(l.Location(), v.nextIdent("arr"), NewAbiTyBase(BaseLong))
 		v.appendInstruction(NewAlloc(l.Location(), retVal, sizeVal))
-		v.zeroInitialize(l.Location(), retVal, sizeVal)
+
+		// Initialize the array elements
+		switch len(l.ArrayValue) {
+		case int(size):
+			// Initialize each element if the size matches
+			for i, elem := range l.ArrayValue {
+				elem.Accept(v)
+				value := v.lastVal
+				offset := NewValInteger(l.Location(), int64(i)*eleSize, NewAbiTyBase(BaseLong))
+				addr := NewValIdent(l.Location(), v.nextIdent("arr_elem"), NewAbiTyBase(BaseLong))
+				v.appendInstruction(NewBinop(l.Location(), BinOpAdd, addr, retVal, offset))
+				v.appendInstruction(NewStore(l.Location(), addr, value))
+			}
+		case 0:
+			// Zero-initialize the array if empty
+			v.zeroInitialize(l.Location(), retVal, sizeVal)
+		default:
+			// Size mismatch: report an error
+			l.Location().Errorf("array literal size mismatch: expected %d, got %d", size, len(l.ArrayValue))
+
+			// Recovery: zero-initialize the array
+			v.zeroInitialize(l.Location(), retVal, sizeVal)
+		}
+
 		v.lastVal = retVal
 	default:
 		l.Location().Errorf("unsupported literal type: %s", l.Type.String())

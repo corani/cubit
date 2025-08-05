@@ -17,8 +17,7 @@ main :: func() -> int {
   printf("Value at py: %d\n", py^)
 
   // Address-of array-index example
-  arr := [3]int{}
-  arr[2] = 2
+  arr := [3]int{1,2,3}
   pArr1 := &arr[1]
   pArr2 := &arr[2]
   pArr1^ = 1
