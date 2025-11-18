@@ -1,0 +1,13 @@
+---
+version: "2"
+
+linters:
+  default: all
+  disable:
+    - testpackage
+    - forbidigo
+    - godox
+    - depguard
+    - revive
+    - noinlineerr
+    - wsl
