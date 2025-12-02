@@ -1,0 +1,107 @@
+(* EBNF for the cubit language (derived from internal/lexer and internal/parser) *)
+
+(* Start symbol *)
+program ::= { top_level_decl } ;
+
+(* Top-level declarations: attributes, package, imports, functions *)
+top_level_decl ::= attributes_opt ( package_decl | import_decl | func_decl ) ;
+
+attributes_opt ::= { attribute } ;
+attribute ::= "@" "(" [ attr_pair { "," attr_pair } ] ")" [ ";" ] ;
+attr_pair ::= IDENT [ ":" ( STRING | NUMBER ) ] ;
+
+package_decl ::= "package" IDENT ";" ;
+
+import_decl ::= "import" STRING [ "as" IDENT ] ";" ;
+
+(* Functions are declared as: IDENT ":" ":" "func" "(" [ func_params ] ")" [ "->" type ] ("{" block "}" | /* extern/builtin no body */) ;
+   Note: Parser expects two ':' tokens before 'func' so the header looks like: ident : : func
+*)
+func_decl ::= IDENT ":" ":" "func" "(" [ func_params ] ")" func_return_type func_body_opt ;
+
+func_params ::= func_param { "," func_param } ;
+func_param ::= attributes_opt IDENT ":" ( param_type | ( /* type omitted, may have default */ ) ) [ ( ":=" | "=" ) expression ] ;
+param_type ::= [ ".." ] type ;  (* varargs prefix uses token '..' *)
+func_return_type ::= [ "->" type ] ;
+func_body_opt ::= "{" block "}" | /* empty for extern/builtin */ ;
+
+block ::= { statement } ;
+
+statement ::= ";"                           (* empty statement *)
+            | return_stmt
+            | if_stmt
+            | for_stmt
+            | declaration_or_assignment
+            | call_stmt ;
+
+return_stmt ::= "return" [ expression ] ;
+
+if_stmt ::= "if" [ init_stmt ] expression "{" block "}" [ "else" ( if_stmt | "{" block "}" ) ] ;
+init_stmt ::= declaration_or_assignment ;
+
+for_stmt ::= "for" [ init_stmt ] expression [ ";" [ post_stmt ] ] "{" block "}" ;
+post_stmt ::= declaration_or_assignment ;
+
+(* Declarations and assignments *)
+declaration_or_assignment ::= 
+      (* typed declaration: IDENT ':' type [ '=' expression ] *)
+      IDENT ":" type [ "=" expression ]
+   | (* short declaration: IDENT ':=' expression (written as ':' followed by '=' in the lexer) *)
+      IDENT ":" "=" expression
+   | lvalue assign_op expression ;
+assign_op ::= ":" "=" | "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" ;
+
+call_stmt ::= [ IDENT "." ] IDENT "(" [ arg_list ] ")" ;
+arg_list ::= expression { "," expression } ;
+
+(* Expressions use Pratt parser with operator precedence. The operator set includes:
+   + - * / % << >> & | && || == != < <= > >=
+   Unary: - ! &  (and deref '^' as postfix)
+*)
+expression ::= pratt_expression ;
+
+pratt_expression ::= primary { binary_op primary } ;
+binary_op ::= "+" | "-" | "*" | "/" | "%" | "<<" | ">>" | "&" | "|" | "&&" | "||" | "==" | "!=" | "<" | "<=" | ">" | ">=" ;
+
+primary ::= "-" primary
+          | "!" primary
+          | "&" primary
+          | NUMBER
+          | BOOL_LITERAL
+          | STRING
+          | IDENT id_suffix
+          | "(" expression ")" [ "^" ]
+          | array_literal ;
+
+id_suffix ::= [
+      ( "." IDENT ( "(" [ arg_list ] ")" | "^" | "[" expression "]" | /* empty */ ) )
+   | ( "(" [ arg_list ] ")" )
+   | ( "^" )
+   | ( "[" expression "]" )
+   ] ;
+
+array_literal ::= "[" expression "]" base_type "{" [ literal_list ] "}" ;
+literal_list ::= literal { "," literal } ;
+literal ::= NUMBER | STRING | BOOL_LITERAL ;
+
+(* Types: support pointer '^' and array prefixes '[N]'. Modifiers apply left-to-right in parser,
+   but grammatically we allow any number of prefixes before base_type. *)
+type ::= { "^" | "[" NUMBER "]" } base_type ;
+base_type ::= "int" | "string" | "bool" | "void" | "any" ;
+
+lvalue ::= variable_ref | deref | array_index ;
+variable_ref ::= [ IDENT "." ] IDENT ;
+deref ::= primary "^" ;
+array_index ::= variable_ref "[" expression "]" ;
+
+(* Terminals *)
+IDENT ::= /* identifier token from lexer: [A-Za-z_][A-Za-z0-9_]* */ ;
+NUMBER ::= /* integer literal token (decimal/0x/0b/0o) */ ;
+STRING ::= /* double-quoted string literal token */ ;
+BOOL_LITERAL ::= "true" | "false" ;
+
+(* Notes on semicolons: newlines may be treated as semicolons when the previous token is one of
+   IDENT, NUMBER, STRING, BOOL_LITERAL, ')', ']', '}' (see Lexer.shouldInsertSemicolon).
+*)
+
+(* End of grammar *)
