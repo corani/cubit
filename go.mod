@@ -4,7 +4,7 @@ go 1.24.3
 
 require (
 	github.com/stretchr/testify v1.11.1
-	modernc.org/libqbe v0.5.1
+	modernc.org/libqbe v0.6.0
 )
 
 require (
@@ -31,7 +31,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect
 	modernc.org/goabi0 v0.2.0 // indirect
-	modernc.org/libc v1.67.1 // indirect
+	modernc.org/libc v1.67.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/token v1.1.0 // indirect
