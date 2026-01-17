@@ -4,7 +4,7 @@ go 1.24.3
 
 require (
 	github.com/stretchr/testify v1.11.1
-	modernc.org/libqbe v0.7.0
+	modernc.org/libqbe v0.8.0
 )
 
 require (
