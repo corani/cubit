@@ -44,5 +44,13 @@
   ],
   "prConcurrentLimit": 2,
   "automergeType": "pr",
-  "platformAutomerge": true
+  "platformAutomerge": true,
+  "commitMessagePrefix": "chore(deps):",
+  "enabledManagers": [
+    "gomod",
+    "dockerfile",
+    "github-actions",
+    "custom.regex"
+  ],
+  "customManagers": []
 }
