@@ -164,9 +164,9 @@ func (gp *GenericParam) Accept(v Visitor) {
 func (gp *GenericParam) String() string {
 	switch gp.Kind {
 	case GenericType:
-		return fmt.Sprintf("type $%s", gp.Symbol)
+		return fmt.Sprintf("$%s: type", gp.Symbol)
 	case GenericValue:
-		return fmt.Sprintf("value %s $%s", gp.Type, gp.Symbol)
+		return fmt.Sprintf("$%s: %s", gp.Symbol, gp.Type)
 	default:
 		return "unknown"
 	}
