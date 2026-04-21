@@ -7,4 +7,4 @@ printf :: func(msg: string, args: ..any)
 calloc :: func(count: int, size: int) -> ^int
 
 @(builtin)
-len :: func($N: int, $T: type, row: [$N]$T) -> int
+len :: func(arr: [$N: int]$T) -> int
