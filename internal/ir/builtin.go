@@ -27,7 +27,7 @@ func (v *visitor) visitBuiltinLen(c *ast.Call) {
 
 	size := arg.Type.Size
 	if size.Kind != ast.SizeLiteral {
-		c.Location().Errorf("array size must be a literal, got %s", size)
+		c.Location().Errorf("builtin 'len': unresolved generic array size '%s' — monomorphization may have failed", size)
 
 		return
 	}

@@ -1,6 +1,8 @@
 package analyzer
 
 import (
+	"fmt"
+
 	"github.com/corani/cubit/internal/ast"
 )
 
@@ -11,6 +13,7 @@ type TypeChecker struct {
 	lastType   *ast.Type
 	lastSymbol *Symbol                 // set by VisitVariableRef for lvalue assignment
 	imports    map[string]*TypeChecker // alias -> TypeChecker for imported units
+	unit       *ast.CompilationUnit    // current compilation unit (for registering monomorphizations)
 }
 
 func NewTypeChecker() *TypeChecker {
@@ -44,6 +47,8 @@ func (tc *TypeChecker) VisitCompilationUnit(unit *ast.CompilationUnit) {
 			tc.imports[alias] = importTC
 		}
 	}
+
+	tc.unit = unit
 
 	// Push global scope
 	tc.pushScope()
@@ -93,7 +98,13 @@ func (tc *TypeChecker) VisitFuncDef(fn *ast.FuncDef) {
 }
 
 func (tc *TypeChecker) VisitGenericParam(gp *ast.GenericParam) {
-	// TODO: implementation
+	if gp.Symbol == "" {
+		tc.errors = append(tc.errors, fmt.Errorf("generic parameter must have a name"))
+	}
+
+	if gp.Kind == ast.GenericValue && gp.Type == nil {
+		tc.errors = append(tc.errors, fmt.Errorf("value generic parameter '$%s' must have a type", gp.Symbol))
+	}
 }
 
 func (tc *TypeChecker) VisitFuncParam(fn *ast.FuncParam) {
@@ -195,6 +206,75 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 	}
 
 	call.FuncDef = sym.FuncDef
+
+	// If the callee is generic, infer type/value bindings from the arguments and
+	// monomorphize: produce (or reuse) a concrete FuncDef with all parameters substituted.
+	if len(call.FuncDef.GenericParams) > 0 {
+		// First, type-check all arguments to get their concrete types.
+		for i, arg := range call.Args {
+			argType, _ := tc.visitNode(arg.Value)
+			call.Args[i].Type = argType
+		}
+
+		// Infer bindings by walking param types vs arg types.
+		typeBindings := map[string]*ast.Type{}
+		valueBindings := map[string]int{}
+
+		for i, param := range call.FuncDef.Params {
+			if i >= len(call.Args) {
+				break
+			}
+
+			inferBindings(param.Type, call.Args[i].Type, typeBindings, valueBindings)
+		}
+
+		// Check that all generic params were bound.
+		for _, gp := range call.FuncDef.GenericParams {
+			switch gp.Kind {
+			case ast.GenericType:
+				if _, ok := typeBindings[gp.Symbol]; !ok {
+					call.Location().Errorf("call to '%s': could not infer type for generic parameter '$%s'",
+						call.Ident, gp.Symbol)
+					tc.lastType = &ast.Type{Kind: ast.TypeUnknown}
+					return
+				}
+			case ast.GenericValue:
+				if _, ok := valueBindings[gp.Symbol]; !ok {
+					call.Location().Errorf("call to '%s': could not infer value for generic parameter '$%s'",
+						call.Ident, gp.Symbol)
+					tc.lastType = &ast.Type{Kind: ast.TypeUnknown}
+					return
+				}
+			}
+		}
+
+		// Produce a mangled name and check if we already have this instantiation.
+		mangledName := mangleName(call.Ident, call.FuncDef.GenericParams, typeBindings, valueBindings)
+
+		if existing, ok := tc.lookupSymbol(mangledName); ok && existing.IsFunc {
+			call.FuncDef = existing.FuncDef
+		} else {
+			// Clone and substitute.
+			concrete := cloneFuncDef(call.FuncDef, typeBindings, valueBindings)
+			concrete.Ident = mangledName
+
+			// Register in scope and in the compilation unit so IR lowering sees it.
+			sym := NewSymbolFunc(mangledName, concrete.ReturnType, concrete)
+			tc.addSymbol(sym)
+
+			if tc.unit != nil {
+				tc.unit.Funcs = append(tc.unit.Funcs, concrete)
+			}
+
+			call.FuncDef = concrete
+		}
+
+		// Set the call result type from the concrete return type.
+		call.Type = call.FuncDef.ReturnType
+		tc.lastType = call.Type
+
+		return
+	}
 
 	// Collect the parameter types, taking into account varargs
 	paramTypes := []*ast.Type{}

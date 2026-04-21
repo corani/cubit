@@ -19,14 +19,16 @@ const (
 	TypeArray
 	TypeAny
 	TypeVararg
+	TypeGeneric // $T (type parameter reference)
 )
 
 // Type is a recursive type structure for basic and pointer types.
 type Type struct {
-	Kind TypeKind
-	Elem *Type // non-nil if Kind == TypePointer, TypeArray or TypeVararg
-	Size *Size // if TypeArray
-	Loc  lexer.Location
+	Kind   TypeKind
+	Elem   *Type  // non-nil if Kind == TypePointer, TypeArray or TypeVararg
+	Size   *Size  // if TypeArray
+	Symbol string // if TypeGeneric
+	Loc    lexer.Location
 }
 
 func NewType(kind TypeKind, location lexer.Location) *Type {
@@ -70,6 +72,15 @@ func NewVarargType(elem *Type, location lexer.Location) *Type {
 	}
 }
 
+// NewGenericType constructs a generic type parameter reference (e.g., $T)
+func NewGenericType(symbol string, location lexer.Location) *Type {
+	return &Type{
+		Kind:   TypeGeneric,
+		Symbol: symbol,
+		Loc:    location,
+	}
+}
+
 func (t *Type) Location() lexer.Location {
 	return t.Loc
 }
@@ -96,6 +107,8 @@ func (t *Type) String() string {
 		return fmt.Sprintf("[%s]%s", t.Size, t.Elem)
 	case TypeVararg:
 		return fmt.Sprintf("..%s", t.Elem)
+	case TypeGeneric:
+		return fmt.Sprintf("$%s", t.Symbol)
 	default:
 		return "unknown"
 	}

@@ -29,6 +29,7 @@ const (
 	KeywordNil      Keyword = "nil"
 	KeywordBool     Keyword = "bool"
 	KeywordAny      Keyword = "any"
+	KeywordType     Keyword = "type"
 )
 
 var keywords = []Keyword{
@@ -56,6 +57,7 @@ var keywords = []Keyword{
 	KeywordDefault,
 	KeywordNil,
 	KeywordBool,
+	KeywordType,
 }
 
 func checkKeyword(ident string) (Keyword, bool) {

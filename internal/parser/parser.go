@@ -266,16 +266,26 @@ func (p *Parser) parseFunc(name lexer.Token) error {
 	clear(p.attributes)
 
 	for {
-		param, err := p.parseFuncParam()
-		if err != nil {
-			return err
-		}
+		// Generic parameters start with '$'
+		if tok, err := p.peekType(lexer.TypeDollar); err == nil && tok.Type == lexer.TypeDollar {
+			gp, err := p.parseGenericParam()
+			if err != nil {
+				return err
+			}
 
-		if param == nil {
-			break
-		}
+			def.GenericParams = append(def.GenericParams, gp)
+		} else {
+			param, err := p.parseFuncParam()
+			if err != nil {
+				return err
+			}
 
-		def.Params = append(def.Params, param)
+			if param == nil {
+				break
+			}
+
+			def.Params = append(def.Params, param)
+		}
 
 		tok, err := p.expectType(lexer.TypeComma, lexer.TypeRparen)
 		if err != nil {
@@ -415,6 +425,37 @@ func (p *Parser) parseFuncParam() (*ast.FuncParam, error) {
 
 	return ast.NewFuncParam(nextTok.StringVal, paramType, value,
 		attrs, nextTok.Location), nil
+}
+
+// parseGenericParam parses a single generic parameter: $NAME: type or $NAME: int
+// The leading '$' has already been consumed by the caller.
+func (p *Parser) parseGenericParam() (*ast.GenericParam, error) {
+	nameTok, err := p.expectType(lexer.TypeIdent)
+	if err != nil {
+		nameTok.Location.Errorf("expected identifier after '$'")
+		return nil, err
+	}
+
+	if _, err := p.expectType(lexer.TypeColon); err != nil {
+		nameTok.Location.Errorf("expected ':' after generic parameter name '$%s'", nameTok.StringVal)
+		return nil, err
+	}
+
+	kindTok, err := p.expectType(lexer.TypeKeyword)
+	if err != nil {
+		nameTok.Location.Errorf("expected 'type' or a type keyword after ':'")
+		return nil, err
+	}
+
+	switch kindTok.Keyword {
+	case lexer.KeywordType:
+		return ast.NewGenericParamType(nameTok.StringVal), nil
+	case lexer.KeywordInt:
+		return ast.NewGenericParamValue(nameTok.StringVal, ast.NewType(ast.TypeInt, kindTok.Location)), nil
+	default:
+		kindTok.Location.Errorf("unsupported generic parameter kind '%s': expected 'type' or 'int'", kindTok.Keyword)
+		return ast.NewGenericParamType(nameTok.StringVal), nil // error recovery
+	}
 }
 
 // parseParamType parses a parameter type, supporting varargs (..type)
@@ -627,20 +668,36 @@ func (p *Parser) parseType() *ast.Type {
 
 		// Array(s)
 		if tok, err := p.peekType(lexer.TypeLBracket); err == nil && tok.Type == lexer.TypeLBracket {
-			sizeTok, err := p.expectType(lexer.TypeNumber)
-			if err != nil {
-				tok.Location.Errorf("expected array size after '['")
-				sizeTok.NumberVal = 0
+			var size *ast.Size
+
+			if dollarTok, err := p.peekType(lexer.TypeDollar); err == nil && dollarTok.Type == lexer.TypeDollar {
+				// Generic size: [$N] — '$' already consumed by peekType
+				symTok, err := p.expectType(lexer.TypeIdent)
+				if err != nil {
+					tok.Location.Errorf("expected identifier after '$' in array size")
+					symTok.StringVal = "_"
+				}
+
+				size = ast.NewSizeSymbol(symTok.StringVal)
+			} else {
+				// Literal size: [N]
+				sizeTok, err := p.expectType(lexer.TypeNumber)
+				if err != nil {
+					tok.Location.Errorf("expected array size after '['")
+					sizeTok.NumberVal = 0
+				}
+
+				size = ast.NewSizeLiteral(sizeTok.NumberVal)
 			}
 
 			if _, err := p.expectType(lexer.TypeRBracket); err != nil {
 				tok.Location.Errorf("expected ']' after array size")
 			}
 
-			loc := tok.Location // TODO(daniel): I think this is not needed?
-			size := sizeTok.NumberVal
+			loc := tok.Location
+			sizeCopy := size
 			typeModifier = append(typeModifier, func(inner *ast.Type) *ast.Type {
-				return ast.NewArrayType(inner, ast.NewSizeLiteral(size), loc)
+				return ast.NewArrayType(inner, sizeCopy, loc)
 			})
 
 			continue
@@ -661,6 +718,17 @@ func (p *Parser) parseType() *ast.Type {
 
 // parseBaseType parses the base type (int, bool, string, void, etc.)
 func (p *Parser) parseBaseType() *ast.Type {
+	// Check for generic type reference: $T ($ already consumed by peekType)
+	if dollarTok, err := p.peekType(lexer.TypeDollar); err == nil && dollarTok.Type == lexer.TypeDollar {
+		symTok, err := p.expectType(lexer.TypeIdent)
+		if err != nil {
+			dollarTok.Location.Errorf("expected identifier after '$' in type position")
+			symTok.StringVal = "_"
+		}
+
+		return ast.NewGenericType(symTok.StringVal, dollarTok.Location)
+	}
+
 	tok, err := p.expectType(lexer.TypeKeyword)
 	if err != nil {
 		tok.Location.Errorf("expected type keyword, got %s", tok.Type)
