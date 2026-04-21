@@ -11,28 +11,28 @@ func (v *visitor) visitBuiltinCall(c *ast.Call) {
 	}
 }
 
-func (v *visitor) visitBuiltinLen(c *ast.Call) {
-	if len(c.Args) != 1 {
-		c.Location().Errorf("builtin 'len' expects 1 argument, got %d", len(c.Args))
+func (v *visitor) visitBuiltinLen(call *ast.Call) {
+	if len(call.Args) != 1 {
+		call.Location().Errorf("builtin 'len' expects 1 argument, got %d", len(call.Args))
 
 		return
 	}
 
-	arg := c.Args[0]
+	arg := call.Args[0]
 	if arg.Type.Kind != ast.TypeArray {
-		c.Location().Errorf("builtin 'len' expects an array, got %s", arg.Type)
+		call.Location().Errorf("builtin 'len' expects an array, got %s", arg.Type)
 
 		return
 	}
 
 	size := arg.Type.Size
 	if size.Kind != ast.SizeLiteral {
-		c.Location().Errorf("array size must be a literal, got %s", size)
+		call.Location().Errorf("builtin 'len': unresolved generic array size '%s' — monomorphization may have failed", size)
 
 		return
 	}
 
-	loc := c.Location()
+	loc := call.Location()
 	word := NewAbiTyBase(BaseWord)
 
 	v.lastType = ast.NewType(ast.TypeInt, loc)

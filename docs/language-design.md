@@ -52,9 +52,7 @@ fast_add :: func(a, b: int) = a + b
 
 ---
 
-
 ## 4. Structs, Enums, and Type Aliases
-
 
 ```odin
 // Structs
@@ -93,32 +91,43 @@ none : Option(int) = Option.None()  // can't infer the type parameter here
 
 ---
 
-
 ## 5. Generics (Parametric Polymorphism)
 
-Generics in this language support both type and value (compile-time constant) parameters. Type parameters are written as `$T`, and value parameters must always specify their type as `$N/int`, `$FLAG/bool`, `$MODE/MyEnum`, etc. This makes parsing unambiguous and usage explicit.
+Generics in this language support both type and value (compile-time constant) parameters. In a generic parameter list, all parameters use the uniform `$NAME: kind` syntax: type parameters use the hard keyword `type` (e.g., `$T: type`), and value parameters specify a concrete type (e.g., `$N: int`). When `$T` appears as a type reference in signatures or bodies, the `: type` annotation is omitted — the `$` prefix alone identifies it as a generic type parameter.
 
 ### Generic Structs
 
 ```odin
 // Type parameter
-Stack :: struct($T) { data: []T, len: int }
+Stack :: struct($T: type) { data: []T, len: int }
 
 // Type and value parameters
-Matrix :: struct($T, $ROWS/int, $COLS/int) {
+Matrix :: struct($T: type, $ROWS: int, $COLS: int) {
     data: [$ROWS][$COLS]$T
 }
 ```
 
 ### Generic Functions
 
+Generic functions declare their parameters inline — `$T` in a type position is a type parameter, `$N: int` in an array size position is a value parameter:
+
 ```odin
-// Type parameters
+// Type parameters inferred from argument types
 pair :: func(a: $A, b: $B) = (a, b)
 
 // Value parameter (array size)
-len :: func(arr: [$N/int]$T) -> int {
+len :: func(arr: [$N: int]$T) -> int {
     return N
+}
+```
+
+### Generic Enums
+
+```odin
+// Generic option type
+Option :: enum($T: type) {
+    Some(T),
+    None
 }
 ```
 
@@ -142,8 +151,10 @@ len(arr: [3]int{1,2,3})     // type and value parameters inferred
 ```
 
 ### Notes
-- Value parameters must specify their type (e.g., `$N/int`), omitting the type is not allowed.
-- Type parameters do not have a type annotation (e.g., `$T`).
+
+- In a generic parameter list, all parameters use `$NAME: kind` — `type` for type parameters, a concrete type for value parameters.
+- `type` is a hard keyword and cannot be used as an identifier.
+- When `$T` appears as a type reference (in signatures or bodies), the `: type` annotation is omitted.
 - You can't explicitly specify type parameters for function calls, they are always inferred.
 
 ---
@@ -230,7 +241,6 @@ p := Point(x: 1, y: 2)
 
 ---
 
-
 ## 9. Minimal Keywords and Visibility
 
 - Most features are implemented via attributes and type parameters, not keywords.
@@ -247,7 +257,6 @@ InternalType :: struct { ... }
 
 ---
 
-
 ## 10. Imports
 
 Imports bring in complete packages. By default, the last element of the import path is used as the prefix. Use `as` to specify an alias in case of conflicts.
@@ -259,7 +268,6 @@ import "mylib/utils"
 x := math.sqrt(2)
 y := utils.do_something()
 ```
-
 
 ```odin
 import "utils"
@@ -290,11 +298,11 @@ if x := foo(); x == 0 {
 ```
 
 Notes:
+
 - The `if` statement may include an optional initializer before the condition, separated by a semicolon.
 - `else if` chains are supported for multiple branches.
 
 ---
-
 
 ## 12. Loops and Iterators
 
@@ -317,9 +325,10 @@ for x in my_iterable {
 Use `break` to exit a loop early, and `continue` to skip to the next iteration.
 
 The `loop` context object is available inside all loop bodies, providing per-iteration state:
-  - `loop.index` (current index, 0-based)
-  - `loop.at_first` (true on first iteration)
-  - Note: `loop.at_last` and `loop.at_new` are only available in `for x in ...` loops, not in infinite or conditional loops.
+
+- `loop.index` (current index, 0-based)
+- `loop.at_first` (true on first iteration)
+- Note: `loop.at_last` and `loop.at_new` are only available in `for x in ...` loops, not in infinite or conditional loops.
 
 This approach keeps the loop header clean and avoids extra variables.
 
@@ -346,10 +355,10 @@ for val in my_iterator {
 ```
 
 - The `loop` context object is available inside the loop body, providing per-iteration state:
-    - `loop.index` (current index, 0-based)
-    - `loop.at_first` (true on first iteration)
-    - `loop.at_last` (true on last iteration)
-    - `loop.at_new(field)` (true if the given field changed compared to the previous iteration)
+  - `loop.index` (current index, 0-based)
+  - `loop.at_first` (true on first iteration)
+  - `loop.at_last` (true on last iteration)
+  - `loop.at_new(field)` (true if the given field changed compared to the previous iteration)
 - This approach keeps the loop header clean and avoids extra variables.
 - Any type can be made iterable by providing an `iter()` method that returns an iterator object.
 
@@ -491,9 +500,7 @@ val := p2^     // value at arr[3]
 - Pointer arithmetic is only valid within the bounds of the same array or allocation.
 - Dereferencing a nil or invalid pointer is undefined behavior.
 
-
 ---
-
 
 ## 12. Implicit Context
 
@@ -631,8 +638,8 @@ Strings in this language are immutable and designed for maximal interoperability
 - **Sized:** The length of a string is always known in O(1) time, allowing fast slicing, concatenation, and iteration without scanning for a terminator.
 - **Zero-Terminated:** All strings are guaranteed to have a trailing \0 byte, making them directly usable with C APIs expecting null-terminated strings (e.g., `printf`, `strcpy`).
 - **C Interoperability:**
-    - When calling C functions, you can pass the string pointer directly for APIs expecting a null-terminated string, or both pointer and length for APIs expecting both.
-    - When receiving strings from C, the language can construct a string value by scanning for the first \0 and storing the length.
+  - When calling C functions, you can pass the string pointer directly for APIs expecting a null-terminated string, or both pointer and length for APIs expecting both.
+  - When receiving strings from C, the language can construct a string value by scanning for the first \0 and storing the length.
 - **Embedded Nulls:** Embedded null bytes (\0) are allowed in strings, but passing such strings to C APIs expecting null-terminated strings will result in truncation at the first null. The length field is always authoritative within the language.
 - **Minimal Overhead:** The only overhead is a single trailing byte per string, which is negligible on modern systems.
 

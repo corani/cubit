@@ -19,32 +19,36 @@ const (
 	TypeArray
 	TypeAny
 	TypeVararg
+	TypeGeneric // $T (type parameter reference)
 )
 
 // Type is a recursive type structure for basic and pointer types.
 type Type struct {
-	Kind TypeKind
-	Elem *Type // non-nil if Kind == TypePointer, TypeArray or TypeVararg
-	Size *Size // if TypeArray
-	Loc  lexer.Location
+	Kind   TypeKind
+	Elem   *Type  // non-nil if Kind == TypePointer, TypeArray or TypeVararg
+	Size   *Size  // if TypeArray
+	Symbol string // if TypeGeneric
+	Loc    lexer.Location
 }
 
 func NewType(kind TypeKind, location lexer.Location) *Type {
 	return &Type{
-		Kind: kind,
-		Elem: nil,
-		Size: nil,
-		Loc:  location,
+		Kind:   kind,
+		Elem:   nil,
+		Size:   nil,
+		Symbol: "",
+		Loc:    location,
 	}
 }
 
 func NewPointerType(elem *Type, depth int, location lexer.Location) *Type {
 	for range depth {
 		elem = &Type{
-			Kind: TypePointer,
-			Elem: elem,
-			Size: nil,
-			Loc:  location,
+			Kind:   TypePointer,
+			Elem:   elem,
+			Size:   nil,
+			Symbol: "",
+			Loc:    location,
 		}
 	}
 
@@ -53,20 +57,33 @@ func NewPointerType(elem *Type, depth int, location lexer.Location) *Type {
 
 func NewArrayType(elem *Type, size *Size, location lexer.Location) *Type {
 	return &Type{
-		Kind: TypeArray,
-		Elem: elem,
-		Size: size,
-		Loc:  location,
+		Kind:   TypeArray,
+		Elem:   elem,
+		Size:   size,
+		Symbol: "",
+		Loc:    location,
 	}
 }
 
-// NewVarargType constructs a typed varargs type (e.g., ..int, ..any)
+// NewVarargType constructs a typed varargs type (e.g., ..int, ..any).
 func NewVarargType(elem *Type, location lexer.Location) *Type {
 	return &Type{
-		Kind: TypeVararg,
-		Elem: elem,
-		Size: nil,
-		Loc:  location,
+		Kind:   TypeVararg,
+		Elem:   elem,
+		Size:   nil,
+		Symbol: "",
+		Loc:    location,
+	}
+}
+
+// NewGenericType constructs a generic type parameter reference (e.g., $T).
+func NewGenericType(symbol string, location lexer.Location) *Type {
+	return &Type{
+		Kind:   TypeGeneric,
+		Elem:   nil,
+		Size:   nil,
+		Symbol: symbol,
+		Loc:    location,
 	}
 }
 
@@ -74,11 +91,13 @@ func (t *Type) Location() lexer.Location {
 	return t.Loc
 }
 
+//nolint:cyclop
 func (t *Type) String() string {
 	if t == nil {
 		return "<nil>"
 	}
 
+	//nolint:perfsprint
 	switch t.Kind {
 	case TypeInt:
 		return "int"
@@ -96,7 +115,12 @@ func (t *Type) String() string {
 		return fmt.Sprintf("[%s]%s", t.Size, t.Elem)
 	case TypeVararg:
 		return fmt.Sprintf("..%s", t.Elem)
+	case TypeGeneric:
+		return fmt.Sprintf("$%s", t.Symbol)
+	case TypeUnknown:
+		fallthrough
 	default:
+		//nolint:goconst
 		return "unknown"
 	}
 }
@@ -116,14 +140,16 @@ type Size struct {
 
 func NewSizeLiteral(value int) *Size {
 	return &Size{
-		Kind:  SizeLiteral,
-		Value: value,
+		Kind:   SizeLiteral,
+		Value:  value,
+		Symbol: "",
 	}
 }
 
 func NewSizeSymbol(symbol string) *Size {
 	return &Size{
 		Kind:   SizeSymbol,
+		Value:  0,
 		Symbol: symbol,
 	}
 }
@@ -133,6 +159,7 @@ func (s *Size) String() string {
 		return "<nil>"
 	}
 
+	//nolint:perfsprint
 	switch s.Kind {
 	case SizeLiteral:
 		return fmt.Sprintf("%d", s.Value)
@@ -150,11 +177,27 @@ const (
 	GenericValue
 )
 
-// Generic parameter struct
+// GenericParam parameter struct.
 type GenericParam struct {
 	Kind   GenericParamKind // GenericType or GenericValue
 	Symbol string           // without '$' prefix
 	Type   *Type            // for Kind == GenericValue
+}
+
+func NewGenericParamType(symbol string) *GenericParam {
+	return &GenericParam{
+		Kind:   GenericType,
+		Symbol: symbol,
+		Type:   nil,
+	}
+}
+
+func NewGenericParamValue(symbol string, ty *Type) *GenericParam {
+	return &GenericParam{
+		Kind:   GenericValue,
+		Symbol: symbol,
+		Type:   ty,
+	}
 }
 
 func (gp *GenericParam) Accept(v Visitor) {
@@ -164,25 +207,10 @@ func (gp *GenericParam) Accept(v Visitor) {
 func (gp *GenericParam) String() string {
 	switch gp.Kind {
 	case GenericType:
-		return fmt.Sprintf("type $%s", gp.Symbol)
+		return fmt.Sprintf("$%s: type", gp.Symbol)
 	case GenericValue:
-		return fmt.Sprintf("value %s $%s", gp.Type, gp.Symbol)
+		return fmt.Sprintf("$%s: %s", gp.Symbol, gp.Type)
 	default:
 		return "unknown"
-	}
-}
-
-func NewGenericParamType(symbol string) *GenericParam {
-	return &GenericParam{
-		Symbol: symbol,
-		Kind:   GenericType,
-	}
-}
-
-func NewGenericParamValue(symbol string, ty *Type) *GenericParam {
-	return &GenericParam{
-		Symbol: symbol,
-		Kind:   GenericValue,
-		Type:   ty,
 	}
 }

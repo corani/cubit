@@ -1,6 +1,8 @@
 package analyzer
 
 import (
+	"fmt"
+
 	"github.com/corani/cubit/internal/ast"
 )
 
@@ -11,6 +13,7 @@ type TypeChecker struct {
 	lastType   *ast.Type
 	lastSymbol *Symbol                 // set by VisitVariableRef for lvalue assignment
 	imports    map[string]*TypeChecker // alias -> TypeChecker for imported units
+	unit       *ast.CompilationUnit    // current compilation unit (for registering monomorphizations)
 }
 
 func NewTypeChecker() *TypeChecker {
@@ -45,6 +48,8 @@ func (tc *TypeChecker) VisitCompilationUnit(unit *ast.CompilationUnit) {
 		}
 	}
 
+	tc.unit = unit
+
 	// Push global scope
 	tc.pushScope()
 
@@ -74,6 +79,8 @@ func (tc *TypeChecker) VisitDataDef(fn *ast.DataDef) {
 }
 
 func (tc *TypeChecker) VisitFuncDef(fn *ast.FuncDef) {
+	validateGenericParams(fn)
+
 	tc.withScope(func() {
 		// Add parameters to the new scope
 		for i := range fn.Params {
@@ -93,7 +100,13 @@ func (tc *TypeChecker) VisitFuncDef(fn *ast.FuncDef) {
 }
 
 func (tc *TypeChecker) VisitGenericParam(gp *ast.GenericParam) {
-	// TODO: implementation
+	if gp.Symbol == "" {
+		tc.errors = append(tc.errors, fmt.Errorf("generic parameter must have a name"))
+	}
+
+	if gp.Kind == ast.GenericValue && gp.Type == nil {
+		tc.errors = append(tc.errors, fmt.Errorf("value generic parameter '$%s' must have a type", gp.Symbol))
+	}
 }
 
 func (tc *TypeChecker) VisitFuncParam(fn *ast.FuncParam) {
@@ -195,6 +208,10 @@ func (tc *TypeChecker) VisitCall(call *ast.Call) {
 	}
 
 	call.FuncDef = sym.FuncDef
+
+	if tc.monomorphizeCall(call) {
+		return
+	}
 
 	// Collect the parameter types, taking into account varargs
 	paramTypes := []*ast.Type{}
