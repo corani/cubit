@@ -98,6 +98,7 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		lexer.TypeLparen,
 		lexer.TypeKeyword,
 		lexer.TypeLBracket, // allow array literal as a primary
+		lexer.TypeDollar,   // allow generic value param reference ($N) as a primary
 	}
 
 	start, err := p.peekType(starters...)
@@ -143,6 +144,15 @@ func (p *Parser) parsePrimary(optional bool) (ast.Expression, error) {
 		// Translate !expr to expr == false
 		expr = ast.NewBinop(ast.BinOpEq, operand,
 			ast.NewBoolLiteral(false, start.Location), start.Location)
+	case lexer.TypeDollar:
+		// Generic value parameter reference: $N — '$' already consumed by peekType.
+		symTok, err := p.expectType(lexer.TypeIdent)
+		if err != nil {
+			return nil, err
+		}
+		// Represent as a plain VariableRef (no '$' prefix); substituteBody will
+		// replace it with a concrete Literal during monomorphization.
+		expr = ast.NewVariableRef("", symTok.StringVal, ast.TypeUnknown, start.Location)
 	case lexer.TypeKeyword:
 		switch start.Keyword {
 		case lexer.KeywordTrue:

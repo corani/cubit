@@ -62,6 +62,12 @@ func (v *visitor) VisitTypeDef(td *ast.TypeDef) {}
 func (v *visitor) VisitDataDef(dd *ast.DataDef) {}
 
 func (v *visitor) VisitFuncDef(fd *ast.FuncDef) {
+	// Generic functions are templates — only their concrete monomorphized clones
+	// (which have no GenericParams) are lowered to IR.
+	if len(fd.GenericParams) > 0 {
+		return
+	}
+
 	// TODO(daniel): This will fail for nested functions like lambdas!
 	// Labels are function-local, so we can reset the counter for each function
 	v.labelCounter = 0
@@ -245,9 +251,10 @@ func (v *visitor) VisitCall(c *ast.Call) {
 
 		return
 	}
-
-	// Lower the callee (function name)
-	ident := Ident(c.Ident)
+	// Use FuncDef.Ident as the canonical callee name; for monomorphized generics
+	// this is the mangled name (e.g. "len__128_int"), for normal functions it
+	// equals c.Ident.
+	ident := Ident(c.FuncDef.Ident)
 
 	if v, ok := c.FuncDef.Attributes.GetString(ast.AttrKeyLinkname); ok {
 		ident = Ident(v)

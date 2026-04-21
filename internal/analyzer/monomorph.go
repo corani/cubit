@@ -228,8 +228,8 @@ func (tc *TypeChecker) monomorphizeCall(call *ast.Call) bool {
 		concrete := cloneFuncDef(call.FuncDef, typeBindings, valueBindings)
 		concrete.Ident = mangledName
 
-		// Register in scope and in the compilation unit so IR lowering sees it.
-		tc.addSymbol(NewSymbolFunc(mangledName, concrete.ReturnType, concrete))
+		// Register in global scope and in the compilation unit so IR lowering sees it.
+		tc.addGlobalSymbol(NewSymbolFunc(mangledName, concrete.ReturnType, concrete))
 
 		if tc.unit != nil {
 			tc.unit.Funcs = append(tc.unit.Funcs, concrete)
@@ -244,6 +244,114 @@ func (tc *TypeChecker) monomorphizeCall(call *ast.Call) bool {
 	return true
 }
 
+// substituteExpr replaces any VariableRef whose Ident matches a value binding
+// with the corresponding integer Literal. Other expression types are cloned
+// shallowly (their structure is preserved) with recursive substitution.
+//
+//nolint:ireturn
+func substituteExpr(expr ast.Expression, valueBindings map[string]int) ast.Expression { //nolint:cyclop
+	if expr == nil {
+		return nil
+	}
+
+	switch e := expr.(type) { //nolint:varnamelen // e
+	case *ast.VariableRef:
+		if v, ok := valueBindings[e.Ident]; ok {
+			return ast.NewIntLiteral(v, e.Location())
+		}
+
+		return e
+	case *ast.Literal:
+		return e // already concrete
+	case *ast.Binop:
+		return ast.NewBinop(e.Operation,
+			substituteExpr(e.Lhs, valueBindings),
+			substituteExpr(e.Rhs, valueBindings),
+			e.Location())
+	case *ast.UnaryOp:
+		return ast.NewUnaryOp(e.Operation,
+			substituteExpr(e.Expr, valueBindings),
+			e.Location())
+	case *ast.ArrayIndex:
+		return ast.NewArrayIndex(
+			substituteExpr(e.Array, valueBindings),
+			substituteExpr(e.Index, valueBindings),
+			e.Location())
+	case *ast.Deref:
+		return ast.NewDeref(substituteExpr(e.Expr, valueBindings), e.Location())
+	case *ast.Call:
+		args := make([]ast.Arg, len(e.Args))
+
+		for i, a := range e.Args {
+			args[i] = ast.NewArg(a.Ident,
+				substituteExpr(a.Value, valueBindings), a.Type, a.Location())
+		}
+
+		call := ast.NewCall(e.Location(), e.Namespace, e.Ident, args...)
+		call.FuncDef = e.FuncDef
+		call.Type = e.Type
+
+		return call
+	default:
+		// TODO: handle any new expression types added in the future
+		return expr
+	}
+}
+
+// substituteBody clones a Body, replacing generic value parameter references
+// (VariableRefs whose Ident is a key in valueBindings) with integer Literals.
+// Returns nil if body is nil (builtin / extern functions have no body).
+//
+//nolint:cyclop
+func substituteBody(body *ast.Body, valueBindings map[string]int) *ast.Body {
+	if body == nil || len(valueBindings) == 0 {
+		return body
+	}
+
+	instrs := make([]ast.Instruction, 0, len(body.Instructions))
+
+	for _, instr := range body.Instructions {
+		switch s := instr.(type) { //nolint:varnamelen // s
+		case *ast.Return:
+			instrs = append(instrs, ast.NewReturn(s.Location(), s.Type, substituteExpr(s.Value, valueBindings)))
+		case *ast.Assign:
+			instrs = append(instrs, ast.NewAssign(s.LHS, substituteExpr(s.Value, valueBindings), s.Type, s.Location()))
+		case *ast.Declare:
+			instrs = append(instrs, s) // no expressions in a bare declare
+		case *ast.Call:
+			//nolint:forcetypeassert
+			instrs = append(instrs, substituteExpr(s, valueBindings).(*ast.Call))
+		case *ast.If:
+			init := substituteInstrs(s.Init, valueBindings)
+			then := substituteBody(s.Then, valueBindings)
+			els := substituteBody(s.Else, valueBindings)
+			instrs = append(instrs, ast.NewIf(s.Location(), init, substituteExpr(s.Cond, valueBindings), then, els))
+		case *ast.For:
+			init := substituteInstrs(s.Init, valueBindings)
+			post := substituteInstrs(s.Post, valueBindings)
+			body := substituteBody(s.Body, valueBindings)
+			instrs = append(instrs, ast.NewFor(s.Location(), init, substituteExpr(s.Cond, valueBindings), post, body))
+		default:
+			// TODO: handle any new instruction types added in the future
+			instrs = append(instrs, instr)
+		}
+	}
+
+	return ast.NewBody(instrs, body.Location())
+}
+
+func substituteInstrs(instrs []ast.Instruction, valueBindings map[string]int) []ast.Instruction {
+	result := make([]ast.Instruction, len(instrs))
+	for i, instr := range instrs {
+		// Reuse substituteBody for single-instruction slice would waste an allocation;
+		// inline the cast via a temporary single-body call.
+		tmp := substituteBody(ast.NewBody([]ast.Instruction{instr}, instr.Location()), valueBindings)
+		result[i] = tmp.Instructions[0]
+	}
+
+	return result
+}
+
 // parameters substituted by their bindings.
 func cloneFuncDef(orig *ast.FuncDef, typeBindings map[string]*ast.Type, valueBindings map[string]int) *ast.FuncDef {
 	clone := ast.NewFuncDef(orig.Ident, orig.Attributes, orig.Loc)
@@ -251,7 +359,7 @@ func cloneFuncDef(orig *ast.FuncDef, typeBindings map[string]*ast.Type, valueBin
 	// Clear generic params — the clone is concrete
 	clone.GenericParams = nil
 	clone.ReturnType = substituteType(orig.ReturnType, typeBindings, valueBindings)
-	clone.Body = orig.Body // body is shared (read-only for builtins; no generic refs in body)
+	clone.Body = substituteBody(orig.Body, valueBindings)
 
 	for _, p := range orig.Params {
 		concreteType := substituteType(p.Type, typeBindings, valueBindings)

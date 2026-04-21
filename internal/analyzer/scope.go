@@ -35,7 +35,8 @@ func NewSymbolVariable(name string, ty *ast.Type, decl *ast.Declare) *Symbol {
 	}
 }
 
-func (s *Symbol) UpdateType(ty *ast.Type) error {
+//nolint:cyclop
+func (s *Symbol) UpdateType(ty *ast.Type) error { //nolint:varnamelen // ty
 	// Allow specializing from 'any' to a more specific type
 	if s.Type != nil && s.Type.Kind != ast.TypeUnknown {
 		if s.Type.Kind == ast.TypeAny && ty != nil && ty.Kind != ast.TypeAny && ty.Kind != ast.TypeUnknown {
@@ -64,7 +65,7 @@ func (s *Symbol) UpdateType(ty *ast.Type) error {
 	return nil
 }
 
-// Scope management helpers
+// Scope management helpers.
 func (tc *TypeChecker) pushScope() {
 	tc.scopes = append(tc.scopes, make(map[string]*Symbol))
 }
@@ -86,7 +87,16 @@ func (tc *TypeChecker) addSymbol(sym *Symbol) {
 	if len(tc.scopes) == 0 {
 		tc.pushScope()
 	}
+
 	tc.scopes[len(tc.scopes)-1][sym.Name] = sym
+}
+
+func (tc *TypeChecker) addGlobalSymbol(sym *Symbol) {
+	if len(tc.scopes) == 0 {
+		tc.pushScope()
+	}
+
+	tc.scopes[0][sym.Name] = sym
 }
 
 func (tc *TypeChecker) lookupSymbol(name string) (*Symbol, bool) {
@@ -95,5 +105,6 @@ func (tc *TypeChecker) lookupSymbol(name string) (*Symbol, bool) {
 			return sym, true
 		}
 	}
+
 	return nil, false
 }
