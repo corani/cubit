@@ -92,8 +92,11 @@ func (tc *TypeChecker) VisitFuncDef(fn *ast.FuncDef) {
 			tc.addSymbol(NewSymbolVariable(param.Ident, param.Type, nil))
 		}
 
-		// Type check the function body (if present)
-		if fn.Body != nil {
+		// Type check the function body (if present).
+		// Skip for generic functions — the body contains unresolved generic
+		// references that are only valid after monomorphization. The concrete
+		// clones (which have no GenericParams) are type-checked instead.
+		if fn.Body != nil && len(fn.GenericParams) == 0 {
 			fn.Body.Accept(tc)
 		}
 	})

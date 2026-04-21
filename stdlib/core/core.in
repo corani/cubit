@@ -6,5 +6,6 @@ printf :: func(msg: string, args: ..any)
 @(extern)
 calloc :: func(count: int, size: int) -> ^int
 
-@(builtin)
-len :: func(arr: [$N: int]$T) -> int
+len :: func(arr: [$N: int]$T) -> int {
+    return $N
+}
