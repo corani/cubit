@@ -4,13 +4,13 @@ go 1.26.0
 
 require (
 	github.com/stretchr/testify v1.12.1
-	modernc.org/libqbe v0.10.0
+	modernc.org/libqbe v0.11.0
 )
 
 require (
 	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/dnephin/pflag v1.0.7 // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
@@ -25,7 +25,7 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/term v0.35.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
-	golang.org/x/tools v0.50.0 // indirect
+	golang.org/x/tools v0.51.0 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect
 	modernc.org/goabi0 v0.2.0 // indirect
 	modernc.org/libc v1.77.1 // indirect
