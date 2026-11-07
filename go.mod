@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/stretchr/testify v1.12.1
-	modernc.org/libqbe v0.12.0
+	modernc.org/libqbe v0.13.0
 )
 
 require (
