@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/stretchr/testify v1.12.1
-	modernc.org/libqbe v0.16.0
+	modernc.org/libqbe v0.17.0
 )
 
 require (
@@ -27,7 +27,7 @@ require (
 	golang.org/x/text v0.17.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect
-	modernc.org/goabi0 v0.2.0 // indirect
+	modernc.org/goabi0 v0.2.1 // indirect
 	modernc.org/libc v1.81.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
